@@ -8,19 +8,21 @@ LearnFlow converts uploaded PDFs into AI-powered learning material.
 
 ## Tech Stack
 
-Frontend
+### Frontend
 - React
 - Vite
-- Tailwind
+- Tailwind CSS
 
-Backend
+### Backend
 - FastAPI
 
-Database
+### Database
 - SQLite
+- SQLAlchemy ORM
 
-AI
-- Gemini (later replaceable)
+### AI
+- Gemini
+- Provider abstraction layer
 
 ---
 
@@ -34,7 +36,7 @@ React UI
 
 ↓
 
-API Layer
+Frontend API Layer
 
 ↓
 
@@ -43,6 +45,20 @@ FastAPI Route
 ↓
 
 Business Services
+
+├── Storage Service
+
+├── PDF Service
+
+└── Summary Service
+
+↓
+
+AI Provider
+
+↓
+
+Gemini
 
 ↓
 
@@ -61,39 +77,60 @@ React UI
 ## Folder Responsibilities
 
 frontend/
-    UI
+- User interface
+
+frontend/src/api/
+- Frontend API layer
 
 backend/app/api/
-    HTTP endpoints
+- HTTP endpoints
 
 backend/app/services/
-    Business logic
+- Business logic
+
+backend/app/services/ai/
+- AI provider abstraction and implementations
 
 backend/app/db/
-    Database
+- Database models
 
 backend/app/schemas/
-    API contracts
+- API request/response schemas
 
 backend/app/core/
-    Configuration
+- Configuration
+
+---
+
+## Design Principles
+
+- Thin routes
+- Business logic inside services
+- AI provider abstraction
+- Environment-based configuration
+- Frontend communicates through the API layer
+- Database models are separated from API schemas
 
 ---
 
 ## Current Milestones
 
-Milestone 0
+### ✅ Milestone 0
 - Project setup
 
-Milestone 1
+### ✅ Milestone 1
 - PDF upload
-- Text extraction
+- PDF storage
+- PDF text extraction
 
-Milestone 2
+### ✅ Milestone 2
 - AI summarization
+- Gemini integration
+- Provider abstraction
+- Summary caching
 
-Milestone 3
+### 🚧 Milestone 3
 - Flashcards
 
-Milestone 4
+### 🚧 Milestone 4
 - Quiz generation

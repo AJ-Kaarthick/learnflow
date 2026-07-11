@@ -87,3 +87,45 @@ Implement PDF upload and text extraction.
 ## Result
 
 LearnFlow can now upload PDFs, extract their text, store metadata, and display the extracted content through the React frontend.
+
+---
+
+# Milestone 2
+
+## Goal
+
+Implement AI-powered document summarization using a reusable AI architecture.
+
+## Features Completed
+
+- AI-generated summaries
+- Gemini integration
+- AI provider abstraction
+- Summary caching
+- Summary API endpoints
+- Frontend summary generation
+- Backend tests for summarization
+
+## Learned
+
+- Provider abstraction
+- Dependency injection
+- Environment variables
+- AI service architecture
+- Summary caching
+
+## Problems Faced
+
+- Gemini model deprecation
+- API key accidentally added to `.env.example`
+- Dependency version mismatch after SDK upgrade
+
+## Solutions
+
+- Updated to a supported Gemini model
+- Removed the exposed API key before committing
+- Updated dependencies and verified a clean installation
+
+## Result
+
+LearnFlow can now generate AI summaries while keeping the AI layer modular and reusable for future features like flashcards, quizzes, and document chat.
