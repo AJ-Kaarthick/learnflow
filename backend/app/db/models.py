@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text
 
 from app.db.database import Base
 
@@ -34,4 +34,20 @@ class Document(Base):
     # grows more states, an Enum column would be the next step.
     status = Column(String, nullable=False, default="processing")
 
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Summary(Base):
+    """
+    One AI-generated summary of a document. `unique=True` on
+    document_id enforces "at most one summary per document" at the
+    database level — the service layer also checks this before calling
+    the AI, but this is a backstop against race conditions or bugs.
+    """
+
+    __tablename__ = "summaries"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False, unique=True)
+    content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

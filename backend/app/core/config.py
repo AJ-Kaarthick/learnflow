@@ -14,10 +14,16 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = "sqlite:///./learnflow.db"
 
-    # Which AI provider to use. Milestone 2 will read this to decide
-    # whether to instantiate the OpenAI, Gemini, or Claude implementation.
+    # Which AI provider to use. The factory in services/ai/provider_factory.py
+    # reads this to decide which provider class to instantiate.
     ai_provider: str = "gemini"
     gemini_api_key: str = ""
+    # Google regularly retires older Gemini model IDs — this exact
+    # error (a working model suddenly 404ing) will happen again. When
+    # it does: check https://ai.google.dev/gemini-api/docs/models for
+    # the current lineup, or call provider.list_models() (see note in
+    # gemini_provider.py) to see what your specific key can access.
+    gemini_model: str = "gemini-3.1-flash-lite"
 
     # The frontend's origin, used to configure CORS below.
     frontend_origin: str = "http://localhost:5173"

@@ -2,45 +2,71 @@
 # Backend (Python)
 # ==========================
 
+# Virtual environment
 backend/.venv/
+
+# Environment variables
 backend/.env
+
+# SQLite databases
 backend/*.db
+
+# Uploaded files (Milestone 1)
 backend/uploads/
 
+# Python cache
 __pycache__/
 **/__pycache__/
 *.py[cod]
 *$py.class
+
+# Python tooling
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Coverage reports
 .coverage
 .coverage.*
 htmlcov/
 
 # ==========================
-# Frontend (React/Vite)
+# Frontend (React + Vite)
 # ==========================
 
+# Dependencies
 frontend/node_modules/
+
+# Production build
 frontend/dist/
+
+# Environment variables
 frontend/.env
 
 # ==========================
-# IDE / OS
-# ==========================
-
-.vscode/
-.DS_Store
-
-# ==========================
-# Environment
+# Global Environment Files
 # ==========================
 
 .env
 .venv/
 venv/
 env/
+
+# ==========================
+# IDE / Editor
+# ==========================
+
+.vscode/
+
+# JetBrains IDEs
+.idea/
+
+# ==========================
+# Operating System Files
+# ==========================
+
+.DS_Store
+Thumbs.db
 
 # ==========================
 # Logs

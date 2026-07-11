@@ -1,5 +1,6 @@
 import { useState } from "react";
 import BackendStatus from "../components/BackendStatus";
+import SummaryPanel from "../components/SummaryPanel";
 import UploadForm from "../components/UploadForm";
 
 function HomePage() {
@@ -40,6 +41,8 @@ function HomePage() {
             </p>
           </div>
         )}
+
+        {document && document.status === "ready" && <SummaryPanel documentId={document.id} />}
       </div>
     </main>
   );

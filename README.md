@@ -1,15 +1,44 @@
 # LearnFlow
 
-Upload a PDF and get an AI-generated summary, flashcards, and a quiz.
-Built as a learning project — see `docs/architecture.md` (added in a later
-milestone) for the full design writeup.
+LearnFlow is an AI-powered learning assistant that helps students study from PDF documents.
 
-## Project status
+## Features
 
-**Milestone 1 complete:** PDF upload, storage, and text extraction, end to
-end. No AI features yet — that's Milestone 2.
+Current features:
 
-## Running locally
+- 📄 Upload PDF documents
+- 📑 Extract text from PDFs
+- 🤖 Generate AI-powered summaries using Gemini
+- 💾 Store documents and summaries in SQLite
+- 🔄 AI provider abstraction for future model support
+
+## Project Status
+
+### ✅ Milestone 1
+- PDF upload
+- PDF text extraction
+- SQLite database
+- SQLAlchemy ORM
+- React + FastAPI integration
+
+### ✅ Milestone 2
+- AI summarization
+- Gemini integration
+- Provider abstraction
+- Summary caching
+
+### 🚧 Upcoming
+- Flashcards
+- Quiz generation
+- Chat with document
+- Authentication
+- PostgreSQL
+- Docker
+- Deployment
+
+---
+
+## Running Locally
 
 ### Backend
 
@@ -18,12 +47,28 @@ cd backend
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 cp .env.example .env
+```
+
+Add your Gemini API key to `.env`:
+
+```env
+GEMINI_API_KEY=your_api_key
+AI_PROVIDER=gemini
+```
+
+Run:
+
+```bash
 .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
-Visit `http://localhost:8000/health` — you should see `{"status": "ok", ...}`.
+Run tests:
 
-Run tests with `.venv/bin/pytest`.
+```bash
+.venv/bin/pytest
+```
+
+---
 
 ### Frontend
 
@@ -34,12 +79,28 @@ cp .env.example .env
 npm run dev
 ```
 
-Visit the URL Vite prints (usually `http://localhost:5173`). You should see
-a green dot and "Backend is connected" — that confirms both services are
-talking to each other.
+---
 
-## Tech stack
+## Tech Stack
 
-- **Backend:** FastAPI (Python), SQLite (via SQLAlchemy)
-- **Frontend:** React + Vite, Tailwind CSS
-- **AI:** provider-swappable layer (currently Gemini)
+**Frontend**
+- React
+- Vite
+- Tailwind CSS
+
+**Backend**
+- FastAPI
+- Python
+- SQLAlchemy
+- SQLite
+
+**AI**
+- Gemini
+- Provider abstraction layer
+
+---
+
+## Documentation
+
+- `docs/architecture.md`
+- `docs/DEVLOG.md`
