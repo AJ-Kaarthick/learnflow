@@ -51,3 +51,39 @@ Create a production-style project structure and verify the backend and frontend 
 Milestone 0 taught me that setting up a development environment is a significant part of software engineering. Most issues encountered were related to tooling rather than application code. I now have a working full-stack project foundation that future milestones will build upon.
 
 ---
+
+# Milestone 1
+
+## Goal
+
+Implement PDF upload and text extraction.
+
+## Features Completed
+
+- Upload PDF from the React frontend
+- Store uploaded PDFs locally
+- Extract text using pypdf
+- Store document metadata in SQLite
+- Retrieve uploaded document by ID
+- Display extracted text preview
+- Added automated backend tests
+
+## Learned
+
+- FastAPI routing
+- SQLAlchemy ORM basics
+- File upload using FormData
+- React API layer
+- Service layer architecture
+- SQLite integration
+- Backend ↔ Frontend communication
+
+## Problems Faced
+
+- Duplicate backend folder after copying milestone
+- Git ignored files verification
+- Backend testing and routing verification
+
+## Result
+
+LearnFlow can now upload PDFs, extract their text, store metadata, and display the extracted content through the React frontend.
