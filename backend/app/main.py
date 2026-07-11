@@ -1,7 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import routes_documents
 from app.core.config import settings
+from app.db.database import Base, engine
+
+# Creates any tables that don't exist yet, based on the models we've
+# defined (see db/models.py). Fine for SQLite in V1. A real production
+# app would use a migration tool (Alembic) instead, so schema changes
+# are tracked and reversible — worth introducing if/when we move to
+# Postgres, since "just recreate the table" stops being an option once
+# there's real user data in it.
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="LearnFlow API", version="0.1.0")
 
@@ -17,6 +27,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.include_router(routes_documents.router, prefix="/api/v1")
 
 
 @app.get("/health")

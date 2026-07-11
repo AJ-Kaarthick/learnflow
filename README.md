@@ -6,8 +6,8 @@ milestone) for the full design writeup.
 
 ## Project status
 
-**Milestone 0 complete:** backend and frontend scaffolding, wired together.
-No AI features yet.
+**Milestone 1 complete:** PDF upload, storage, and text extraction, end to
+end. No AI features yet — that's Milestone 2.
 
 ## Running locally
 

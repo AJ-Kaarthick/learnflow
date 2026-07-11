@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     """
 
     app_env: str = "development"
+    database_url: str = "sqlite:///./learnflow.db"
 
     # Which AI provider to use. Milestone 2 will read this to decide
     # whether to instantiate the OpenAI, Gemini, or Claude implementation.

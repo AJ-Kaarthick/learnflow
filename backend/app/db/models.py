@@ -1,0 +1,37 @@
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import Column, DateTime, String, Text
+
+from app.db.database import Base
+
+
+def generate_uuid() -> str:
+    return str(uuid.uuid4())
+
+
+class Document(Base):
+    """
+    One uploaded PDF. Every future feature (summary, flashcards, quiz,
+    mind map) will store its own results in its own table, linked back
+    to a document by this id.
+    """
+
+    __tablename__ = "documents"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+
+    # The name the user's file had on their computer — shown in the UI.
+    original_filename = Column(String, nullable=False)
+
+    # The generated, collision-proof name it's actually saved under on
+    # disk (see storage_service.py). Never shown to the user.
+    stored_filename = Column(String, nullable=False)
+
+    extracted_text = Column(Text, nullable=True)
+
+    # processing -> ready | failed. A string is enough for V1; if this
+    # grows more states, an Enum column would be the next step.
+    status = Column(String, nullable=False, default="processing")
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
