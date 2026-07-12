@@ -163,3 +163,38 @@ Implement AI-generated flashcards while reusing the AI infrastructure built in M
 ## Result
 
 LearnFlow can now generate and cache AI-powered flashcards while reusing the same provider abstraction introduced in Milestone 2.
+
+---
+
+# Milestone 4
+
+## Goal
+
+Implement AI-generated quizzes while reusing the AI infrastructure built in previous milestones.
+
+## Features Completed
+
+- AI-generated quizzes
+- Quiz database model
+- Quiz caching
+- Quiz API endpoints
+- Frontend quiz generation
+- Shared structured-output parser
+- Backend tests for quizzes
+
+## Learned
+
+- Reusing common parsing logic
+- Database design tradeoffs
+- JSON columns in SQLAlchemy
+- Extending existing architecture without duplication
+
+## Problems Faced
+
+- Designing a reusable JSON parser for multiple AI features
+- Choosing between normalized tables and JSON columns
+- Keeping the AI provider abstraction generic
+
+## Result
+
+LearnFlow can now generate, cache, and display AI-powered quizzes while reusing the same AI provider abstraction and shared structured-output utilities used by other AI features.

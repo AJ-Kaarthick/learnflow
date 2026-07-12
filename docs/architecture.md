@@ -52,7 +52,9 @@ Business Services
 
 ├── Summary Service
 
-└── Flashcard Service
+├── Flashcard Service
+
+└── Quiz Service
 
 ↓
 
@@ -91,7 +93,7 @@ backend/app/services/
 - Business logic
 
 backend/app/services/ai/
-- AI provider abstraction and implementations
+- AI provider abstraction, provider implementations, and structured output utilities
 
 backend/app/db/
 - Database models
@@ -109,6 +111,7 @@ backend/app/core/
 - Thin routes
 - Business logic inside services
 - AI provider abstraction
+- Shared structured-output parsing
 - Environment-based configuration
 - Frontend communicates through the API layer
 - Database models are separated from API schemas
@@ -136,5 +139,7 @@ backend/app/core/
 - Flashcard caching
 - Reuse of AI provider abstraction
 
-### 🚧 Milestone 4
-- Quiz generation
+### ✅ Milestone 4
+- AI quiz generation
+- Quiz caching
+- Shared structured-output parser

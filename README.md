@@ -10,7 +10,8 @@ Current features:
 - 📑 Extract text from PDFs
 - 🤖 Generate AI-powered summaries using Gemini
 - 🧠 Generate AI-powered flashcards
-- 💾 Store documents, summaries, and flashcards in SQLite
+- 📝 Generate AI-powered quizzes
+- 💾 Store documents, summaries, flashcards, and quizzes in SQLite
 - 🔄 AI provider abstraction for future model support
 
 ## Project Status
@@ -34,8 +35,13 @@ Current features:
 - JSON parsing and validation
 - Reuse of AI provider abstraction
 
+### ✅ Milestone 4
+- AI quiz generation
+- Quiz caching
+- Shared structured-output parser
+- Reuse of AI provider abstraction
+
 ### 🚧 Upcoming
-- Quiz generation
 - Chat with document
 - Authentication
 - PostgreSQL
