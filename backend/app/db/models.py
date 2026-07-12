@@ -100,3 +100,23 @@ class QuizQuestion(Base):
     correct_answer_index = Column(Integer, nullable=False)
     position = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class MindMap(Base):
+    """
+    One AI-generated mind map for a document. One-to-one with Document
+    (unique=True), like Summary. Stored as a single JSON column holding
+    the whole nested tree — {"title": str, "children": [...]} — rather
+    than one row per node with a parent_id (an adjacency list). Nothing
+    in this product addresses an individual node independently yet, so
+    normalizing into rows would be solving a problem V1 doesn't have.
+    If a future feature needs to edit one node in place, this is the
+    column that would change.
+    """
+
+    __tablename__ = "mind_maps"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False, unique=True)
+    structure = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

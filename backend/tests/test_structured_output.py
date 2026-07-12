@@ -27,3 +27,22 @@ def test_raises_when_not_a_list():
 def test_raises_when_required_key_missing():
     with pytest.raises(AIProviderError):
         parse_json_array('[{"b": 1}]', required_keys={"a"})
+
+
+def test_extract_json_returns_object():
+    from app.services.ai.structured_output import extract_json
+
+    assert extract_json('{"title": "Root"}') == {"title": "Root"}
+
+
+def test_extract_json_strips_code_fences_for_object():
+    from app.services.ai.structured_output import extract_json
+
+    assert extract_json('```json\n{"title": "Root"}\n```') == {"title": "Root"}
+
+
+def test_extract_json_raises_on_invalid_json():
+    from app.services.ai.structured_output import extract_json
+
+    with pytest.raises(AIProviderError):
+        extract_json("not json at all")

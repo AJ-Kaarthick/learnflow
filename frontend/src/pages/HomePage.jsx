@@ -1,6 +1,7 @@
 import { useState } from "react";
 import BackendStatus from "../components/BackendStatus";
 import FlashcardsPanel from "../components/FlashcardsPanel";
+import MindMapPanel from "../components/MindMapPanel";
 import QuizPanel from "../components/QuizPanel";
 import SummaryPanel from "../components/SummaryPanel";
 import UploadForm from "../components/UploadForm";
@@ -47,6 +48,7 @@ function HomePage() {
         {document && document.status === "ready" && <SummaryPanel documentId={document.id} />}
         {document && document.status === "ready" && <FlashcardsPanel documentId={document.id} />}
         {document && document.status === "ready" && <QuizPanel documentId={document.id} />}
+        {document && document.status === "ready" && <MindMapPanel documentId={document.id} />}
       </div>
     </main>
   );
