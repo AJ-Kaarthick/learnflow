@@ -8,17 +8,16 @@ backend/.venv/
 # Environment variables
 backend/.env
 
-# SQLite databases
+# SQLite database
 backend/*.db
 
-# Uploaded files (Milestone 1)
+# Uploaded files
 backend/uploads/
 
 # Python cache
 __pycache__/
 **/__pycache__/
 *.py[cod]
-*$py.class
 
 # Python tooling
 .pytest_cache/
@@ -53,18 +52,11 @@ venv/
 env/
 
 # ==========================
-# IDE / Editor
+# IDE / OS
 # ==========================
 
 .vscode/
-
-# JetBrains IDEs
 .idea/
-
-# ==========================
-# Operating System Files
-# ==========================
-
 .DS_Store
 Thumbs.db
 

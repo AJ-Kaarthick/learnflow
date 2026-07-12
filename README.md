@@ -9,7 +9,8 @@ Current features:
 - 📄 Upload PDF documents
 - 📑 Extract text from PDFs
 - 🤖 Generate AI-powered summaries using Gemini
-- 💾 Store documents and summaries in SQLite
+- 🧠 Generate AI-powered flashcards
+- 💾 Store documents, summaries, and flashcards in SQLite
 - 🔄 AI provider abstraction for future model support
 
 ## Project Status
@@ -27,8 +28,13 @@ Current features:
 - Provider abstraction
 - Summary caching
 
+### ✅ Milestone 3
+- AI flashcard generation
+- Flashcard caching
+- JSON parsing and validation
+- Reuse of AI provider abstraction
+
 ### 🚧 Upcoming
-- Flashcards
 - Quiz generation
 - Chat with document
 - Authentication
@@ -45,7 +51,8 @@ Current features:
 ```bash
 cd backend
 python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
+source .venv/bin/activate
+pip install -r requirements-dev.txt
 cp .env.example .env
 ```
 
@@ -54,18 +61,19 @@ Add your Gemini API key to `.env`:
 ```env
 GEMINI_API_KEY=your_api_key
 AI_PROVIDER=gemini
+GEMINI_MODEL=gemini-3.1-flash-lite
 ```
 
 Run:
 
 ```bash
-.venv/bin/uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000
 ```
 
 Run tests:
 
 ```bash
-.venv/bin/pytest
+pytest
 ```
 
 ---
@@ -75,7 +83,6 @@ Run tests:
 ```bash
 cd frontend
 npm install
-cp .env.example .env
 npm run dev
 ```
 
@@ -83,18 +90,18 @@ npm run dev
 
 ## Tech Stack
 
-**Frontend**
+### Frontend
 - React
 - Vite
 - Tailwind CSS
 
-**Backend**
+### Backend
 - FastAPI
 - Python
 - SQLAlchemy
 - SQLite
 
-**AI**
+### AI
 - Gemini
 - Provider abstraction layer
 

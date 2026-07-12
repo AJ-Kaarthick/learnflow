@@ -50,7 +50,9 @@ Business Services
 
 ├── PDF Service
 
-└── Summary Service
+├── Summary Service
+
+└── Flashcard Service
 
 ↓
 
@@ -129,8 +131,10 @@ backend/app/core/
 - Provider abstraction
 - Summary caching
 
-### 🚧 Milestone 3
-- Flashcards
+### ✅ Milestone 3
+- AI flashcard generation
+- Flashcard caching
+- Reuse of AI provider abstraction
 
 ### 🚧 Milestone 4
 - Quiz generation

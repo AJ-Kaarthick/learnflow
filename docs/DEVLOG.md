@@ -129,3 +129,37 @@ Implement AI-powered document summarization using a reusable AI architecture.
 ## Result
 
 LearnFlow can now generate AI summaries while keeping the AI layer modular and reusable for future features like flashcards, quizzes, and document chat.
+
+---
+
+# Milestone 3
+
+## Goal
+
+Implement AI-generated flashcards while reusing the AI infrastructure built in Milestone 2.
+
+## Features Completed
+
+- AI-generated flashcards
+- Flashcard database model
+- Flashcard caching
+- Flashcard API endpoints
+- Frontend flashcard generation
+- Backend tests for flashcards
+
+## Learned
+
+- Prompting LLMs for structured JSON
+- JSON parsing and validation
+- Reusing existing service architecture
+- Designing reusable AI features
+
+## Problems Faced
+
+- Handling AI responses wrapped in Markdown code fences
+- Validating malformed JSON responses
+- Reusing existing architecture without duplicating logic
+
+## Result
+
+LearnFlow can now generate and cache AI-powered flashcards while reusing the same provider abstraction introduced in Milestone 2.
