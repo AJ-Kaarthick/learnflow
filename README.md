@@ -2,17 +2,22 @@
 
 LearnFlow is an AI-powered learning assistant that helps students study from PDF documents.
 
+---
+
 ## Features
 
 Current features:
 
 - 📄 Upload PDF documents
 - 📑 Extract text from PDFs
-- 🤖 Generate AI-powered summaries using Gemini
+- 🤖 Generate AI-powered summaries
 - 🧠 Generate AI-powered flashcards
 - 📝 Generate AI-powered quizzes
-- 💾 Store documents, summaries, flashcards, and quizzes in SQLite
-- 🔄 AI provider abstraction for future model support
+- 🗺️ Generate AI-powered mind maps
+- 💾 Store generated learning content in SQLite
+- 🔄 Provider-swappable AI architecture
+
+---
 
 ## Project Status
 
@@ -32,21 +37,18 @@ Current features:
 ### ✅ Milestone 3
 - AI flashcard generation
 - Flashcard caching
-- JSON parsing and validation
-- Reuse of AI provider abstraction
+- Structured JSON parsing
 
 ### ✅ Milestone 4
 - AI quiz generation
 - Quiz caching
 - Shared structured-output parser
-- Reuse of AI provider abstraction
 
-### 🚧 Upcoming
-- Chat with document
-- Authentication
-- PostgreSQL
-- Docker
-- Deployment
+### ✅ Milestone 5 (V1 Complete)
+- AI mind map generation
+- Interactive mind map visualization
+- Tree-based JSON generation
+- Shared AI architecture reused across all features
 
 ---
 
@@ -70,13 +72,13 @@ AI_PROVIDER=gemini
 GEMINI_MODEL=gemini-3.1-flash-lite
 ```
 
-Run:
+Run the backend:
 
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-Run tests:
+Run backend tests:
 
 ```bash
 pytest
@@ -117,3 +119,30 @@ npm run dev
 
 - `docs/architecture.md`
 - `docs/DEVLOG.md`
+
+---
+
+## Roadmap
+
+### ✅ V1
+- PDF Upload
+- Text Extraction
+- AI Summaries
+- AI Flashcards
+- AI Quizzes
+- AI Mind Maps
+
+### 🚧 V1.1
+- UI/UX improvements
+- Better state management
+- Loading indicators
+- Responsive design
+- Improved error handling
+
+### 🔮 V2
+- Chat with PDF (RAG)
+- DOCX / PPTX / TXT support
+- Authentication
+- PostgreSQL
+- Docker
+- Deployment

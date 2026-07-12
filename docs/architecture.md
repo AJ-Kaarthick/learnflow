@@ -2,7 +2,7 @@
 
 ## Goal
 
-LearnFlow converts uploaded PDFs into AI-powered learning material.
+LearnFlow converts uploaded PDFs into AI-powered learning material such as summaries, flashcards, quizzes, and mind maps.
 
 ---
 
@@ -54,11 +54,17 @@ Business Services
 
 ├── Flashcard Service
 
-└── Quiz Service
+├── Quiz Service
+
+└── MindMap Service
 
 ↓
 
 AI Provider
+
+↓
+
+Structured Output Utilities
 
 ↓
 
@@ -84,7 +90,7 @@ frontend/
 - User interface
 
 frontend/src/api/
-- Frontend API layer
+- API communication layer
 
 backend/app/api/
 - HTTP endpoints
@@ -93,7 +99,9 @@ backend/app/services/
 - Business logic
 
 backend/app/services/ai/
-- AI provider abstraction, provider implementations, and structured output utilities
+- AI provider abstraction
+- Provider implementations
+- Structured output utilities
 
 backend/app/db/
 - Database models
@@ -110,10 +118,10 @@ backend/app/core/
 
 - Thin routes
 - Business logic inside services
-- AI provider abstraction
+- Provider-swappable AI architecture
 - Shared structured-output parsing
 - Environment-based configuration
-- Frontend communicates through the API layer
+- Frontend communicates only through the API layer
 - Database models are separated from API schemas
 
 ---
@@ -135,11 +143,40 @@ backend/app/core/
 - Summary caching
 
 ### ✅ Milestone 3
-- AI flashcard generation
-- Flashcard caching
-- Reuse of AI provider abstraction
+- AI flashcards
 
 ### ✅ Milestone 4
-- AI quiz generation
-- Quiz caching
-- Shared structured-output parser
+- AI quizzes
+
+### ✅ Milestone 5
+- AI mind maps
+
+---
+
+## Version
+
+**Current Release:** V1.0
+
+Core learning workflow:
+
+Upload PDF
+
+↓
+
+Extract Text
+
+↓
+
+Generate Summary
+
+↓
+
+Generate Flashcards
+
+↓
+
+Generate Quiz
+
+↓
+
+Generate Mind Map

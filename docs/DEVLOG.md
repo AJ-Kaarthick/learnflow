@@ -198,3 +198,39 @@ Implement AI-generated quizzes while reusing the AI infrastructure built in prev
 ## Result
 
 LearnFlow can now generate, cache, and display AI-powered quizzes while reusing the same AI provider abstraction and shared structured-output utilities used by other AI features.
+
+---
+
+# Milestone 5
+
+## Goal
+
+Implement AI-generated mind maps while continuing to reuse the existing AI architecture.
+
+## Features Completed
+
+- AI-generated mind maps
+- Mind map database model
+- Mind map caching
+- Mind map API endpoints
+- Interactive frontend visualization
+- Shared structured-output utilities
+- Backend tests for mind maps
+
+## Learned
+
+- Representing hierarchical data as trees
+- Tree validation
+- JSON storage for hierarchical structures
+- Choosing between JSON storage and normalized database tables
+- Reusing existing architecture without introducing new AI abstractions
+
+## Problems Faced
+
+- Choosing an appropriate data structure for mind maps
+- Rendering hierarchical AI output on the frontend
+- Keeping the implementation reusable while avoiding unnecessary complexity
+
+## Result
+
+LearnFlow V1 is now feature complete. Users can upload PDFs and generate summaries, flashcards, quizzes, and interactive mind maps while reusing a single AI provider abstraction and a shared architecture across all AI features.
