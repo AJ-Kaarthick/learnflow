@@ -5,7 +5,17 @@ from app.services.ai.base_provider import AIProvider, AIProviderError
 
 
 class GeminiProvider(AIProvider):
-    """Talks to Google's Gemini API via the official google-genai SDK."""
+    """
+    Talks to Google's Gemini API via the official google-genai SDK.
+
+    Debugging tip: if GEMINI_MODEL starts 404ing again (Google retires
+    model IDs on their own schedule, not ours), list what your key can
+    actually access:
+
+        from google import genai
+        for m in genai.Client(api_key="...").models.list():
+            print(m.name)
+    """
 
     def __init__(self) -> None:
         if not settings.gemini_api_key:

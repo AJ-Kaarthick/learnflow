@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 
 from app.db.database import Base
 
@@ -50,4 +50,26 @@ class Summary(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     document_id = Column(String, ForeignKey("documents.id"), nullable=False, unique=True)
     content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Flashcard(Base):
+    """
+    One question/answer pair generated from a document. Many rows per
+    document (no unique constraint on document_id, unlike Summary) —
+    a normal one-to-many relationship, which is why this is a row per
+    card rather than one row holding a JSON list.
+    """
+
+    __tablename__ = "flashcards"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+
+    # Preserves the order the AI generated the cards in, since a plain
+    # SQL query has no inherent ordering guarantee.
+    position = Column(Integer, nullable=False)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
