@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 
 from app.db.database import Base
 
@@ -72,4 +72,31 @@ class Flashcard(Base):
     # SQL query has no inherent ordering guarantee.
     position = Column(Integer, nullable=False)
 
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class QuizQuestion(Base):
+    """
+    One multiple-choice question generated from a document. Unlike
+    Flashcard, `options` is stored as a JSON column on this same row
+    rather than a child table — it's a small, fixed-size property OF
+    one question, not a separate list of resources, so normalizing it
+    into its own table would be a join for four short strings with no
+    real benefit.
+
+    correct_answer_index is included here (and in the API response) on
+    purpose: without user accounts yet, there's no "quiz attempt" to
+    grade server-side against, so grading happens client-side. A
+    submit-and-check endpoint that hides this becomes worth building
+    once there's a user to attribute an attempt to.
+    """
+
+    __tablename__ = "quiz_questions"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    question = Column(Text, nullable=False)
+    options = Column(JSON, nullable=False)  # list[str]
+    correct_answer_index = Column(Integer, nullable=False)
+    position = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

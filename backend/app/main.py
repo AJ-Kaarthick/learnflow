@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import routes_documents, routes_flashcards, routes_summary
+from app.api.v1 import routes_documents, routes_flashcards, routes_quiz, routes_summary
 from app.core.config import settings
 from app.db.database import Base, engine
 
@@ -32,6 +32,7 @@ app.add_middleware(
 app.include_router(routes_documents.router, prefix="/api/v1")
 app.include_router(routes_summary.router, prefix="/api/v1")
 app.include_router(routes_flashcards.router, prefix="/api/v1")
+app.include_router(routes_quiz.router, prefix="/api/v1")
 
 
 @app.get("/health")
