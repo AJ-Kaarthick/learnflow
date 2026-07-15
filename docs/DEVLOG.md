@@ -234,3 +234,55 @@ Implement AI-generated mind maps while continuing to reuse the existing AI archi
 ## Result
 
 LearnFlow V1 is now feature complete. Users can upload PDFs and generate summaries, flashcards, quizzes, and interactive mind maps while reusing a single AI provider abstraction and a shared architecture across all AI features.
+
+---
+
+# V1.1 — Milestone 1
+
+## Goal
+
+Improve the user experience without changing the project's architecture or adding new AI features.
+
+## Features Completed
+
+- Cleared previous AI-generated content after uploading a new document
+- Added loading indicators for uploads and AI generation
+- Disabled controls while requests were running
+- Added user-friendly status and error messages
+- Added empty states to AI panels
+- Added client-side PDF validation
+- Fixed same-file upload support
+- Fixed a React reconciliation bug affecting panel resets during sequential uploads
+
+## Learned
+
+- React component remounting using keys
+- React reconciliation and sibling key uniqueness
+- Client-side validation versus backend validation
+- Improving UX without changing business logic
+- Importance of browser-based smoke testing in addition to backend testing
+
+## Problems Faced
+
+- Previous AI-generated content persisted after uploading a new document.
+- React components were not resetting correctly because sibling components shared identical keys.
+- Initial smoke tests only verified backend behavior and did not exercise React reconciliation.
+
+## Solutions
+
+- Assigned unique keys to each AI panel by combining the panel type with the document ID.
+- Improved frontend validation and loading behavior.
+- Added browser-level verification for sequential document uploads.
+
+## Verification
+
+- Backend tests: **40 passed**
+- Frontend production build successful
+- Manual smoke testing completed
+- Sequential uploads verified
+- Same-file upload verified
+- Client-side validation verified
+
+## Result
+
+LearnFlow now provides a significantly smoother user experience while preserving the original architecture. The application correctly resets AI panels between uploads, provides immediate user feedback during long-running operations, and handles common user interactions more reliably.

@@ -32,18 +32,32 @@ function FlashcardsPanel({ documentId }) {
     });
   }
 
+  const isLoading = status === "loading";
+
   return (
     <div className="border-t border-slate-200 pt-4 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-slate-900">Flashcards</h2>
         <button
           onClick={handleGenerate}
-          disabled={status === "loading"}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          disabled={isLoading}
+          className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
         >
-          {status === "loading" ? "Generating..." : "Generate flashcards"}
+          {isLoading && (
+            <span
+              className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"
+              aria-hidden="true"
+            />
+          )}
+          {isLoading ? "Generating..." : "Generate flashcards"}
         </button>
       </div>
+
+      {status === "idle" && flashcards.length === 0 && (
+        <p className="text-sm text-slate-500">
+          Create a set of flashcards to test yourself on this document's key concepts.
+        </p>
+      )}
 
       {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
 
@@ -56,7 +70,8 @@ function FlashcardsPanel({ documentId }) {
                 key={card.id}
                 type="button"
                 onClick={() => toggleFlip(card.id)}
-                className="text-left rounded-md border border-slate-200 p-3 hover:border-slate-300 transition-colors"
+                disabled={isLoading}
+                className="text-left rounded-md border border-slate-200 p-3 hover:border-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
                   {isFlipped ? "Answer" : "Question"}

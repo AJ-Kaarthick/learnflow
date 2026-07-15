@@ -50,6 +50,20 @@ Current features:
 - Tree-based JSON generation
 - Shared AI architecture reused across all features
 
+## 🚧 LearnFlow V1.1 Progress
+
+### ✅ Milestone 1 — UX Improvements
+
+Completed:
+
+- Clear previous AI-generated content when uploading a new PDF
+- Loading indicators for uploads and AI generation
+- Disable buttons while requests are running
+- Friendly user-facing success and error messages
+- Empty states for AI panels
+- Client-side PDF validation
+- Same-file upload support
+
 ---
 
 ## Running Locally
@@ -133,11 +147,40 @@ npm run dev
 - AI Mind Maps
 
 ### 🚧 V1.1
-- UI/UX improvements
-- Better state management
+
+#### ✅ Milestone 1
+- UX improvements
 - Loading indicators
-- Responsive design
-- Improved error handling
+- Client-side validation
+- Better error handling
+- Empty states
+- Same-file upload support
+
+#### ⏳ Milestone 2
+- UI polish
+- Better spacing
+- Better typography
+- Better cards
+- Better responsiveness
+- Accessibility improvements
+
+#### ⏳ Milestone 3
+- Copy AI outputs
+- Download summary
+- Upload history
+- Rename/Delete documents
+
+#### ⏳ Milestone 4
+- Logging
+- Shared frontend API helpers
+- Remove duplicated logic
+- Better tests
+- Small refactors
+
+#### ⏳ Milestone 5
+- Documentation
+- Final testing
+- Release preparation
 
 ### 🔮 V2
 - Chat with PDF (RAG)

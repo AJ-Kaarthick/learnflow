@@ -10,6 +10,11 @@ export async function generateFlashcards(documentId) {
   });
 
   if (!response.ok) {
+    if (response.status === 502) {
+      throw new Error(
+        "The AI couldn't generate flashcards right now. Please try again in a moment."
+      );
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(
       errorBody?.detail || `Flashcard generation failed (status ${response.status})`

@@ -124,7 +124,22 @@ backend/app/core/
 - Frontend communicates only through the API layer
 - Database models are separated from API schemas
 
+
+## UX Principles (V1.1)
+
+The V1.1 update focuses on improving usability without changing the underlying architecture.
+
+Implemented in Milestone 1:
+
+- Immediate client-side validation
+- Loading feedback during long-running requests
+- Disabled controls while requests are active
+- Friendly error messages
+- Empty states for AI panels
+- Automatic reset of previous AI content after uploading a new document
+
 ---
+
 
 ## Current Milestones
 
@@ -156,6 +171,8 @@ backend/app/core/
 ## Version
 
 **Current Release:** V1.0
+
+**Current Development:** V1.1 (Milestone 1 Complete)
 
 Core learning workflow:
 

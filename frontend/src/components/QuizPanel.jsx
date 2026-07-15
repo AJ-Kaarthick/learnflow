@@ -28,6 +28,7 @@ function QuizPanel({ documentId }) {
     setSelectedAnswers((previous) => ({ ...previous, [questionId]: optionIndex }));
   }
 
+  const isLoading = status === "loading";
   const answeredCount = Object.keys(selectedAnswers).length;
   const score = questions.reduce(
     (total, question) =>
@@ -41,12 +42,24 @@ function QuizPanel({ documentId }) {
         <h2 className="text-sm font-medium text-slate-900">Quiz</h2>
         <button
           onClick={handleGenerate}
-          disabled={status === "loading"}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          disabled={isLoading}
+          className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
         >
-          {status === "loading" ? "Generating..." : "Generate quiz"}
+          {isLoading && (
+            <span
+              className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"
+              aria-hidden="true"
+            />
+          )}
+          {isLoading ? "Generating..." : "Generate quiz"}
         </button>
       </div>
+
+      {status === "idle" && questions.length === 0 && (
+        <p className="text-sm text-slate-500">
+          Generate a multiple-choice quiz to check your understanding.
+        </p>
+      )}
 
       {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
 
@@ -74,7 +87,8 @@ function QuizPanel({ documentId }) {
                   key={optionIndex}
                   type="button"
                   onClick={() => selectAnswer(question.id, optionIndex)}
-                  className={`w-full text-left text-sm rounded-md border px-3 py-1.5 transition-colors ${stateClasses}`}
+                  disabled={isLoading}
+                  className={`w-full text-left text-sm rounded-md border px-3 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${stateClasses}`}
                 >
                   {option}
                 </button>
@@ -87,7 +101,7 @@ function QuizPanel({ documentId }) {
       {questions.length > 0 && !submitted && (
         <button
           onClick={() => setSubmitted(true)}
-          disabled={answeredCount < questions.length}
+          disabled={answeredCount < questions.length || isLoading}
           className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
         >
           Submit answers ({answeredCount}/{questions.length})

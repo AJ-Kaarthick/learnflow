@@ -6,6 +6,11 @@ export async function generateMindMap(documentId) {
   });
 
   if (!response.ok) {
+    if (response.status === 502) {
+      throw new Error(
+        "The AI couldn't generate a mind map right now. Please try again in a moment."
+      );
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(
       errorBody?.detail || `Mind map generation failed (status ${response.status})`

@@ -6,6 +6,14 @@ import QuizPanel from "../components/QuizPanel";
 import SummaryPanel from "../components/SummaryPanel";
 import UploadForm from "../components/UploadForm";
 
+// Maps the raw backend status value to copy a student should actually
+// read, rather than the internal state name ("ready", "failed").
+function statusLabel(status) {
+  if (status === "ready") return "Ready";
+  if (status === "failed") return "Couldn't process this file";
+  return status;
+}
+
 function HomePage() {
   const [document, setDocument] = useState(null);
 
@@ -28,7 +36,13 @@ function HomePage() {
           <div className="border-t border-slate-200 pt-4 space-y-2">
             <p className="text-sm font-medium text-slate-900">{document.original_filename}</p>
             <p className="text-xs text-slate-500">
-              Status: {document.status} &middot; {document.character_count} characters extracted
+              Status: {statusLabel(document.status)}
+              {document.status === "ready" && (
+                <>
+                  {" "}
+                  &middot; {document.character_count} characters extracted
+                </>
+              )}
             </p>
 
             {extractedVeryLittleText && (
@@ -38,17 +52,34 @@ function HomePage() {
               </p>
             )}
 
-            <p className="text-sm text-slate-700 whitespace-pre-wrap">
-              {document.text_preview}
-              {document.character_count > document.text_preview.length && "…"}
-            </p>
+            {document.status === "failed" && (
+              <p className="text-sm text-red-600">
+                We couldn&apos;t read this PDF — it may be corrupted or scanned without a text
+                layer. Try uploading a different file.
+              </p>
+            )}
+
+            {document.status === "ready" && (
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                {document.text_preview}
+                {document.character_count > document.text_preview.length && "…"}
+              </p>
+            )}
           </div>
         )}
 
-        {document && document.status === "ready" && <SummaryPanel documentId={document.id} />}
-        {document && document.status === "ready" && <FlashcardsPanel documentId={document.id} />}
-        {document && document.status === "ready" && <QuizPanel documentId={document.id} />}
-        {document && document.status === "ready" && <MindMapPanel documentId={document.id} />}
+        {document && document.status === "ready" && (
+          <SummaryPanel key={`summary-${document.id}`} documentId={document.id} />
+        )}
+        {document && document.status === "ready" && (
+          <FlashcardsPanel key={`flashcards-${document.id}`} documentId={document.id} />
+        )}
+        {document && document.status === "ready" && (
+          <QuizPanel key={`quiz-${document.id}`} documentId={document.id} />
+        )}
+        {document && document.status === "ready" && (
+          <MindMapPanel key={`mindmap-${document.id}`} documentId={document.id} />
+        )}
       </div>
     </main>
   );

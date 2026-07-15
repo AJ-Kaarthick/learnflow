@@ -11,6 +11,9 @@ export async function generateSummary(documentId) {
   });
 
   if (!response.ok) {
+    if (response.status === 502) {
+      throw new Error("The AI couldn't generate a summary right now. Please try again in a moment.");
+    }
     const errorBody = await response.json().catch(() => null);
     throw new Error(errorBody?.detail || `Summary generation failed (status ${response.status})`);
   }
