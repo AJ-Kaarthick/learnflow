@@ -1,1 +1,19 @@
 @import "tailwindcss";
+
+/* LearnFlow's single accent color: a deliberately deep, calm teal
+   rather than the default indigo/violet most AI-assisted UIs reach
+   for. Defining it here (Tailwind v4's @theme) generates the full
+   set of accent utility classes automatically, no extra dependency
+   required. */
+@theme {
+  --color-accent-50: #f0fbfa;
+  --color-accent-100: #d6f3f0;
+  --color-accent-200: #ade7e0;
+  --color-accent-300: #7ad6cb;
+  --color-accent-400: #4abfb1;
+  --color-accent-500: #2aa294;
+  --color-accent-600: #1f8478;
+  --color-accent-700: #1c6a62;
+  --color-accent-800: #1a5650;
+  --color-accent-900: #184744;
+}

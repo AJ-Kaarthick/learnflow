@@ -172,7 +172,7 @@ Implemented in Milestone 1:
 
 **Current Release:** V1.0
 
-**Current Development:** V1.1 (Milestone 1 Complete)
+**Current Development:** V1.1 (Milestone 2 Complete)
 
 Core learning workflow:
 

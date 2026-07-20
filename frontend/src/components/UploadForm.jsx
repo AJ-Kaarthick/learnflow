@@ -80,18 +80,22 @@ function UploadForm({ onUploadComplete }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      <label htmlFor="pdf-upload" className="block text-sm font-medium text-slate-700">
+        Choose a PDF
+      </label>
       <input
+        id="pdf-upload"
         type="file"
         accept="application/pdf"
         onChange={handleFileChange}
         disabled={isUploading}
         ref={fileInputRef}
-        className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+        className="block w-full text-sm text-slate-600 file:mr-4 file:cursor-pointer file:rounded-md file:border file:border-slate-300 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-slate-700 file:transition-colors hover:file:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
       />
       <button
         type="submit"
         disabled={!selectedFile || isUploading}
-        className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+        className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
       >
         {isUploading && (
           <span

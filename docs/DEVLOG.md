@@ -286,3 +286,54 @@ Improve the user experience without changing the project's architecture or addin
 ## Result
 
 LearnFlow now provides a significantly smoother user experience while preserving the original architecture. The application correctly resets AI panels between uploads, provides immediate user feedback during long-running operations, and handles common user interactions more reliably.
+
+---
+
+# V1.1 — Milestone 2
+
+## Goal
+
+Improve the visual quality and usability of LearnFlow without changing its architecture or functionality.
+
+## Features Completed
+
+- Introduced a consistent accent color system
+- Redesigned AI panels using reusable card styling
+- Improved typography and visual hierarchy
+- Unified button styling across the application
+- Improved responsive layout for desktop and mobile
+- Added keyboard focus indicators
+- Improved quiz accessibility with icon + text feedback
+- Improved flashcard interaction hints
+
+## Learned
+
+- Building a consistent design system
+- Responsive UI design using Tailwind CSS
+- Accessibility fundamentals
+- Maintaining visual consistency across components
+- Improving UI without modifying application architecture
+
+## Problems Faced
+
+- CSS comment syntax caused a production build failure.
+- Mobile devices do not support hover interactions.
+- Browser-based verification was required because jsdom cannot fully render SVG layouts.
+
+## Solutions
+
+- Fixed the CSS parsing issue and rebuilt successfully.
+- Updated flashcard hints to work for both touch and desktop users.
+- Verified the layout through automated smoke tests and manual browser testing.
+
+## Verification
+
+- Backend tests: **40 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- Responsive layout verified
+- Accessibility improvements verified
+
+## Result
+
+LearnFlow now provides a cleaner, more consistent, and more accessible interface while preserving the original architecture and functionality.

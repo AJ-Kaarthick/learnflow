@@ -64,6 +64,18 @@ Completed:
 - Client-side PDF validation
 - Same-file upload support
 
+### ✅ Milestone 2 — UI Polish
+
+Completed:
+
+- Improved visual hierarchy
+- Consistent card-based layout
+- Better typography and spacing
+- Unified button styling
+- Responsive layout improvements
+- Accessibility improvements
+- Consistent accent color system
+
 ---
 
 ## Running Locally
@@ -156,7 +168,7 @@ npm run dev
 - Empty states
 - Same-file upload support
 
-#### ⏳ Milestone 2
+#### ✅ Milestone 2
 - UI polish
 - Better spacing
 - Better typography

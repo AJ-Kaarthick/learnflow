@@ -22,13 +22,13 @@ function SummaryPanel({ documentId }) {
   const isLoading = status === "loading";
 
   return (
-    <div className="border-t border-slate-200 pt-4 space-y-3">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-slate-900">Summary</h2>
+        <h2 className="text-base font-semibold tracking-tight text-slate-900">Summary</h2>
         <button
           onClick={handleGenerate}
           disabled={isLoading}
-          className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
         >
           {isLoading && (
             <span
@@ -48,7 +48,7 @@ function SummaryPanel({ documentId }) {
 
       {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
 
-      {summary && <p className="text-sm text-slate-700 whitespace-pre-wrap">{summary.content}</p>}
+      {summary && <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{summary.content}</p>}
     </div>
   );
 }

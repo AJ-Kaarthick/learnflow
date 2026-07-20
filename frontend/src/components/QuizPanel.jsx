@@ -37,13 +37,13 @@ function QuizPanel({ documentId }) {
   );
 
   return (
-    <div className="border-t border-slate-200 pt-4 space-y-4">
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-slate-900">Quiz</h2>
+        <h2 className="text-base font-semibold tracking-tight text-slate-900">Quiz</h2>
         <button
           onClick={handleGenerate}
           disabled={isLoading}
-          className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
         >
           {isLoading && (
             <span
@@ -68,18 +68,21 @@ function QuizPanel({ documentId }) {
           <p className="text-sm font-medium text-slate-800">
             {questionIndex + 1}. {question.question}
           </p>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {question.options.map((option, optionIndex) => {
               const isSelected = selectedAnswers[question.id] === optionIndex;
               const isCorrect = optionIndex === question.correct_answer_index;
 
               let stateClasses = "border-slate-200";
+              let marker = null;
               if (submitted && isCorrect) {
                 stateClasses = "border-emerald-400 bg-emerald-50";
+                marker = <span className="font-medium text-emerald-700">&#10003; Correct</span>;
               } else if (submitted && isSelected && !isCorrect) {
                 stateClasses = "border-red-400 bg-red-50";
+                marker = <span className="font-medium text-red-700">&#10007; Your answer</span>;
               } else if (isSelected) {
-                stateClasses = "border-slate-900";
+                stateClasses = "border-accent-500 bg-accent-50";
               }
 
               return (
@@ -88,9 +91,10 @@ function QuizPanel({ documentId }) {
                   type="button"
                   onClick={() => selectAnswer(question.id, optionIndex)}
                   disabled={isLoading}
-                  className={`w-full text-left text-sm rounded-md border px-3 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${stateClasses}`}
+                  className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 ${stateClasses}`}
                 >
-                  {option}
+                  <span>{option}</span>
+                  {marker && <span className="text-xs whitespace-nowrap">{marker}</span>}
                 </button>
               );
             })}
@@ -102,14 +106,14 @@ function QuizPanel({ documentId }) {
         <button
           onClick={() => setSubmitted(true)}
           disabled={answeredCount < questions.length || isLoading}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
         >
           Submit answers ({answeredCount}/{questions.length})
         </button>
       )}
 
       {submitted && (
-        <p className="text-sm font-medium text-slate-900">
+        <p className="text-sm font-semibold text-slate-900">
           Score: {score}/{questions.length}
         </p>
       )}
