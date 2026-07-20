@@ -1,11 +1,19 @@
 import { useState } from "react";
 import { generateFlashcards } from "../api/flashcards";
 
+const SECONDARY_BUTTON_CLASSES =
+  "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
+
+function flashcardsToText(flashcards) {
+  return flashcards.map((card) => `Q: ${card.question}\nA: ${card.answer}`).join("\n\n");
+}
+
 function FlashcardsPanel({ documentId }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [flashcards, setFlashcards] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [flippedIds, setFlippedIds] = useState(new Set());
+  const [copyState, setCopyState] = useState("idle"); // idle | copied
 
   async function handleGenerate() {
     setStatus("loading");
@@ -32,25 +40,44 @@ function FlashcardsPanel({ documentId }) {
     });
   }
 
+  async function handleCopy() {
+    if (flashcards.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(flashcardsToText(flashcards));
+      setCopyState("copied");
+      setTimeout(() => setCopyState("idle"), 2000);
+    } catch {
+      // Clipboard access can fail (permissions, insecure context); no
+      // crash, just stays in its normal state.
+    }
+  }
+
   const isLoading = status === "loading";
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold tracking-tight text-slate-900">Flashcards</h2>
-        <button
-          onClick={handleGenerate}
-          disabled={isLoading}
-          className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
-        >
-          {isLoading && (
-            <span
-              className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"
-              aria-hidden="true"
-            />
+        <div className="flex flex-wrap items-center gap-2">
+          {flashcards.length > 0 && (
+            <button onClick={handleCopy} disabled={isLoading} className={SECONDARY_BUTTON_CLASSES}>
+              {copyState === "copied" ? "Copied!" : "Copy"}
+            </button>
           )}
-          {isLoading ? "Generating..." : "Generate flashcards"}
-        </button>
+          <button
+            onClick={handleGenerate}
+            disabled={isLoading}
+            className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
+          >
+            {isLoading && (
+              <span
+                className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                aria-hidden="true"
+              />
+            )}
+            {isLoading ? "Generating..." : "Generate flashcards"}
+          </button>
+        </div>
       </div>
 
       {status === "idle" && flashcards.length === 0 && (

@@ -129,7 +129,7 @@ backend/app/core/
 
 The V1.1 update focuses on improving usability without changing the underlying architecture.
 
-Implemented in Milestone 1:
+Implemented in V1.1 so far:
 
 - Immediate client-side validation
 - Loading feedback during long-running requests
@@ -137,6 +137,10 @@ Implemented in Milestone 1:
 - Friendly error messages
 - Empty states for AI panels
 - Automatic reset of previous AI content after uploading a new document
+- Improved visual hierarchy
+- Consistent card layout
+- Better responsive design
+- Built-in copy and download actions for generated content
 
 ---
 
@@ -172,7 +176,7 @@ Implemented in Milestone 1:
 
 **Current Release:** V1.0
 
-**Current Development:** V1.1 (Milestone 2 Complete)
+**Current Development:** V1.1 (Milestone 3A Complete)
 
 Core learning workflow:
 

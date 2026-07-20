@@ -337,3 +337,50 @@ Improve the visual quality and usability of LearnFlow without changing its archi
 ## Result
 
 LearnFlow now provides a cleaner, more consistent, and more accessible interface while preserving the original architecture and functionality.
+
+---
+
+# V1.1 — Milestone 3A
+
+## Goal
+
+Improve the usability of generated learning content by allowing users to easily copy or download AI-generated outputs.
+
+## Features Completed
+
+- Added Copy action for AI summaries
+- Added Download Summary (.txt) support
+- Added Copy action for flashcards
+- Added Copy action for quizzes
+- Added transient "Copied!" and "Downloaded!" feedback
+- Buttons only appear when content exists
+- Disabled actions while generation is in progress
+
+## Learned
+
+- Browser Clipboard API
+- File downloads using Blob and object URLs
+- Providing lightweight user feedback without extra dependencies
+- Designing convenience features while preserving existing architecture
+
+## Problems Faced
+
+- Test harness mocked the wrong global URL object during download testing.
+- Clipboard functionality behaves differently depending on browser permissions and secure contexts.
+
+## Solutions
+
+- Corrected the test harness to mock the appropriate global object.
+- Implemented graceful failure handling for clipboard operations without affecting the user experience.
+
+## Verification
+
+- Backend tests: **40 passed**
+- Frontend production build successful
+- Browser smoke testing completed
+- Copy functionality verified
+- Download functionality verified
+
+## Result
+
+LearnFlow now allows users to easily reuse AI-generated content by copying summaries, flashcards, and quizzes or downloading summaries as text files, without changing the existing application architecture.

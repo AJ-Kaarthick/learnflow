@@ -176,11 +176,18 @@ npm run dev
 - Better responsiveness
 - Accessibility improvements
 
-#### ⏳ Milestone 3
-- Copy AI outputs
-- Download summary
+#### 🚧 Milestone 3
+
+##### ✅ Milestone 3A
+- Copy Summary
+- Download Summary
+- Copy Flashcards
+- Copy Quiz
+
+##### ⏳ Milestone 3B
 - Upload history
-- Rename/Delete documents
+- Rename documents
+- Delete documents
 
 #### ⏳ Milestone 4
 - Logging
