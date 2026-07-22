@@ -8,9 +8,9 @@ function flashcardsToText(flashcards) {
   return flashcards.map((card) => `Q: ${card.question}\nA: ${card.answer}`).join("\n\n");
 }
 
-function FlashcardsPanel({ documentId }) {
+function FlashcardsPanel({ documentId, initialFlashcards = [] }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
-  const [flashcards, setFlashcards] = useState([]);
+  const [flashcards, setFlashcards] = useState(initialFlashcards);
   const [errorMessage, setErrorMessage] = useState("");
   const [flippedIds, setFlippedIds] = useState(new Set());
   const [copyState, setCopyState] = useState("idle"); // idle | copied

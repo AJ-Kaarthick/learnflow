@@ -9,9 +9,9 @@ import { treeToMarkdown } from "../utils/treeToMarkdown";
 // cheaper) to share.
 const transformer = new Transformer();
 
-function MindMapPanel({ documentId }) {
+function MindMapPanel({ documentId, initialMindmap = null }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
-  const [structure, setStructure] = useState(null);
+  const [structure, setStructure] = useState(initialMindmap?.structure ?? null);
   const [errorMessage, setErrorMessage] = useState("");
 
   const svgRef = useRef(null);

@@ -4,9 +4,9 @@ import { generateSummary } from "../api/summary";
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
 
-function SummaryPanel({ documentId }) {
+function SummaryPanel({ documentId, initialSummary = null }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
-  const [summary, setSummary] = useState(null);
+  const [summary, setSummary] = useState(initialSummary);
   const [errorMessage, setErrorMessage] = useState("");
   const [copyState, setCopyState] = useState("idle"); // idle | copied
   const [downloadState, setDownloadState] = useState("idle"); // idle | downloaded

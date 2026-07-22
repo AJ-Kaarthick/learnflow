@@ -16,9 +16,9 @@ function quizToText(questions) {
     .join("\n\n");
 }
 
-function QuizPanel({ documentId }) {
+function QuizPanel({ documentId, initialQuestions = [] }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState(initialQuestions);
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedAnswers, setSelectedAnswers] = useState({}); // questionId -> optionIndex
   const [submitted, setSubmitted] = useState(false);

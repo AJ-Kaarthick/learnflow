@@ -21,3 +21,12 @@ def save_pdf(file_bytes: bytes, original_filename: str) -> str:
 
 def get_path(stored_filename: str) -> Path:
     return UPLOAD_DIR / stored_filename
+
+
+def delete_pdf(stored_filename: str) -> None:
+    """
+    Removes a stored PDF from disk. missing_ok=True means deleting an
+    already-missing file (e.g. a retry, or manual cleanup) is a no-op
+    rather than an error.
+    """
+    get_path(stored_filename).unlink(missing_ok=True)

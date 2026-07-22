@@ -15,3 +15,18 @@ export async function generateQuiz(documentId) {
 
   return response.json();
 }
+
+/**
+ * Loads existing quiz questions without generating any. Returns an
+ * empty array if none exist yet.
+ */
+export async function getQuiz(documentId) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/quiz`);
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.detail || `Could not load quiz (status ${response.status})`);
+  }
+
+  return response.json();
+}

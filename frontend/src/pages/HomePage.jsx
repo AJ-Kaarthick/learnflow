@@ -1,5 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { deleteDocument, listDocuments, renameDocument } from "../api/documents";
+import { getFlashcards } from "../api/flashcards";
+import { getMindMap } from "../api/mindmap";
+import { getQuiz } from "../api/quiz";
+import { getSummary } from "../api/summary";
 import BackendStatus from "../components/BackendStatus";
+import DocumentList from "../components/DocumentList";
 import FlashcardsPanel from "../components/FlashcardsPanel";
 import MindMapPanel from "../components/MindMapPanel";
 import QuizPanel from "../components/QuizPanel";
@@ -14,8 +20,75 @@ function statusLabel(status) {
   return status;
 }
 
+// Loads everything already generated for a document in one place, so
+// individual panels don't each decide independently when to fetch —
+// HomePage coordinates it once and hands each panel its starting data.
+// Failures here fall back to empty/null rather than surfacing an
+// error: worst case the panel just shows its normal "not generated
+// yet" state, which is still a fully working fallback.
+async function loadCachedContent(documentId) {
+  const [summary, flashcards, quiz, mindmap] = await Promise.all([
+    getSummary(documentId).catch(() => null),
+    getFlashcards(documentId).catch(() => []),
+    getQuiz(documentId).catch(() => []),
+    getMindMap(documentId).catch(() => null),
+  ]);
+  return { summary, flashcards, quiz, mindmap };
+}
+
 function HomePage() {
+  const [documents, setDocuments] = useState([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+
   const [document, setDocument] = useState(null);
+  const [cachedContent, setCachedContent] = useState(null);
+  const [contentLoading, setContentLoading] = useState(false);
+
+  useEffect(() => {
+    refreshDocumentList();
+  }, []);
+
+  async function refreshDocumentList() {
+    setDocumentsLoading(true);
+    try {
+      const list = await listDocuments();
+      setDocuments(list);
+    } catch {
+      // Leave the list as-is; the section just shows whatever it had.
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }
+
+  async function openDocument(doc) {
+    setDocument(doc);
+    setCachedContent(null);
+    if (doc.status !== "ready") return;
+    setContentLoading(true);
+    const content = await loadCachedContent(doc.id);
+    setCachedContent(content);
+    setContentLoading(false);
+  }
+
+  async function handleUploadComplete(newDocument) {
+    await refreshDocumentList();
+    await openDocument(newDocument);
+  }
+
+  async function handleRename(documentId, newName) {
+    const updated = await renameDocument(documentId, newName);
+    setDocuments((previous) => previous.map((doc) => (doc.id === documentId ? updated : doc)));
+    setDocument((previous) => (previous && previous.id === documentId ? updated : previous));
+  }
+
+  async function handleDelete(documentId) {
+    await deleteDocument(documentId);
+    setDocuments((previous) => previous.filter((doc) => doc.id !== documentId));
+    if (document && document.id === documentId) {
+      setDocument(null);
+      setCachedContent(null);
+    }
+  }
 
   const extractedVeryLittleText =
     document && document.status === "ready" && document.character_count < 50;
@@ -27,13 +100,32 @@ function HomePage() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             Learn<span className="text-accent-600">Flow</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Upload a PDF to get started</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Pick up where you left off, or upload a new PDF.
+          </p>
         </header>
+
+        <section className="mx-auto w-full max-w-xl space-y-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold tracking-tight text-slate-900">
+            Your documents
+          </h2>
+          {documentsLoading ? (
+            <p className="text-sm text-slate-500">Loading documents...</p>
+          ) : (
+            <DocumentList
+              documents={documents}
+              activeDocumentId={document?.id ?? null}
+              onOpen={openDocument}
+              onRename={handleRename}
+              onDelete={handleDelete}
+            />
+          )}
+        </section>
 
         <section className="mx-auto w-full max-w-xl space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <BackendStatus />
 
-          <UploadForm onUploadComplete={setDocument} />
+          <UploadForm onUploadComplete={handleUploadComplete} />
 
           {document && (
             <div className="space-y-2 border-t border-slate-200 pt-4">
@@ -72,14 +164,34 @@ function HomePage() {
           )}
         </section>
 
-        {document && document.status === "ready" && (
-          <div className="space-y-4">
-            <SummaryPanel key={`summary-${document.id}`} documentId={document.id} />
-            <FlashcardsPanel key={`flashcards-${document.id}`} documentId={document.id} />
-            <QuizPanel key={`quiz-${document.id}`} documentId={document.id} />
-            <MindMapPanel key={`mindmap-${document.id}`} documentId={document.id} />
-          </div>
-        )}
+        {document &&
+          document.status === "ready" &&
+          (contentLoading || !cachedContent ? (
+            <p className="text-center text-sm text-slate-500">Loading saved content...</p>
+          ) : (
+            <div className="space-y-4">
+              <SummaryPanel
+                key={`summary-${document.id}`}
+                documentId={document.id}
+                initialSummary={cachedContent.summary}
+              />
+              <FlashcardsPanel
+                key={`flashcards-${document.id}`}
+                documentId={document.id}
+                initialFlashcards={cachedContent.flashcards}
+              />
+              <QuizPanel
+                key={`quiz-${document.id}`}
+                documentId={document.id}
+                initialQuestions={cachedContent.quiz}
+              />
+              <MindMapPanel
+                key={`mindmap-${document.id}`}
+                documentId={document.id}
+                initialMindmap={cachedContent.mindmap}
+              />
+            </div>
+          ))}
       </div>
     </main>
   );

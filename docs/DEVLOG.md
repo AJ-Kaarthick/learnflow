@@ -384,3 +384,61 @@ Improve the usability of generated learning content by allowing users to easily 
 ## Result
 
 LearnFlow now allows users to easily reuse AI-generated content by copying summaries, flashcards, and quizzes or downloading summaries as text files, without changing the existing application architecture.
+
+---
+
+# V1.1 — Milestone 3B
+
+**Date:** 21 July 2026
+
+## Goal
+
+Transform LearnFlow into a persistent document workspace by introducing a Document Manager.
+
+## Features Completed
+
+- Added document history
+- Open previously uploaded documents
+- Restored cached summaries, flashcards, quizzes and mind maps
+- Added document renaming
+- Added document deletion
+- Centralized cached-content loading in HomePage
+- Added backend tests for document management
+
+## Learned
+
+- Coordinating application state from a higher-level React component
+- Designing RESTful CRUD endpoints
+- Building persistent user workflows
+- Separating backend state from UI state
+
+## Problems Faced
+
+- ORM relationships did not automatically cascade deletes.
+- Component-level data fetching would have scattered application state.
+- React controlled-input behaviour required adjustments during testing.
+
+## Solutions
+
+- Explicitly deleted associated AI-generated data and uploaded files.
+- Centralized document loading in HomePage.
+- Expanded backend tests and browser-level smoke testing.
+
+## Verification
+
+- Backend tests: **48 passed**
+- Frontend production build successful
+- Browser smoke testing completed
+- Document restore verified
+- Rename verified
+- Delete verified
+
+## Result
+
+LearnFlow now behaves as a persistent AI learning workspace where users can return to previously uploaded documents and continue learning without regenerating AI content.
+
+### Post-Milestone Improvements
+
+- Improved document rename UX by preserving the original file extension while preventing extension changes.
+- Generalized filename handling to support future document types.
+- Added generic filename utilities and additional backend tests.

@@ -19,3 +19,21 @@ export async function generateMindMap(documentId) {
 
   return response.json();
 }
+
+/**
+ * Loads an existing mind map without generating one. Returns null if
+ * none exists yet.
+ */
+export async function getMindMap(documentId) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/mindmap`);
+
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.detail || `Could not load mind map (status ${response.status})`);
+  }
+
+  return response.json();
+}

@@ -76,6 +76,21 @@ Completed:
 - Accessibility improvements
 - Consistent accent color system
 
+### ✅ Milestone 3 — Document Manager
+
+Completed:
+
+- Copy Summary
+- Download Summary
+- Copy Flashcards
+- Copy Quiz
+- Document history
+- Open existing documents
+- Rename documents
+- Delete documents
+- Restore cached AI-generated content
+- Refresh-and-continue workflow
+
 ---
 
 ## Running Locally
@@ -176,25 +191,26 @@ npm run dev
 - Better responsiveness
 - Accessibility improvements
 
-#### 🚧 Milestone 3
+### ✅ Milestone 3 — Document Manager
 
-##### ✅ Milestone 3A
+Completed:
+
 - Copy Summary
 - Download Summary
 - Copy Flashcards
 - Copy Quiz
-
-##### ⏳ Milestone 3B
-- Upload history
-- Rename documents
+- Persistent document history
+- Open existing documents
+- Rename documents with locked file extension
 - Delete documents
+- Restore cached AI-generated content
+- Refresh-and-continue workflow
 
 #### ⏳ Milestone 4
-- Logging
-- Shared frontend API helpers
-- Remove duplicated logic
-- Better tests
-- Small refactors
+
+- Search documents
+- Sort documents
+- Better document metadata
 
 #### ⏳ Milestone 5
 - Documentation

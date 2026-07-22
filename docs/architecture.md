@@ -141,6 +141,11 @@ Implemented in V1.1 so far:
 - Consistent card layout
 - Better responsive design
 - Built-in copy and download actions for generated content
+- Persistent document management
+- Reopen previously uploaded documents
+- Restore cached AI-generated content
+- Document rename and delete support
+- Original file extensions remain visible and are preserved during document renaming
 
 ---
 
@@ -176,11 +181,11 @@ Implemented in V1.1 so far:
 
 **Current Release:** V1.0
 
-**Current Development:** V1.1 (Milestone 3A Complete)
+**Current Development:** V1.1 (Milestone 3 Complete)
 
-Core learning workflow:
-
-Upload PDF
+Open Existing Document
+        OR
+Upload New PDF
 
 ↓
 
@@ -188,16 +193,11 @@ Extract Text
 
 ↓
 
-Generate Summary
+Generate or Restore Cached AI Content
 
 ↓
 
-Generate Flashcards
-
-↓
-
-Generate Quiz
-
-↓
-
-Generate Mind Map
+Summary
+Flashcards
+Quiz
+Mind Map

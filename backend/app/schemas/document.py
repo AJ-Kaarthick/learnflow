@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 PREVIEW_LENGTH = 500
 
@@ -36,3 +36,28 @@ class DocumentResponse(BaseModel):
             text_preview=text[:PREVIEW_LENGTH],
             character_count=len(text),
         )
+
+
+class DocumentRenameRequest(BaseModel):
+    """
+    Body for PATCH /documents/{id}. Reuses the existing
+    original_filename field as the editable display name rather than
+    adding a separate column — same field the UI already shows.
+
+    This only checks that the requested name isn't blank. Extension
+    preservation happens in the route handler (see
+    rename_document in routes_documents.py), not here, because it
+    needs to know the document's *current* extension — which varies
+    per document and per file type — and a field validator has no
+    access to that.
+    """
+
+    original_filename: str
+
+    @field_validator("original_filename")
+    @classmethod
+    def not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Name cannot be empty.")
+        return stripped
