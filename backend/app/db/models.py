@@ -42,6 +42,22 @@ class Document(Base):
     # option — nothing else reads it.
     last_opened_at = Column(DateTime, nullable=True)
 
+    # Size of the uploaded file in bytes. Captured once at upload time
+    # (see routes_documents.py) rather than stat'd from disk on every
+    # request — cheap either way for one document, but this avoids a
+    # filesystem call per document on every Document Library load.
+    file_size_bytes = Column(Integer, nullable=True)
+
+    # Number of pages, read from the PDF once at upload time (see
+    # pdf_service.get_page_count). Unlike file size, this can't be
+    # derived cheaply on demand — it requires parsing the PDF's page
+    # tree — so it's worth storing rather than recomputing per
+    # request. Nullable so existing rows from before this column
+    # existed, or documents whose page count couldn't be read, just
+    # show nothing instead of erroring.
+    page_count = Column(Integer, nullable=True)
+
+
 
 class Summary(Base):
     """

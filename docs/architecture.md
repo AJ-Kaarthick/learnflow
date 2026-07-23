@@ -159,6 +159,11 @@ Implemented:
 - Recently Opened
 - Better rename validation
 - Inline validation errors
+- Upload date display
+- Last opened display
+- File size display
+- Page count display
+- Compact responsive metadata layout
 
 ---
 
@@ -192,10 +197,10 @@ Implemented:
 
 ## Version
 
-**Current Release:** V1.2.0
+Current Release: V1.2.0
 
-**Current Development:**
-V1.2 — Milestone 1 Complete
+Current Development:
+V1.2 — Milestone 2 Complete
 
 Open Existing Document
         OR

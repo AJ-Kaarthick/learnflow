@@ -33,6 +33,20 @@ def test_upload_document_extracts_text():
     assert body["character_count"] > 0
 
 
+def test_upload_document_includes_file_size_and_page_count():
+    pdf_bytes = _make_test_pdf("One page of content")
+
+    response = client.post(
+        "/api/v1/documents/upload",
+        files={"file": ("sized.pdf", pdf_bytes, "application/pdf")},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["file_size_bytes"] == len(pdf_bytes)
+    assert body["page_count"] == 1
+
+
 def test_upload_rejects_non_pdf_files():
     response = client.post(
         "/api/v1/documents/upload",

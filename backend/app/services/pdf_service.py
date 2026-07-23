@@ -16,3 +16,17 @@ def extract_text(file_path: Path) -> str:
     reader = PdfReader(str(file_path))
     pages_text = [page.extract_text() or "" for page in reader.pages]
     return "\n\n".join(pages_text).strip()
+
+
+def get_page_count(file_path: Path) -> int:
+    """
+    Returns how many pages a PDF has. Kept separate from extract_text
+    rather than returned alongside it: this only needs the page tree
+    (cheap), not the text of every page (the expensive part of
+    extract_text), and callers that only need a count — like the
+    Document Library metadata — shouldn't have to pay for text
+    extraction to get it.
+    """
+    reader = PdfReader(str(file_path))
+    return len(reader.pages)
+

@@ -20,6 +20,8 @@ LearnFlow currently supports:
 - ✏️ Rename documents (with filename validation)
 - 🗑️ Delete documents
 - 📂 Reopen previously uploaded documents
+- 📅 Display upload date and last opened time
+- 📄 Display file size and page count
 - 📋 Copy summaries, flashcards, and quizzes
 - 💾 Download summaries
 - 💾 Store generated learning content in SQLite
@@ -57,6 +59,13 @@ LearnFlow currently supports:
 - Recently Opened
 - Improved Filename Validation
 - Better Rename Error Handling
+
+#### Milestone 2
+- Display Upload Date
+- Display Last Opened
+- Display File Size
+- Display Page Count
+- Compact Responsive Metadata Layout
 
 ### 🔮 Planned for V2
 

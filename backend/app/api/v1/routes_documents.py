@@ -88,14 +88,19 @@ async def upload_document(
         original_filename=file.filename,
         stored_filename=stored_filename,
         status="processing",
+        # Known as soon as the bytes are in hand — no need to wait for
+        # extraction or stat the file back off disk.
+        file_size_bytes=len(file_bytes),
     )
     db.add(document)
     db.commit()
     db.refresh(document)
 
     try:
-        text = pdf_service.extract_text(storage_service.get_path(stored_filename))
+        stored_path = storage_service.get_path(stored_filename)
+        text = pdf_service.extract_text(stored_path)
         document.extracted_text = text
+        document.page_count = pdf_service.get_page_count(stored_path)
         document.status = "ready"
     except Exception:
         document.status = "failed"

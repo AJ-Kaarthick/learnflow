@@ -443,6 +443,9 @@ LearnFlow now behaves as a persistent AI learning workspace where users can retu
 - Generalized filename handling to support future document types.
 - Added generic filename utilities and additional backend tests.
 
+
+# V1.2 — Milestone 1
+
 ## Goal
 
 Improve document management for projects with many uploaded PDFs.
@@ -496,3 +499,55 @@ Improve document management for projects with many uploaded PDFs.
 ## Result
 
 LearnFlow now scales much better for users with many uploaded documents. The new Document Library keeps AI content accessible while making it easy to search, organize, and manage previously uploaded PDFs.
+
+---
+
+# V1.2 — Milestone 2
+
+## Goal
+
+Improve the Document Library by displaying useful document metadata while preserving the existing architecture.
+
+## Features Completed
+
+- Display upload date
+- Display last opened date
+- Display file size
+- Display page count
+- Compact responsive metadata layout
+- Stored file size during upload
+- Stored page count during upload
+- Added backend tests for new metadata
+
+## Learned
+
+- Tradeoffs between deriving metadata and storing it
+- Extending SQLAlchemy models safely
+- Keeping UI improvements isolated from business logic
+- Maintaining backward compatibility with additive API changes
+
+## Problems Faced
+
+- Existing SQLite database schema did not include the new columns.
+- Existing databases are not updated automatically by `Base.metadata.create_all()`.
+
+## Solutions
+
+- Added nullable database columns for `file_size_bytes` and `page_count`.
+- Populated metadata during document upload.
+- Recreated the local development database to apply the updated schema.
+
+## Verification
+
+- Backend tests: **86 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- Upload date verified
+- Last opened verified
+- File size verified
+- Page count verified
+- Search, sort, rename and delete regression testing completed
+
+## Result
+
+LearnFlow now provides richer document information while preserving the existing architecture. Users can quickly identify documents using upload date, last opened time, page count and file size without affecting existing functionality.

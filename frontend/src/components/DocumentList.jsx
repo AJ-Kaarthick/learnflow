@@ -8,6 +8,21 @@ function formatDate(isoString) {
   });
 }
 
+// File sizes come back from the API in bytes. KB is the smallest unit
+// shown (a sub-KB PDF is vanishingly rare) so the number stays short
+// and glanceable in a compact metadata line.
+function formatFileSize(bytes) {
+  if (bytes === null || bytes === undefined) return null;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+function formatPageCount(pageCount) {
+  if (pageCount === null || pageCount === undefined) return null;
+  return `${pageCount} ${pageCount === 1 ? "page" : "pages"}`;
+}
+
 function statusPillClasses(status) {
   if (status === "ready") return "bg-emerald-50 text-emerald-700";
   if (status === "failed") return "bg-red-50 text-red-700";
@@ -169,7 +184,7 @@ function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete 
               )}
 
               {!isEditing && (
-                <p className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
                   <span
                     className={`rounded-full px-1.5 py-0.5 font-medium ${statusPillClasses(
                       doc.status
@@ -177,7 +192,22 @@ function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete 
                   >
                     {statusLabel(doc.status)}
                   </span>
-                  {formatDate(doc.created_at)}
+                  <span title="Upload date">{formatDate(doc.created_at)}</span>
+                  {formatPageCount(doc.page_count) && (
+                    <span title="Page count">
+                      &middot; {formatPageCount(doc.page_count)}
+                    </span>
+                  )}
+                  {formatFileSize(doc.file_size_bytes) && (
+                    <span title="File size">
+                      &middot; {formatFileSize(doc.file_size_bytes)}
+                    </span>
+                  )}
+                  {doc.last_opened_at && (
+                    <span title="Last opened">
+                      &middot; Opened {formatDate(doc.last_opened_at)}
+                    </span>
+                  )}
                 </p>
               )}
             </div>

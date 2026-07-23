@@ -37,6 +37,8 @@ class DocumentResponse(BaseModel):
     last_opened_at: datetime | None
     text_preview: str
     character_count: int
+    file_size_bytes: int | None
+    page_count: int | None
 
     # Lets Pydantic build this model directly from a SQLAlchemy object
     # (document.id, document.status, ...) instead of only from a dict.
@@ -53,6 +55,8 @@ class DocumentResponse(BaseModel):
             last_opened_at=document.last_opened_at,
             text_preview=text[:PREVIEW_LENGTH],
             character_count=len(text),
+            file_size_bytes=document.file_size_bytes,
+            page_count=document.page_count,
         )
 
 
