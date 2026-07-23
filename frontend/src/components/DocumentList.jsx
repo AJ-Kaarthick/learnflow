@@ -37,16 +37,19 @@ function splitFilename(filename) {
 function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete }) {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [editError, setEditError] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
   function startRename(doc) {
     setEditingId(doc.id);
     setEditValue(splitFilename(doc.original_filename).base);
+    setEditError(null);
   }
 
   function cancelRename() {
     setEditingId(null);
     setEditValue("");
+    setEditError(null);
   }
 
   async function saveRename(doc) {
@@ -56,14 +59,19 @@ function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete 
       return;
     }
     setBusyId(doc.id);
+    setEditError(null);
     try {
       // Send just the base name — the backend reapplies this
       // document's real extension server-side, so it can never be
-      // edited away here regardless of file type.
+      // edited away here regardless of file type. The backend also
+      // validates the name (not blank, not punctuation-only, not a
+      // duplicate) — on failure, keep editing open and show why.
       await onRename(doc.id, trimmed);
+      cancelRename();
+    } catch (error) {
+      setEditError(error.message || "Couldn't rename this document.");
     } finally {
       setBusyId(null);
-      cancelRename();
     }
   }
 
@@ -79,7 +87,7 @@ function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete 
   }
 
   if (documents.length === 0) {
-    return <p className="text-sm text-slate-500">No documents uploaded yet.</p>;
+    return null;
   }
 
   return (
@@ -104,7 +112,10 @@ function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete 
                       <input
                         type="text"
                         value={editValue}
-                        onChange={(event) => setEditValue(event.target.value)}
+                        onChange={(event) => {
+                          setEditValue(event.target.value);
+                          setEditError(null);
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") saveRename(doc);
                           if (event.key === "Escape") cancelRename();
@@ -136,8 +147,14 @@ function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete 
                       Cancel
                     </button>
                   </div>
-                  {splitFilename(doc.original_filename).extension && (
-                    <p className="pl-2 text-[11px] text-slate-400">File type can&apos;t be changed</p>
+                  {editError ? (
+                    <p role="alert" className="pl-2 text-[11px] font-medium text-red-600">
+                      {editError}
+                    </p>
+                  ) : (
+                    splitFilename(doc.original_filename).extension && (
+                      <p className="pl-2 text-[11px] text-slate-400">File type can&apos;t be changed</p>
+                    )
                   )}
                 </div>
               ) : (

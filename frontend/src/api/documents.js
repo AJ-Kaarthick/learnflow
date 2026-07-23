@@ -34,14 +34,39 @@ export async function getDocument(documentId) {
 }
 
 /**
- * Returns every previously uploaded document, most recent first. This
- * is what powers the Document Manager list on the home page.
+ * Returns documents for the Document Library, optionally filtered by
+ * a case-insensitive partial filename match and/or sorted. `sort`
+ * mirrors the backend's DocumentSortOption values exactly
+ * ("name_asc", "name_desc", "uploaded_newest", "uploaded_oldest",
+ * "recently_opened") — see routes_documents.py.
  */
-export async function listDocuments() {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents`);
+export async function listDocuments({ search, sort } = {}) {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (sort) params.set("sort", sort);
+  const queryString = params.toString();
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/documents${queryString ? `?${queryString}` : ""}`);
 
   if (!response.ok) {
     throw new Error(`Could not load documents (status ${response.status})`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Marks a document as opened (sets last_opened_at server-side), which
+ * is what powers the "Recently Opened" sort. Call whenever the user
+ * opens an existing document from the library.
+ */
+export async function markDocumentOpened(documentId) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/open`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Could not mark document opened (status ${response.status})`);
   }
 
   return response.json();

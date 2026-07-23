@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
-import { deleteDocument, listDocuments, renameDocument } from "../api/documents";
+import { useState } from "react";
+import { deleteDocument, markDocumentOpened, renameDocument } from "../api/documents";
 import { getFlashcards } from "../api/flashcards";
 import { getMindMap } from "../api/mindmap";
 import { getQuiz } from "../api/quiz";
 import { getSummary } from "../api/summary";
 import BackendStatus from "../components/BackendStatus";
-import DocumentList from "../components/DocumentList";
+import DocumentLibrary from "../components/DocumentLibrary";
 import FlashcardsPanel from "../components/FlashcardsPanel";
 import MindMapPanel from "../components/MindMapPanel";
 import QuizPanel from "../components/QuizPanel";
@@ -37,32 +37,27 @@ async function loadCachedContent(documentId) {
 }
 
 function HomePage() {
-  const [documents, setDocuments] = useState([]);
-  const [documentsLoading, setDocumentsLoading] = useState(true);
+  // Bumped whenever an action outside DocumentLibrary's own
+  // search/sort controls changes the underlying document data (open,
+  // rename, delete, upload) so it knows to re-fetch.
+  const [refreshSignal, setRefreshSignal] = useState(0);
 
   const [document, setDocument] = useState(null);
   const [cachedContent, setCachedContent] = useState(null);
   const [contentLoading, setContentLoading] = useState(false);
 
-  useEffect(() => {
-    refreshDocumentList();
-  }, []);
-
-  async function refreshDocumentList() {
-    setDocumentsLoading(true);
-    try {
-      const list = await listDocuments();
-      setDocuments(list);
-    } catch {
-      // Leave the list as-is; the section just shows whatever it had.
-    } finally {
-      setDocumentsLoading(false);
-    }
-  }
-
   async function openDocument(doc) {
     setDocument(doc);
     setCachedContent(null);
+
+    // Timestamp the open server-side (powers the "Recently Opened"
+    // sort) and refresh the library so it reflects the new order.
+    // Best-effort: if this fails, opening the document should still
+    // work normally.
+    markDocumentOpened(doc.id)
+      .catch(() => {})
+      .finally(() => setRefreshSignal((count) => count + 1));
+
     if (doc.status !== "ready") return;
     setContentLoading(true);
     const content = await loadCachedContent(doc.id);
@@ -71,23 +66,22 @@ function HomePage() {
   }
 
   async function handleUploadComplete(newDocument) {
-    await refreshDocumentList();
     await openDocument(newDocument);
   }
 
   async function handleRename(documentId, newName) {
     const updated = await renameDocument(documentId, newName);
-    setDocuments((previous) => previous.map((doc) => (doc.id === documentId ? updated : doc)));
     setDocument((previous) => (previous && previous.id === documentId ? updated : previous));
+    setRefreshSignal((count) => count + 1);
   }
 
   async function handleDelete(documentId) {
     await deleteDocument(documentId);
-    setDocuments((previous) => previous.filter((doc) => doc.id !== documentId));
     if (document && document.id === documentId) {
       setDocument(null);
       setCachedContent(null);
     }
+    setRefreshSignal((count) => count + 1);
   }
 
   const extractedVeryLittleText =
@@ -105,21 +99,14 @@ function HomePage() {
           </p>
         </header>
 
-        <section className="mx-auto w-full max-w-xl space-y-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-base font-semibold tracking-tight text-slate-900">
-            Your documents
-          </h2>
-          {documentsLoading ? (
-            <p className="text-sm text-slate-500">Loading documents...</p>
-          ) : (
-            <DocumentList
-              documents={documents}
-              activeDocumentId={document?.id ?? null}
-              onOpen={openDocument}
-              onRename={handleRename}
-              onDelete={handleDelete}
-            />
-          )}
+        <section className="mx-auto w-full max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <DocumentLibrary
+            refreshSignal={refreshSignal}
+            activeDocumentId={document?.id ?? null}
+            onOpen={openDocument}
+            onRename={handleRename}
+            onDelete={handleDelete}
+          />
         </section>
 
         <section className="mx-auto w-full max-w-xl space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

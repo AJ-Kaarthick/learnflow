@@ -442,3 +442,57 @@ LearnFlow now behaves as a persistent AI learning workspace where users can retu
 - Improved document rename UX by preserving the original file extension while preventing extension changes.
 - Generalized filename handling to support future document types.
 - Added generic filename utilities and additional backend tests.
+
+## Goal
+
+Improve document management for projects with many uploaded PDFs.
+
+## Features Completed
+
+- Added Document Library
+- Search by filename
+- Sort by name
+- Sort by upload date
+- Sort by recently opened
+- Fixed-height scrollable library
+- Result count
+- Empty search state
+- Added last_opened tracking
+- Improved rename validation
+- Duplicate filename prevention
+- Better rename error handling
+
+## Learned
+
+- Designing scalable document management
+- Server-side search vs client-side search
+- REST query parameters
+- Backend validation vs frontend validation
+- Better UX for inline form validation
+
+## Problems Faced
+
+- Growing document list pushed AI content down the page.
+- Duplicate filenames created ambiguity.
+- Rename errors were not visible to the user.
+
+## Solutions
+
+- Introduced a scrollable Document Library.
+- Added server-side search and sorting.
+- Added case-insensitive duplicate detection.
+- Added inline rename validation messages.
+
+## Verification
+
+- Backend tests: **85 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- Search verified
+- Sorting verified
+- Recently Opened verified
+- Rename validation verified
+
+## Result
+
+LearnFlow now scales much better for users with many uploaded documents. The new Document Library keeps AI content accessible while making it easy to search, organize, and manage previously uploaded PDFs.

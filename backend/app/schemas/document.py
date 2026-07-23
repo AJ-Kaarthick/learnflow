@@ -1,8 +1,24 @@
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, field_validator
 
 PREVIEW_LENGTH = 500
+
+
+class DocumentSortOption(str, Enum):
+    """
+    The 5 sort orders the Document Library supports. A str Enum so
+    FastAPI validates the `sort` query param against exactly these
+    values (invalid values -> automatic 422) and it serializes as a
+    plain string, same as any other query param.
+    """
+
+    NAME_ASC = "name_asc"
+    NAME_DESC = "name_desc"
+    UPLOADED_NEWEST = "uploaded_newest"
+    UPLOADED_OLDEST = "uploaded_oldest"
+    RECENTLY_OPENED = "recently_opened"
 
 
 class DocumentResponse(BaseModel):
@@ -18,6 +34,7 @@ class DocumentResponse(BaseModel):
     original_filename: str
     status: str
     created_at: datetime
+    last_opened_at: datetime | None
     text_preview: str
     character_count: int
 
@@ -33,6 +50,7 @@ class DocumentResponse(BaseModel):
             original_filename=document.original_filename,
             status=document.status,
             created_at=document.created_at,
+            last_opened_at=document.last_opened_at,
             text_preview=text[:PREVIEW_LENGTH],
             character_count=len(text),
         )

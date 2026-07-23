@@ -147,6 +147,19 @@ Implemented in V1.1 so far:
 - Document rename and delete support
 - Original file extensions remain visible and are preserved during document renaming
 
+## UX Principles (V1.2)
+
+V1.2 focuses on making LearnFlow scale well as the number of uploaded documents grows.
+
+Implemented:
+
+- Scrollable Document Library
+- Search by filename
+- Sorting
+- Recently Opened
+- Better rename validation
+- Inline validation errors
+
 ---
 
 
@@ -179,9 +192,10 @@ Implemented in V1.1 so far:
 
 ## Version
 
-**Current Release:** V1.0
+**Current Release:** V1.2.0
 
-**Current Development:** V1.1 (Milestone 3 Complete)
+**Current Development:**
+V1.2 — Milestone 1 Complete
 
 Open Existing Document
         OR
@@ -189,7 +203,7 @@ Upload New PDF
 
 ↓
 
-Extract Text
+Document Library
 
 ↓
 

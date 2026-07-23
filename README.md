@@ -6,7 +6,7 @@ LearnFlow is an AI-powered learning assistant that helps students study from PDF
 
 ## Features
 
-Current features:
+LearnFlow currently supports:
 
 - 📄 Upload PDF documents
 - 📑 Extract text from PDFs
@@ -14,6 +14,14 @@ Current features:
 - 🧠 Generate AI-powered flashcards
 - 📝 Generate AI-powered quizzes
 - 🗺️ Generate AI-powered mind maps
+- 📚 Persistent Document Library
+- 🔍 Search uploaded documents
+- ↕️ Sort documents by name, upload date, or recently opened
+- ✏️ Rename documents (with filename validation)
+- 🗑️ Delete documents
+- 📂 Reopen previously uploaded documents
+- 📋 Copy summaries, flashcards, and quizzes
+- 💾 Download summaries
 - 💾 Store generated learning content in SQLite
 - 🔄 Provider-swappable AI architecture
 
@@ -21,75 +29,43 @@ Current features:
 
 ## Project Status
 
-### ✅ Milestone 1
-- PDF upload
-- PDF text extraction
-- SQLite database
-- SQLAlchemy ORM
-- React + FastAPI integration
+### ✅ V1.0
 
-### ✅ Milestone 2
-- AI summarization
-- Gemini integration
-- Provider abstraction
-- Summary caching
+- PDF Upload
+- Text Extraction
+- AI Summaries
+- AI Flashcards
+- AI Quizzes
+- AI Mind Maps
 
-### ✅ Milestone 3
-- AI flashcard generation
-- Flashcard caching
-- Structured JSON parsing
+### ✅ V1.1
 
-### ✅ Milestone 4
-- AI quiz generation
-- Quiz caching
-- Shared structured-output parser
+- UX Improvements
+- UI Polish
+- Copy & Download Actions
+- Persistent Document Manager
+- Open Existing Documents
+- Cached AI Content
+- Refresh-and-Continue Workflow
 
-### ✅ Milestone 5 (V1 Complete)
-- AI mind map generation
-- Interactive mind map visualization
-- Tree-based JSON generation
-- Shared AI architecture reused across all features
+### ✅ V1.2 (Current)
 
-## 🚧 LearnFlow V1.1 Progress
+#### Milestone 1
+- Scrollable Document Library
+- Search Documents
+- Sort Documents
+- Recently Opened
+- Improved Filename Validation
+- Better Rename Error Handling
 
-### ✅ Milestone 1 — UX Improvements
+### 🔮 Planned for V2
 
-Completed:
-
-- Clear previous AI-generated content when uploading a new PDF
-- Loading indicators for uploads and AI generation
-- Disable buttons while requests are running
-- Friendly user-facing success and error messages
-- Empty states for AI panels
-- Client-side PDF validation
-- Same-file upload support
-
-### ✅ Milestone 2 — UI Polish
-
-Completed:
-
-- Improved visual hierarchy
-- Consistent card-based layout
-- Better typography and spacing
-- Unified button styling
-- Responsive layout improvements
-- Accessibility improvements
-- Consistent accent color system
-
-### ✅ Milestone 3 — Document Manager
-
-Completed:
-
-- Copy Summary
-- Download Summary
-- Copy Flashcards
-- Copy Quiz
-- Document history
-- Open existing documents
-- Rename documents
-- Delete documents
-- Restore cached AI-generated content
-- Refresh-and-continue workflow
+- Chat with PDF (RAG)
+- DOCX / PPTX support
+- Authentication
+- PostgreSQL
+- Docker
+- Deployment
 
 ---
 
@@ -101,7 +77,7 @@ Completed:
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env
 ```
 
@@ -162,65 +138,3 @@ npm run dev
 - `docs/DEVLOG.md`
 
 ---
-
-## Roadmap
-
-### ✅ V1
-- PDF Upload
-- Text Extraction
-- AI Summaries
-- AI Flashcards
-- AI Quizzes
-- AI Mind Maps
-
-### 🚧 V1.1
-
-#### ✅ Milestone 1
-- UX improvements
-- Loading indicators
-- Client-side validation
-- Better error handling
-- Empty states
-- Same-file upload support
-
-#### ✅ Milestone 2
-- UI polish
-- Better spacing
-- Better typography
-- Better cards
-- Better responsiveness
-- Accessibility improvements
-
-### ✅ Milestone 3 — Document Manager
-
-Completed:
-
-- Copy Summary
-- Download Summary
-- Copy Flashcards
-- Copy Quiz
-- Persistent document history
-- Open existing documents
-- Rename documents with locked file extension
-- Delete documents
-- Restore cached AI-generated content
-- Refresh-and-continue workflow
-
-#### ⏳ Milestone 4
-
-- Search documents
-- Sort documents
-- Better document metadata
-
-#### ⏳ Milestone 5
-- Documentation
-- Final testing
-- Release preparation
-
-### 🔮 V2
-- Chat with PDF (RAG)
-- DOCX / PPTX / TXT support
-- Authentication
-- PostgreSQL
-- Docker
-- Deployment

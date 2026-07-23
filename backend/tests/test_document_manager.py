@@ -150,6 +150,84 @@ def test_rename_document_rejects_name_that_is_only_the_extension():
     assert response.status_code == 422
 
 
+def test_rename_document_rejects_punctuation_only_names():
+    client = TestClient(app)
+    document_id = _upload_ready_document(client)
+
+    for punctuation_only in ["...", "???", "__", "---", "!!!"]:
+        response = client.patch(
+            f"/api/v1/documents/{document_id}", json={"original_filename": punctuation_only}
+        )
+        assert response.status_code == 422, f"expected {punctuation_only!r} to be rejected"
+
+
+def test_rename_document_accepts_names_with_punctuation_and_letters():
+    """Punctuation mixed with real characters is fine — only *all*-punctuation names are rejected."""
+    client = TestClient(app)
+    document_id = _upload_ready_document(client)
+
+    for reasonable_name in ["DBMS (Unit 1)", "AI_Week_3", "C++ Basics"]:
+        response = client.patch(
+            f"/api/v1/documents/{document_id}", json={"original_filename": reasonable_name}
+        )
+        assert response.status_code == 200, f"expected {reasonable_name!r} to be accepted"
+        assert response.json()["original_filename"] == f"{reasonable_name}.pdf"
+
+
+def test_rename_document_rejects_duplicate_name():
+    client = TestClient(app)
+    _upload_ready_document(client, "DBMS.pdf")
+    other_id = _upload_ready_document(client, "Other.pdf")
+
+    response = client.patch(
+        f"/api/v1/documents/{other_id}", json={"original_filename": "DBMS.pdf"}
+    )
+
+    assert response.status_code == 409
+
+
+def test_rename_document_duplicate_check_is_case_and_whitespace_insensitive():
+    client = TestClient(app)
+    tag = uuid.uuid4().hex[:8]
+    _upload_ready_document(client, f"{tag}-DBMS.pdf")
+    other_id = _upload_ready_document(client, f"{tag}-Other.pdf")
+
+    for attempted_name in [f"{tag}-dbms.pdf", f"  {tag}-DBMS.pdf  ", f"{tag}-DbMs"]:
+        response = client.patch(
+            f"/api/v1/documents/{other_id}", json={"original_filename": attempted_name}
+        )
+        assert response.status_code == 409, f"expected {attempted_name!r} to be rejected as a duplicate"
+
+
+def test_rename_document_allows_renaming_to_its_own_current_name():
+    """Renaming a document to the name it already has isn't a duplicate of itself."""
+    client = TestClient(app)
+    document_id = _upload_ready_document(client, "Same Name.pdf")
+
+    response = client.patch(
+        f"/api/v1/documents/{document_id}", json={"original_filename": "Same Name.pdf"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["original_filename"] == "Same Name.pdf"
+
+
+def test_rename_document_duplicate_check_does_not_cross_extensions():
+    """A .pdf named "Notes" and a .docx named "Notes" aren't duplicates of each other."""
+    client = TestClient(app)
+    tag = uuid.uuid4().hex[:8]
+    pdf_id = _upload_ready_document(client, f"{tag}-Notes.pdf")
+    docx_id = _seed_document_with_extension(f"{tag}-Something.docx")
+
+    response = client.patch(
+        f"/api/v1/documents/{docx_id}", json={"original_filename": f"{tag}-Notes"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["original_filename"] == f"{tag}-Notes.docx"
+    assert pdf_id != docx_id
+
+
 def _seed_document_with_extension(filename: str) -> str:
     """
     Inserts a Document row directly via the DB session rather than
@@ -178,6 +256,7 @@ def _seed_document_with_extension(filename: str) -> str:
 def test_rename_preserves_non_pdf_extension():
     """
     The extension is derived from the document's own current name,
+
     not a hardcoded ".pdf" — a .docx document renamed today must still
     come back as .docx, proving this isn't PDF-specific.
     """
@@ -227,11 +306,13 @@ def test_open_and_delete_work_after_rename():
     client = TestClient(app)
     document_id = _upload_ready_document(client)
 
-    client.patch(f"/api/v1/documents/{document_id}", json={"original_filename": "Renamed"})
+    client.patch(
+        f"/api/v1/documents/{document_id}", json={"original_filename": "Renamed For Open And Delete Test"}
+    )
 
     get_response = client.get(f"/api/v1/documents/{document_id}")
     assert get_response.status_code == 200
-    assert get_response.json()["original_filename"] == "Renamed.pdf"
+    assert get_response.json()["original_filename"] == "Renamed For Open And Delete Test.pdf"
     assert get_response.json()["status"] == "ready"
 
     delete_response = client.delete(f"/api/v1/documents/{document_id}")

@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import Document, Flashcard, MindMap, QuizQuestion, Summary
-from app.schemas.document import DocumentRenameRequest, DocumentResponse
+from app.schemas.document import DocumentRenameRequest, DocumentResponse, DocumentSortOption
 from app.services import pdf_service, storage_service
 from app.utils import filenames
 
@@ -13,14 +16,52 @@ ALLOWED_CONTENT_TYPE = "application/pdf"
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 
 
+def _escape_like(value: str) -> str:
+    """
+    Escapes LIKE/ILIKE wildcard characters so a search for a literal
+    "%" or "_" doesn't get treated as a wildcard. Paired with
+    `.ilike(..., escape="\\")` below.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("", response_model=list[DocumentResponse])
-def list_documents(db: Session = Depends(get_db)) -> list[DocumentResponse]:
+def list_documents(
+    search: str | None = Query(default=None, description="Case-insensitive, partial filename match."),
+    sort: DocumentSortOption = Query(default=DocumentSortOption.UPLOADED_NEWEST),
+    db: Session = Depends(get_db),
+) -> list[DocumentResponse]:
     """
-    The document history behind the Document Manager. Most recent
-    upload first — no pagination yet, fine at the scale a single
-    student's document list will realistically reach.
+    The Document Library list. Filtering and sorting both happen here,
+    in the database query, rather than in the frontend — search and
+    sort are the same "which documents, in what order" question the
+    DB is already best suited to answer, and it keeps that logic in
+    one tested place instead of duplicated in JS.
     """
-    documents = db.query(Document).order_by(Document.created_at.desc()).all()
+    query = db.query(Document)
+
+    search = (search or "").strip()
+    if search:
+        query = query.filter(
+            Document.original_filename.ilike(f"%{_escape_like(search)}%", escape="\\")
+        )
+
+    if sort == DocumentSortOption.NAME_ASC:
+        query = query.order_by(func.lower(Document.original_filename).asc())
+    elif sort == DocumentSortOption.NAME_DESC:
+        query = query.order_by(func.lower(Document.original_filename).desc())
+    elif sort == DocumentSortOption.UPLOADED_OLDEST:
+        query = query.order_by(Document.created_at.asc())
+    elif sort == DocumentSortOption.RECENTLY_OPENED:
+        # Never-opened documents have a null last_opened_at, which
+        # sorts last here — falling back to upload recency among them
+        # so the list still has a sensible order for documents that
+        # have never been opened.
+        query = query.order_by(Document.last_opened_at.desc(), Document.created_at.desc())
+    else:  # UPLOADED_NEWEST, the default
+        query = query.order_by(Document.created_at.desc())
+
+    documents = query.all()
     return [DocumentResponse.from_document(document) for document in documents]
 
 
@@ -75,6 +116,24 @@ def get_document(document_id: str, db: Session = Depends(get_db)) -> DocumentRes
     return DocumentResponse.from_document(document)
 
 
+@router.post("/{document_id}/open", response_model=DocumentResponse)
+def mark_document_opened(document_id: str, db: Session = Depends(get_db)) -> DocumentResponse:
+    """
+    Called whenever the user opens a document from the library, purely
+    to timestamp it for the "Recently Opened" sort — this endpoint has
+    no other side effects and doesn't touch the document's content.
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    document.last_opened_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(document)
+
+    return DocumentResponse.from_document(document)
+
+
 @router.patch("/{document_id}", response_model=DocumentResponse)
 def rename_document(
     document_id: str, payload: DocumentRenameRequest, db: Session = Depends(get_db)
@@ -94,8 +153,31 @@ def rename_document(
     base_name = filenames.strip_extension(payload.original_filename, extension).strip()
     if not base_name:
         raise HTTPException(status_code=422, detail="Name cannot be empty.")
+    if not any(character.isalnum() for character in base_name):
+        raise HTTPException(
+            status_code=422, detail="Name must include at least one letter or number."
+        )
 
-    document.original_filename = f"{base_name}{extension}"
+    new_filename = f"{base_name}{extension}"
+
+    # Case-insensitive, whitespace-insensitive duplicate check against
+    # every *other* document. func.trim() guards against any legacy
+    # row whose name has stray leading/trailing whitespace (upload
+    # doesn't trim file.filename), so the comparison is symmetric with
+    # how new_filename was just built.
+    duplicate = (
+        db.query(Document)
+        .filter(Document.id != document_id)
+        .filter(func.lower(func.trim(Document.original_filename)) == new_filename.lower())
+        .first()
+    )
+    if duplicate:
+        raise HTTPException(
+            status_code=409,
+            detail=f'A document named "{new_filename}" already exists. Choose a different name.',
+        )
+
+    document.original_filename = new_filename
     db.commit()
     db.refresh(document)
 

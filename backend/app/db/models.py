@@ -36,6 +36,12 @@ class Document(Base):
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # Set by POST /documents/{id}/open whenever the user opens this
+    # document (see routes_documents.py). Null until opened for the
+    # first time. Exists purely to power the "Recently Opened" sort
+    # option — nothing else reads it.
+    last_opened_at = Column(DateTime, nullable=True)
+
 
 class Summary(Base):
     """
