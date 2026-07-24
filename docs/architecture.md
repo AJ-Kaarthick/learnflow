@@ -164,6 +164,12 @@ Implemented:
 - File size display
 - Page count display
 - Compact responsive metadata layout
+- Markdown export for summaries
+- Markdown export for flashcards
+- Markdown export for quizzes
+- Markdown export for mind maps
+- Shared frontend Markdown export utilities
+- Consistent download workflow across all learning artifacts
 
 ---
 
@@ -200,7 +206,7 @@ Implemented:
 Current Release: V1.2.0
 
 Current Development:
-V1.2 — Milestone 2 Complete
+V1.2 — Milestone 3 Complete
 
 Open Existing Document
         OR

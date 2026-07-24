@@ -551,3 +551,53 @@ Improve the Document Library by displaying useful document metadata while preser
 ## Result
 
 LearnFlow now provides richer document information while preserving the existing architecture. Users can quickly identify documents using upload date, last opened time, page count and file size without affecting existing functionality.
+
+---
+
+# V1.2 — Milestone 3
+
+## Goal
+
+Improve the usability of AI-generated learning content by allowing users to export every generated artifact in Markdown format.
+
+## Features Completed
+
+- Markdown export for summaries
+- Markdown export for flashcards
+- Markdown export for quizzes
+- Markdown export for mind maps
+- Added shared frontend download utility
+- Added shared Markdown export utilities
+- Reused existing mind map Markdown conversion
+
+## Learned
+
+- Reusing frontend utilities instead of duplicating logic
+- Designing reusable Markdown formatting helpers
+- Separating formatting logic from UI components
+- Maintaining a consistent export experience across different data structures
+
+## Problems Faced
+
+- Each learning artifact had a different internal data structure.
+- Export functionality needed to remain consistent without introducing duplicated code.
+
+## Solutions
+
+- Created shared download and Markdown formatting utilities.
+- Reused the existing `treeToMarkdown` function for mind map export.
+- Kept all export logic on the frontend since the generated content already exists in client state.
+
+## Verification
+
+- Manual browser testing completed
+- Summary export verified
+- Flashcard export verified
+- Quiz export verified
+- Mind map export verified
+- Copy functionality regression tested
+- Search, sort, rename, and delete regression tested
+
+## Result
+
+LearnFlow now allows users to export every generated learning artifact as Markdown while preserving the existing architecture and maintaining a consistent user experience.

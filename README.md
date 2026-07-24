@@ -23,7 +23,7 @@ LearnFlow currently supports:
 - 📅 Display upload date and last opened time
 - 📄 Display file size and page count
 - 📋 Copy summaries, flashcards, and quizzes
-- 💾 Download summaries
+- 💾 Download summaries, flashcards, quizzes, and mind maps as Markdown
 - 💾 Store generated learning content in SQLite
 - 🔄 Provider-swappable AI architecture
 
@@ -66,6 +66,15 @@ LearnFlow currently supports:
 - Display File Size
 - Display Page Count
 - Compact Responsive Metadata Layout
+
+#### Milestone 3
+
+- Markdown Export for Summaries
+- Markdown Export for Flashcards
+- Markdown Export for Quizzes
+- Markdown Export for Mind Maps
+- Shared Markdown Export Utilities
+- Consistent Download Experience
 
 ### 🔮 Planned for V2
 

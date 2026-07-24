@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { generateFlashcards } from "../api/flashcards";
+import { downloadTextFile } from "../utils/downloadFile";
+import { flashcardsToMarkdown } from "../utils/markdownExport";
 
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
@@ -14,6 +16,7 @@ function FlashcardsPanel({ documentId, initialFlashcards = [] }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [flippedIds, setFlippedIds] = useState(new Set());
   const [copyState, setCopyState] = useState("idle"); // idle | copied
+  const [downloadState, setDownloadState] = useState("idle"); // idle | downloaded
 
   async function handleGenerate() {
     setStatus("loading");
@@ -52,6 +55,13 @@ function FlashcardsPanel({ documentId, initialFlashcards = [] }) {
     }
   }
 
+  function handleDownload() {
+    if (flashcards.length === 0) return;
+    downloadTextFile("flashcards.md", flashcardsToMarkdown(flashcards));
+    setDownloadState("downloaded");
+    setTimeout(() => setDownloadState("idle"), 2000);
+  }
+
   const isLoading = status === "loading";
 
   return (
@@ -60,9 +70,14 @@ function FlashcardsPanel({ documentId, initialFlashcards = [] }) {
         <h2 className="text-base font-semibold tracking-tight text-slate-900">Flashcards</h2>
         <div className="flex flex-wrap items-center gap-2">
           {flashcards.length > 0 && (
-            <button onClick={handleCopy} disabled={isLoading} className={SECONDARY_BUTTON_CLASSES}>
-              {copyState === "copied" ? "Copied!" : "Copy"}
-            </button>
+            <>
+              <button onClick={handleCopy} disabled={isLoading} className={SECONDARY_BUTTON_CLASSES}>
+                {copyState === "copied" ? "Copied!" : "Copy"}
+              </button>
+              <button onClick={handleDownload} disabled={isLoading} className={SECONDARY_BUTTON_CLASSES}>
+                {downloadState === "downloaded" ? "Downloaded!" : "Download"}
+              </button>
+            </>
           )}
           <button
             onClick={handleGenerate}

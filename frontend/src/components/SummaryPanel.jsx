@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { generateSummary } from "../api/summary";
+import { downloadTextFile } from "../utils/downloadFile";
+import { summaryToMarkdown } from "../utils/markdownExport";
 
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
@@ -38,15 +40,7 @@ function SummaryPanel({ documentId, initialSummary = null }) {
 
   function handleDownload() {
     if (!summary) return;
-    const blob = new Blob([summary.content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "summary.txt";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadTextFile("summary.md", summaryToMarkdown(summary));
     setDownloadState("downloaded");
     setTimeout(() => setDownloadState("idle"), 2000);
   }

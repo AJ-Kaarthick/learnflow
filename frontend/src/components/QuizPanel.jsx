@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { generateQuiz } from "../api/quiz";
+import { downloadTextFile } from "../utils/downloadFile";
+import { quizToMarkdown } from "../utils/markdownExport";
 
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
@@ -23,6 +25,7 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
   const [selectedAnswers, setSelectedAnswers] = useState({}); // questionId -> optionIndex
   const [submitted, setSubmitted] = useState(false);
   const [copyState, setCopyState] = useState("idle"); // idle | copied
+  const [downloadState, setDownloadState] = useState("idle"); // idle | downloaded
 
   async function handleGenerate() {
     setStatus("loading");
@@ -56,6 +59,13 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
     }
   }
 
+  function handleDownload() {
+    if (questions.length === 0) return;
+    downloadTextFile("quiz.md", quizToMarkdown(questions));
+    setDownloadState("downloaded");
+    setTimeout(() => setDownloadState("idle"), 2000);
+  }
+
   const isLoading = status === "loading";
   const answeredCount = Object.keys(selectedAnswers).length;
   const score = questions.reduce(
@@ -70,9 +80,14 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
         <h2 className="text-base font-semibold tracking-tight text-slate-900">Quiz</h2>
         <div className="flex flex-wrap items-center gap-2">
           {questions.length > 0 && (
-            <button onClick={handleCopy} disabled={isLoading} className={SECONDARY_BUTTON_CLASSES}>
-              {copyState === "copied" ? "Copied!" : "Copy"}
-            </button>
+            <>
+              <button onClick={handleCopy} disabled={isLoading} className={SECONDARY_BUTTON_CLASSES}>
+                {copyState === "copied" ? "Copied!" : "Copy"}
+              </button>
+              <button onClick={handleDownload} disabled={isLoading} className={SECONDARY_BUTTON_CLASSES}>
+                {downloadState === "downloaded" ? "Downloaded!" : "Download"}
+              </button>
+            </>
           )}
           <button
             onClick={handleGenerate}
