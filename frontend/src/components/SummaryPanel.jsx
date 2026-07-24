@@ -90,7 +90,11 @@ function SummaryPanel({ documentId, initialSummary = null }) {
 
       {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
 
-      {summary && <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{summary.content}</p>}
+      {summary && (
+        <p className="max-w-3xl text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+          {summary.content}
+        </p>
+      )}
     </div>
   );
 }

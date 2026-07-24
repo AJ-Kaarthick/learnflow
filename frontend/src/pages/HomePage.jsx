@@ -89,7 +89,7 @@ function HomePage() {
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
         <header>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             Learn<span className="text-accent-600">Flow</span>
@@ -99,7 +99,7 @@ function HomePage() {
           </p>
         </header>
 
-        <section className="mx-auto w-full max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="w-full rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <DocumentLibrary
             refreshSignal={refreshSignal}
             activeDocumentId={document?.id ?? null}
@@ -109,7 +109,7 @@ function HomePage() {
           />
         </section>
 
-        <section className="mx-auto w-full max-w-xl space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="w-full space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <BackendStatus />
 
           <UploadForm onUploadComplete={handleUploadComplete} />
@@ -142,7 +142,7 @@ function HomePage() {
               )}
 
               {document.status === "ready" && (
-                <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                <p className="max-w-3xl text-sm text-slate-700 whitespace-pre-wrap">
                   {document.text_preview}
                   {document.character_count > document.text_preview.length && "…"}
                 </p>

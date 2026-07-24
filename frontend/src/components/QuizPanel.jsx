@@ -114,7 +114,7 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
       {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
 
       {questions.map((question, questionIndex) => (
-        <div key={question.id} className="space-y-2">
+        <div key={question.id} className="max-w-3xl space-y-2">
           <p className="text-sm font-medium text-slate-800">
             {questionIndex + 1}. {question.question}
           </p>
