@@ -4,6 +4,16 @@ LearnFlow is an AI-powered learning assistant that helps students study from PDF
 
 ---
 
+## Highlights
+
+- Upload and manage PDF documents
+- Generate AI-powered summaries, flashcards, quizzes, and mind maps
+- Resume learning from previously uploaded documents
+- Export learning materials as Markdown
+- Built with a provider-swappable AI architecture
+
+---
+
 ## Features
 
 LearnFlow currently supports:
@@ -50,7 +60,7 @@ LearnFlow currently supports:
 - Cached AI Content
 - Refresh-and-Continue Workflow
 
-### ✅ V1.2 (Current)
+### ✅ V1.2
 
 #### Milestone 1
 - Scrollable Document Library
