@@ -11,6 +11,7 @@ LearnFlow is an AI-powered learning assistant that helps students study from PDF
 - Resume learning from previously uploaded documents
 - Export learning materials as Markdown
 - Built with a provider-swappable AI architecture
+- Semantic document indexing (RAG foundation)
 
 ---
 
@@ -36,6 +37,8 @@ LearnFlow currently supports:
 - 💾 Download summaries, flashcards, quizzes, and mind maps as Markdown
 - 💾 Store generated learning content in SQLite
 - 🔄 Provider-swappable AI architecture
+- 🧩 Semantic document indexing (RAG foundation)
+- 🔎 Semantic search over indexed documents
 
 ---
 
@@ -86,9 +89,21 @@ LearnFlow currently supports:
 - Shared Markdown Export Utilities
 - Consistent Download Experience
 
-### 🔮 Planned for V2
 
-- Chat with PDF (RAG)
+### ✅ V2.0
+
+#### Milestone 1
+
+- RAG Foundation
+- Document Chunking
+- Semantic Embeddings
+- Document Indexing
+- Semantic Search API
+
+### 🔮 Planned Next
+
+- Chat with PDF
+- Multi-document Chat
 - DOCX / PPTX support
 - Authentication
 - PostgreSQL
@@ -115,6 +130,7 @@ Add your Gemini API key to `.env`:
 GEMINI_API_KEY=your_api_key
 AI_PROVIDER=gemini
 GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 ```
 
 Run the backend:

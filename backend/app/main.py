@@ -6,6 +6,7 @@ from app.api.v1 import (
     routes_flashcards,
     routes_mindmap,
     routes_quiz,
+    routes_rag,
     routes_summary,
 )
 from app.core.config import settings
@@ -40,6 +41,7 @@ app.include_router(routes_summary.router, prefix="/api/v1")
 app.include_router(routes_flashcards.router, prefix="/api/v1")
 app.include_router(routes_quiz.router, prefix="/api/v1")
 app.include_router(routes_mindmap.router, prefix="/api/v1")
+app.include_router(routes_rag.router, prefix="/api/v1")
 
 
 @app.get("/health")

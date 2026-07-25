@@ -112,6 +112,11 @@ backend/app/schemas/
 backend/app/core/
 - Configuration
 
+backend/app/services/rag/
+- Chunking
+- Embedding orchestration
+- Semantic retrieval
+
 ---
 
 ## Design Principles
@@ -123,7 +128,9 @@ backend/app/core/
 - Environment-based configuration
 - Frontend communicates only through the API layer
 - Database models are separated from API schemas
-
+- Retrieval separated from generation
+- Embedding-provider abstraction
+- Idempotent document indexing
 
 ## UX Principles (V1.1)
 
@@ -226,3 +233,42 @@ Summary
 Flashcards
 Quiz
 Mind Map
+
+
+## RAG Foundation (V2.0)
+
+LearnFlow now includes the foundational infrastructure required for Retrieval-Augmented Generation (RAG).
+
+### Write Path
+
+PDF
+
+↓
+
+Chunking Service
+
+↓
+
+Embedding Provider
+
+↓
+
+DocumentChunk Table
+
+### Read Path
+
+User Query
+
+↓
+
+Embedding Provider
+
+↓
+
+Semantic Retrieval
+
+↓
+
+Relevant Chunks
+
+The RAG foundation intentionally stops after retrieval. AI-generated answers will be introduced in the next milestone by combining retrieved chunks with the existing provider abstraction.

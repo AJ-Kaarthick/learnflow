@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import Document, Flashcard, MindMap, QuizQuestion, Summary
+from app.db.models import Document, DocumentChunk, Flashcard, MindMap, QuizQuestion, Summary
 from app.schemas.document import DocumentRenameRequest, DocumentResponse, DocumentSortOption
 from app.services import pdf_service, storage_service
 from app.utils import filenames
@@ -203,6 +203,7 @@ def delete_document(document_id: str, db: Session = Depends(get_db)) -> None:
     db.query(Flashcard).filter(Flashcard.document_id == document_id).delete()
     db.query(QuizQuestion).filter(QuizQuestion.document_id == document_id).delete()
     db.query(MindMap).filter(MindMap.document_id == document_id).delete()
+    db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
 
     storage_service.delete_pdf(document.stored_filename)
 

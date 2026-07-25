@@ -142,3 +142,53 @@ class MindMap(Base):
     document_id = Column(String, ForeignKey("documents.id"), nullable=False, unique=True)
     structure = Column(JSON, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class DocumentChunk(Base):
+    """
+    One chunk of a document's extracted text, plus the embedding vector
+    for that chunk. This is the storage layer of the RAG foundation:
+    app/services/rag/chunking.py decides how a document's text gets cut
+    into these rows, embedding_service.py fills in `embedding` for each
+    one, and retrieval_service.py is what reads them back out again by
+    similarity to a query.
+
+    Many rows per document, like Flashcard and QuizQuestion, not one row
+    holding a JSON list — retrieval needs to score and rank chunks
+    individually, which only works if each one is its own row.
+
+    The embedding is stored as JSON (a plain list of floats) rather than
+    a dedicated vector column, extension, or standalone vector database.
+    SQLite has no native vector type, and reaching for one (sqlite-vec,
+    Chroma, FAISS, pgvector...) would be solving a scale problem
+    LearnFlow doesn't have yet: a single user's PDF library, each
+    document producing at most a few hundred chunks, comfortably fits in
+    memory for the brute-force similarity scan retrieval_service.py
+    does. If chunk volume ever grows enough for that scan to be too
+    slow, this column — and that one file — are what would change;
+    nothing above the retrieval_service function boundary would need to.
+    """
+
+    __tablename__ = "document_chunks"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+
+    # Preserves the order chunks appeared in the source document.
+    # Retrieval ranks by similarity, not this, so nothing reads it yet —
+    # kept for the same reason as Flashcard.position: it's cheap to
+    # capture now, and a future feature (e.g. showing the passage
+    # before/after a match for more context) would need it and
+    # shouldn't have to re-derive chunk order from scratch.
+    chunk_index = Column(Integer, nullable=False)
+
+    content = Column(Text, nullable=False)
+
+    # list[float]. Every row written by the same embedding model has
+    # the same length (3072 numbers for Gemini's gemini-embedding-001
+    # at its default output size), but nothing here enforces that
+    # length stays consistent — see the note in embedding_service.py
+    # about what changing GEMINI_EMBEDDING_MODEL later would require.
+    embedding = Column(JSON, nullable=False)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

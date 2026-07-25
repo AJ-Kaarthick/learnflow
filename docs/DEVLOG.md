@@ -601,3 +601,60 @@ Improve the usability of AI-generated learning content by allowing users to expo
 ## Result
 
 LearnFlow now allows users to export every generated learning artifact as Markdown while preserving the existing architecture and maintaining a consistent user experience.
+
+V2 — Milestone 1
+
+Goal:
+
+Implement the Retrieval-Augmented Generation (RAG) foundation required for future conversational AI features.
+
+Features Completed
+
+- Document chunking
+- DocumentChunk database model
+- Embedding provider abstraction
+- Gemini embedding implementation
+- Document indexing endpoint
+- Semantic search endpoint
+- Retrieval service
+- Chunking service
+- Embedding service
+- Backend tests
+
+Learned
+
+- Retrieval-Augmented Generation (RAG)
+- Embedding vectors
+- Semantic search
+- Cosine similarity
+- Chunking strategies
+- Provider abstraction for embeddings
+
+Problems Faced
+
+- Chunk boundary produced partial words
+- Choosing a storage format for embedding vectors
+- Deciding between brute-force retrieval and vector databases
+
+Solutions
+
+- Adjusted chunk boundaries to respect word limits
+- Stored embeddings as JSON in SQLite
+- Used brute-force cosine similarity for simplicity and current project scale
+
+Verification
+
+This is where your manual testing goes.
+
+## Verification
+
+- Backend tests: **104 passed**
+- Manual API testing completed
+- Document indexing verified
+- Semantic search verified
+- Duplicate indexing verified
+- Existing V1 functionality regression tested
+
+Result
+
+LearnFlow now includes a complete Retrieval-Augmented Generation foundation capable of indexing documents and retrieving semantically relevant chunks. This infrastructure will power future conversational features such as Chat with PDF.

@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     # gemini_provider.py) to see what your specific key can access.
     gemini_model: str = "gemini-3.1-flash-lite"
 
+    # Separate from gemini_model because embedding models and text
+    # generation models are different product lines that version on
+    # their own schedules — Gemini has shipped many generations of
+    # chat models against a single stable embedding model. See
+    # gemini_embedding_provider.py for how this is used.
+    gemini_embedding_model: str = "gemini-embedding-001"
+
     # The frontend's origin, used to configure CORS below.
     frontend_origin: str = "http://localhost:5173"
 
