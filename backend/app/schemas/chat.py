@@ -1,24 +1,56 @@
-from pydantic import BaseModel, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.rag import SearchResultItem
 
 # Mirrors DEFAULT_TOP_K in schemas/rag.py — same default, same reason.
 DEFAULT_TOP_K = 5
 
+# Sanity cap on the request payload itself — deliberately generous,
+# and a different concern from chat_service.MAX_HISTORY_TURNS (which
+# decides how much of this actually reaches the model). This just
+# stops a malformed or runaway client from posting an unbounded body;
+# the real "how much conversation memory" decision lives in the
+# service layer, per this milestone's design goal of keeping prompt
+# construction there.
+MAX_HISTORY_TURNS_ACCEPTED = 50
+
+
+class ChatHistoryTurn(BaseModel):
+    """One prior turn of the conversation, as the frontend already holds it in state."""
+
+    role: Literal["user", "assistant"]
+    content: str
+
+    @field_validator("content")
+    @classmethod
+    def not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("history content cannot be empty.")
+        return stripped
+
 
 class ChatRequest(BaseModel):
     """
-    Body for POST /documents/{id}/chat. Deliberately just one question
-    today — no conversation_id, no message history. This is a
-    single-turn endpoint by design, not a stripped-down multi-turn one:
-    adding conversation history later means adding new optional fields
-    to this same model (e.g. an optional conversation_id), which is an
-    additive change existing callers wouldn't need to react to, not a
-    breaking one.
+    Body for POST /documents/{id}/chat. `history` is optional and
+    defaults to empty, so existing callers that only ever sent
+    `question` (and, before this milestone, nothing else) keep working
+    unchanged — this is an additive field, not a breaking one, exactly
+    as anticipated when this model was first written.
+
+    Still no conversation_id: history is frontend-managed and resent
+    with each request rather than looked up server-side by an id.
+    Adding persisted, server-tracked conversations later is still just
+    new fields on this same model (e.g. an optional conversation_id
+    that, when present, means "load history server-side instead of
+    trusting the body") — not a redesign of it.
     """
 
     question: str
     top_k: int = DEFAULT_TOP_K
+    history: list[ChatHistoryTurn] = Field(default_factory=list, max_length=MAX_HISTORY_TURNS_ACCEPTED)
 
     @field_validator("question")
     @classmethod

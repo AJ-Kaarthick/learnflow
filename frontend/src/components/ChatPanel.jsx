@@ -89,13 +89,23 @@ function ChatPanel({ documentId }) {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion || sendStatus === "sending" || indexStatus !== "ready") return;
 
+    // Turns already in this conversation, sent along so the backend
+    // can resolve follow-ups like "explain that more simply" without
+    // the user repeating the original topic. Error bubbles aren't
+    // real assistant content, so they're excluded. How much of this
+    // actually gets used is the backend's call (see MAX_HISTORY_TURNS
+    // in chat_service.py) — this just relays what's currently here.
+    const history = messages
+      .filter((message) => !message.isError)
+      .map((message) => ({ role: message.role, content: message.content }));
+
     const userMessage = { id: `${Date.now()}-user`, role: "user", content: trimmedQuestion };
     setMessages((previous) => [...previous, userMessage]);
     setQuestion("");
     setSendStatus("sending");
 
     try {
-      const result = await sendChatMessage(documentId, trimmedQuestion);
+      const result = await sendChatMessage(documentId, trimmedQuestion, { history });
       setMessages((previous) => [
         ...previous,
         {

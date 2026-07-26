@@ -57,6 +57,12 @@ async def chat_with_document(
             ai_provider=ai_provider,
             embedding_provider=embedding_provider,
             top_k=payload.top_k,
+            # Schema -> plain dict here, at the API boundary, so the
+            # service layer (chat_service.answer_question) never
+            # depends on app.schemas — same reasoning as passing
+            # document_id / question as plain values above rather than
+            # the whole `payload` object.
+            history=[{"role": turn.role, "content": turn.content} for turn in payload.history],
         )
     except AIProviderError as error:
         raise HTTPException(status_code=502, detail=str(error))

@@ -87,7 +87,7 @@ User
 
 ↓
 
-React UI 
+React UI
 
 ↓
 
@@ -103,6 +103,10 @@ Chat Service
 
 ↓
 
+Conversation History
+
+↓
+
 Retrieval Service
 
 ↓
@@ -115,11 +119,19 @@ Relevant Chunks
 
 ↓
 
+Grounded Prompt Builder
+
+↓
+
 AI Provider
 
 ↓
 
 Grounded Answer
+
+↓
+
+Supporting Sources
 
 ↓
 
@@ -180,6 +192,11 @@ backend/app/services/rag/
 - Retrieval is performed before generation
 - Answers are grounded in retrieved document context
 - Chat does not implicitly trigger indexing
+- Stateless chat requests
+- Conversation history is client-managed
+- Recent conversation provides context, not factual grounding
+- Prompt construction combines conversation history with retrieved document context
+
 
 ## UX Principles (V1.1)
 
@@ -241,6 +258,11 @@ Implemented:
 - Grounded AI responses
 - Expandable supporting source references
 - Consistent chat interface matching existing LearnFlow styling
+- Multi-turn conversations
+- Natural follow-up questions
+- Conversation history preserved during active sessions
+- Recent history automatically trimmed
+
 
 ---
 
@@ -341,6 +363,10 @@ The RAG foundation now powers Chat with PDF. Retrieved chunks are passed to the 
 ### Chat Pipeline
 
 Question
+
+↓
+
+Conversation History
 
 ↓
 

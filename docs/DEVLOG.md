@@ -765,3 +765,53 @@ Implement a frontend chat interface for grounded conversations with uploaded PDF
 ## Result
 
 LearnFlow now provides a complete end-to-end conversational experience. Users can upload PDFs, generate learning material, and ask grounded questions through a responsive chat interface while reusing the existing Retrieval-Augmented Generation architecture.
+
+# V2 — Milestone 4
+
+Goal:
+
+Implement conversational memory to support natural multi-turn conversations while preserving grounded Retrieval-Augmented Generation.
+
+## Features Completed
+
+Multi-turn conversational memory
+Conversation history support in Chat API
+Client-managed conversation history
+Automatic history trimming
+Context-aware prompt construction
+Frontend history integration
+Backend tests for conversational memory
+
+## Learned
+
+Conversational AI design
+Stateless chat architectures
+Prompt engineering using conversation history
+Tradeoffs between frontend-managed and backend-managed memory
+Context window management
+
+## Problems Faced
+
+Resolving follow-up questions without storing conversations in the backend
+Preventing unlimited conversation growth
+Preserving hallucination prevention while introducing conversational context
+Solutions
+Sent recent conversation history with every chat request
+Trimmed conversation history before prompt construction
+Continued grounding answers only with retrieved document chunks
+Kept the backend stateless by managing conversation history in the frontend
+
+## Verification
+
+Backend tests: 121 passed
+Frontend production build successful
+Manual browser testing completed
+Multi-turn conversations verified
+Conversation reset verified
+Hallucination prevention regression tested
+Source references verified
+Existing feature regression testing completed
+
+## Result
+
+LearnFlow now supports natural multi-turn conversations over uploaded PDF documents while preserving the existing Retrieval-Augmented Generation architecture. Users can ask follow-up questions without repeating previous context, and all responses remain grounded in retrieved document content.

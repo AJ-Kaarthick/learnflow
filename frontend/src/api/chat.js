@@ -25,12 +25,24 @@ export async function indexDocument(documentId) {
  * plus the source chunks it was grounded in. The document must
  * already be indexed (see indexDocument above) — the backend returns
  * a 400 if it isn't.
+ *
+ * `history` is a plain array of { role: "user" | "assistant", content }
+ * turns already in the conversation — ChatPanel holds this in React
+ * state and resends it with every message so the model can resolve
+ * follow-ups ("explain that more simply") without repeating the
+ * original topic. Nothing is persisted server-side; the backend only
+ * uses the most recent few turns of whatever's sent (see
+ * MAX_HISTORY_TURNS in chat_service.py).
  */
-export async function sendChatMessage(documentId, question, topK) {
+export async function sendChatMessage(documentId, question, { topK, history } = {}) {
   const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(topK ? { question, top_k: topK } : { question }),
+    body: JSON.stringify({
+      question,
+      ...(topK ? { top_k: topK } : {}),
+      ...(history && history.length > 0 ? { history } : {}),
+    }),
   });
 
   if (!response.ok) {
