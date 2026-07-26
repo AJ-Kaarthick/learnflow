@@ -87,7 +87,7 @@ User
 
 ↓
 
-React UI (future)
+React UI 
 
 ↓
 
@@ -227,6 +227,21 @@ Implemented:
 - Shared frontend Markdown export utilities
 - Consistent download workflow across all learning artifacts
 
+
+## UX Principles (V2)
+
+V2 introduces conversational interaction while preserving the existing application architecture.
+
+Implemented:
+
+- Integrated Chat with PDF panel
+- Automatic document indexing on first use
+- Local conversation history
+- Automatic conversation reset when switching documents
+- Grounded AI responses
+- Expandable supporting source references
+- Consistent chat interface matching existing LearnFlow styling
+
 ---
 
 
@@ -262,7 +277,7 @@ Implemented:
 Current Release: V2.0.0 (In Development)
 
 Current Development:
-V2.0 — Milestone 2 Complete
+V2.0 — Milestone 3 Complete
 
 Open Existing Document
         OR
@@ -282,6 +297,7 @@ Summary
 Flashcards
 Quiz
 Mind Map
+Chat with PDF
 
 
 ## RAG Foundation (V2.0)
@@ -344,4 +360,8 @@ Gemini
 
 ↓
 
-Answer + Supporting Sources
+Grounded Answer
+
+↓
+
+Supporting Sources

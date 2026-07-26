@@ -709,3 +709,59 @@ Implement Chat with PDF by combining semantic retrieval with grounded AI-generat
 ## Result
 
 LearnFlow now supports grounded question answering over indexed PDF documents. The chat system combines semantic retrieval with the existing AI provider architecture to answer questions using only the uploaded document while returning supporting source chunks for transparency.
+
+
+## V2 — Milestone 3
+
+Goal:
+
+Implement a frontend chat interface for grounded conversations with uploaded PDF documents.
+
+## Features Completed
+
+- Chat panel
+- Chat API integration
+- Local conversation history
+- Automatic document indexing
+- Source viewer
+- Loading indicators
+- Empty state
+- Friendly error handling
+- Automatic conversation reset when switching documents
+
+## Learned
+
+- Designing conversational user interfaces
+- React state management for chat applications
+- Reusing existing API abstraction layers
+- Component remounting using React keys
+- Building responsive chat layouts
+
+## Problems Faced
+
+- Integrating chat without affecting existing features
+- Resetting conversation state when changing documents
+- Presenting supporting source chunks in a readable way
+
+## Solutions
+
+- Reused the existing frontend API layer
+- Used React's keyed remount pattern to automatically reset conversations
+- Displayed supporting chunks inside expandable source panels
+
+## Verification
+
+- Backend tests: **114 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- Chat responses verified
+- Conversation history verified
+- Automatic indexing verified
+- Hallucination prevention verified
+- Source display verified
+- Document switch reset verified
+- Existing feature regression testing completed
+
+## Result
+
+LearnFlow now provides a complete end-to-end conversational experience. Users can upload PDFs, generate learning material, and ask grounded questions through a responsive chat interface while reusing the existing Retrieval-Augmented Generation architecture.

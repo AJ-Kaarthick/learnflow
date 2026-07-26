@@ -40,7 +40,7 @@ LearnFlow currently supports:
 - 🔄 Provider-swappable AI architecture
 - 🧩 Semantic document indexing (RAG foundation)
 - 🔎 Semantic search over indexed documents
-- 💬 Chat with indexed PDF documents
+- 💬 Chat with PDF documents using Retrieval-Augmented Generation (RAG)
 
 ---
 
@@ -89,7 +89,7 @@ LearnFlow currently supports:
 - Markdown Export for Quizzes
 - Markdown Export for Mind Maps
 - Shared Markdown Export Utilities
-- Consistent Download Exp
+- Consistent Download Experience
 
 ### 🚧 V2.0 (In Progress)
 
@@ -109,15 +109,22 @@ LearnFlow currently supports:
 - Chat API
 - Source Chunk References
 
+#### Milestone 3
+
+- Chat with PDF Frontend
+- Conversation History
+- Automatic Document Indexing
+- Source Viewer
+- Responsive Chat Interface
+
 ### 🔮 Planned Next
 
-- Frontend Chat Interface
 - Multi-document Chat
 - DOCX / PPTX support
 - Authentication
 - PostgreSQL
 - Docker
-- Deploymenterience
+- Deployment
 
 
 ---
@@ -192,3 +199,20 @@ npm run dev
 - `docs/DEVLOG.md`
 
 ---
+
+
+## Roadmap
+
+### Completed
+- ✅ AI-generated learning content
+- ✅ Persistent document library
+- ✅ RAG foundation
+- ✅ Chat with PDF
+
+### Planned
+- 🔜 Multi-document chat
+- 🔜 DOCX / PPTX support
+- 🔜 Authentication
+- 🔜 PostgreSQL
+- 🔜 Docker
+- 🔜 Deployment

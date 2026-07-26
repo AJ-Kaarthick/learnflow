@@ -5,6 +5,7 @@ import { getMindMap } from "../api/mindmap";
 import { getQuiz } from "../api/quiz";
 import { getSummary } from "../api/summary";
 import BackendStatus from "../components/BackendStatus";
+import ChatPanel from "../components/ChatPanel";
 import DocumentLibrary from "../components/DocumentLibrary";
 import FlashcardsPanel from "../components/FlashcardsPanel";
 import MindMapPanel from "../components/MindMapPanel";
@@ -177,6 +178,7 @@ function HomePage() {
                 documentId={document.id}
                 initialMindmap={cachedContent.mindmap}
               />
+              <ChatPanel key={`chat-${document.id}`} documentId={document.id} />
             </div>
           ))}
       </div>
