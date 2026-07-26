@@ -2,8 +2,7 @@
 
 ## Goal
 
-LearnFlow converts uploaded PDFs into AI-powered learning material such as summaries, flashcards, quizzes, and mind maps.
-
+LearnFlow converts uploaded PDFs into AI-powered learning material and enables grounded question answering using Retrieval-Augmented Generation (RAG).
 ---
 
 ## Tech Stack
@@ -82,6 +81,50 @@ JSON Response
 
 React UI
 
+## Chat Request Flow (V2)
+
+User
+
+↓
+
+React UI (future)
+
+↓
+
+Frontend API Layer
+
+↓
+
+Chat Route
+
+↓
+
+Chat Service
+
+↓
+
+Retrieval Service
+
+↓
+
+Embedding Provider
+
+↓
+
+Relevant Chunks
+
+↓
+
+AI Provider
+
+↓
+
+Grounded Answer
+
+↓
+
+JSON Response
+
 ---
 
 ## Folder Responsibilities
@@ -97,6 +140,7 @@ backend/app/api/
 
 backend/app/services/
 - Business logic
+- Chat orchestration
 
 backend/app/services/ai/
 - AI provider abstraction
@@ -117,6 +161,8 @@ backend/app/services/rag/
 - Embedding orchestration
 - Semantic retrieval
 
+
+
 ---
 
 ## Design Principles
@@ -131,6 +177,9 @@ backend/app/services/rag/
 - Retrieval separated from generation
 - Embedding-provider abstraction
 - Idempotent document indexing
+- Retrieval is performed before generation
+- Answers are grounded in retrieved document context
+- Chat does not implicitly trigger indexing
 
 ## UX Principles (V1.1)
 
@@ -210,10 +259,10 @@ Implemented:
 
 ## Version
 
-Current Release: V1.2.0
+Current Release: V2.0.0 (In Development)
 
 Current Development:
-V1.2 — Milestone 3 Complete
+V2.0 — Milestone 2 Complete
 
 Open Existing Document
         OR
@@ -271,4 +320,28 @@ Semantic Retrieval
 
 Relevant Chunks
 
-The RAG foundation intentionally stops after retrieval. AI-generated answers will be introduced in the next milestone by combining retrieved chunks with the existing provider abstraction.
+The RAG foundation now powers Chat with PDF. Retrieved chunks are passed to the existing AI provider, which generates grounded answers while preventing responses that cannot be supported by the indexed document.
+
+### Chat Pipeline
+
+Question
+
+↓
+
+Semantic Retrieval
+
+↓
+
+Relevant Chunks
+
+↓
+
+Grounded Prompt
+
+↓
+
+Gemini
+
+↓
+
+Answer + Supporting Sources

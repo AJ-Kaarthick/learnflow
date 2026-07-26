@@ -602,7 +602,7 @@ Improve the usability of AI-generated learning content by allowing users to expo
 
 LearnFlow now allows users to export every generated learning artifact as Markdown while preserving the existing architecture and maintaining a consistent user experience.
 
-V2 — Milestone 1
+# V2 — Milestone 1
 
 Goal:
 
@@ -658,3 +658,54 @@ This is where your manual testing goes.
 Result
 
 LearnFlow now includes a complete Retrieval-Augmented Generation foundation capable of indexing documents and retrieving semantically relevant chunks. This infrastructure will power future conversational features such as Chat with PDF.
+
+
+# V2 — Milestone 2
+
+Goal:
+
+Implement Chat with PDF by combining semantic retrieval with grounded AI-generated answers.
+
+## Features Completed
+
+- Chat service
+- Chat API endpoint
+- Grounded answer generation
+- Prompt construction using retrieved chunks
+- Hallucination prevention
+- Reused existing RetrievalService
+- Reused AI provider abstraction
+- Backend tests
+
+## Learned
+
+- Retrieval-Augmented Generation workflow
+- Prompt grounding
+- Separating retrieval from generation
+- Designing extensible chat APIs
+- Hallucination mitigation techniques
+
+## Problems Faced
+
+- Preventing answers outside the retrieved document context
+- Designing reusable chat response schemas
+- Maintaining architectural consistency with existing services
+
+## Solutions
+
+- Constructed prompts only from retrieved chunks
+- Reused existing retrieval and AI provider layers
+- Reused existing SearchResultItem schema for chat sources
+
+## Verification
+
+- Backend tests: **114 passed**
+- Manual API testing completed
+- Chat endpoint verified
+- Grounded answers verified
+- Hallucination prevention verified
+- Existing V1 and V2 regression testing completed
+
+## Result
+
+LearnFlow now supports grounded question answering over indexed PDF documents. The chat system combines semantic retrieval with the existing AI provider architecture to answer questions using only the uploaded document while returning supporting source chunks for transparency.

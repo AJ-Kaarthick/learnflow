@@ -12,6 +12,7 @@ LearnFlow is an AI-powered learning assistant that helps students study from PDF
 - Export learning materials as Markdown
 - Built with a provider-swappable AI architecture
 - Semantic document indexing (RAG foundation)
+- Chat with PDF using Retrieval-Augmented Generation (RAG)
 
 ---
 
@@ -39,6 +40,7 @@ LearnFlow currently supports:
 - 🔄 Provider-swappable AI architecture
 - 🧩 Semantic document indexing (RAG foundation)
 - 🔎 Semantic search over indexed documents
+- 💬 Chat with indexed PDF documents
 
 ---
 
@@ -87,10 +89,9 @@ LearnFlow currently supports:
 - Markdown Export for Quizzes
 - Markdown Export for Mind Maps
 - Shared Markdown Export Utilities
-- Consistent Download Experience
+- Consistent Download Exp
 
-
-### ✅ V2.0
+### 🚧 V2.0 (In Progress)
 
 #### Milestone 1
 
@@ -100,15 +101,24 @@ LearnFlow currently supports:
 - Document Indexing
 - Semantic Search API
 
+#### Milestone 2
+
+- Chat with PDF (Backend)
+- Grounded Answer Generation
+- Hallucination Prevention
+- Chat API
+- Source Chunk References
+
 ### 🔮 Planned Next
 
-- Chat with PDF
+- Frontend Chat Interface
 - Multi-document Chat
 - DOCX / PPTX support
 - Authentication
 - PostgreSQL
 - Docker
-- Deployment
+- Deploymenterience
+
 
 ---
 
