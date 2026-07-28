@@ -25,7 +25,15 @@ function resultCountLabel(count, search) {
 // currently has open. `refreshSignal` is bumped by the parent
 // whenever something outside this component's control changes the
 // underlying data (upload, rename, delete, open) so the list re-fetches.
-function DocumentLibrary({ refreshSignal, activeDocumentId, onOpen, onRename, onDelete }) {
+function DocumentLibrary({
+  refreshSignal,
+  activeDocumentId,
+  selectedDocumentIds,
+  onOpen,
+  onRename,
+  onDelete,
+  onToggleSelect,
+}) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("uploaded_newest");
@@ -76,6 +84,11 @@ function DocumentLibrary({ refreshSignal, activeDocumentId, onOpen, onRename, on
           </span>
         )}
       </div>
+
+      <p className="text-xs text-slate-400">
+        Check the box next to a document to include it in the chat below. Select more than one
+        to chat across several documents at once.
+      </p>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
@@ -131,9 +144,11 @@ function DocumentLibrary({ refreshSignal, activeDocumentId, onOpen, onRename, on
             <DocumentList
               documents={documents}
               activeDocumentId={activeDocumentId}
+              selectedDocumentIds={selectedDocumentIds}
               onOpen={onOpen}
               onRename={onRename}
               onDelete={onDelete}
+              onToggleSelect={onToggleSelect}
             />
           </div>
         )}

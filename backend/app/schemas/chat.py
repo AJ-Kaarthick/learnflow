@@ -83,3 +83,75 @@ class ChatResponse(BaseModel):
     # identical class — a chat source and a search result are the same
     # thing: a chunk plus how well it matched a query.
     sources: list[SearchResultItem]
+
+
+# Sanity cap on how many documents one request can select — a UI
+# multi-select is the expected caller (see routes_chat.py's docstring),
+# and there's no realistic study session that needs more than this many
+# documents in one conversation at once. Independent of
+# MAX_HISTORY_TURNS_ACCEPTED above; this bounds documents, not turns.
+MAX_DOCUMENT_IDS = 10
+
+
+class MultiDocumentChatRequest(BaseModel):
+    """
+    Body for POST /documents/chat — the multi-document counterpart to
+    ChatRequest. Same question/top_k/history shape (history is reused
+    as-is via ChatHistoryTurn; conversation memory works the same way
+    regardless of how many documents are selected), plus the set of
+    documents to search across.
+    """
+
+    document_ids: list[str] = Field(min_length=1, max_length=MAX_DOCUMENT_IDS)
+    question: str
+    top_k: int = DEFAULT_TOP_K
+    history: list[ChatHistoryTurn] = Field(default_factory=list, max_length=MAX_HISTORY_TURNS_ACCEPTED)
+
+    @field_validator("document_ids")
+    @classmethod
+    def deduplicate_preserving_order(cls, value: list[str]) -> list[str]:
+        # A multi-select UI shouldn't produce duplicates, but nothing
+        # stops a client from sending the same id twice — deduping here
+        # means chat_service never has to think about it.
+        seen: set[str] = set()
+        deduplicated = []
+        for document_id in value:
+            if document_id not in seen:
+                seen.add(document_id)
+                deduplicated.append(document_id)
+        return deduplicated
+
+    @field_validator("question")
+    @classmethod
+    def not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("question cannot be empty.")
+        return stripped
+
+    @field_validator("top_k")
+    @classmethod
+    def positive(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("top_k must be at least 1.")
+        return value
+
+
+class MultiDocumentSourceItem(SearchResultItem):
+    """
+    SearchResultItem plus which document a source came from — the
+    "document information" a multi-document answer's sources need that
+    a single-document one doesn't (the document is already implied by
+    the URL for single-document chat/search).
+    """
+
+    document_id: str
+    document_name: str
+
+
+class MultiDocumentChatResponse(BaseModel):
+    document_ids: list[str]
+    question: str
+    answer: str
+    grounded: bool
+    sources: list[MultiDocumentSourceItem]

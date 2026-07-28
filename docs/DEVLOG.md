@@ -815,3 +815,51 @@ Existing feature regression testing completed
 ## Result
 
 LearnFlow now supports natural multi-turn conversations over uploaded PDF documents while preserving the existing Retrieval-Augmented Generation architecture. Users can ask follow-up questions without repeating previous context, and all responses remain grounded in retrieved document content.
+
+# V2 — Milestone 5
+
+## Goal
+
+Extend Chat with PDF to support grounded conversations across multiple selected documents while preserving the existing Retrieval-Augmented Generation architecture.
+
+## Features Completed
+
+- Multi-document chat
+- Multi-document retrieval
+- Multi-document chat API
+- Document selection in the frontend
+- Shared conversation across selected documents
+- Retrieval from multiple indexed documents
+- Backend tests
+
+## Learned
+
+- Multi-document Retrieval-Augmented Generation
+- Balancing retrieval across multiple documents
+- Reusing existing retrieval services without architectural duplication
+- Extending APIs while preserving backward compatibility
+
+## Problems Faced
+
+- Designing retrieval across multiple documents
+- Preserving grounded answers when multiple sources are selected
+- Ensuring retrieval remained document-balanced
+
+## Solutions
+
+- Extended the retrieval pipeline to support multiple document IDs
+- Reused the existing retrieval service and prompt builder
+- Preserved the stateless backend and client-managed conversation history
+
+## Verification
+
+- Backend tests: **133 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- Multi-document conversations verified
+- Single-document regression testing completed
+- Compare and summarization workflows verified
+
+## Result
+
+LearnFlow now supports grounded conversations across multiple selected documents while preserving the existing Retrieval-Augmented Generation architecture. Each selected document participates in semantic retrieval, allowing users to summarize, compare, and discuss multiple PDFs within a single conversation.

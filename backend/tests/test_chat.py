@@ -297,7 +297,7 @@ def test_chat_does_not_call_ai_provider_when_document_has_no_indexed_chunks():
 
         result = asyncio.run(
             answer_question(
-                document=document,
+                documents=[document],
                 question="What is this document about?",
                 db=db,
                 ai_provider=ai_provider,
@@ -499,7 +499,7 @@ def test_answer_question_history_defaults_to_no_history_section():
 
         asyncio.run(
             answer_question(
-                document=document,
+                documents=[document],
                 question="What does photosynthesis convert?",
                 db=db,
                 ai_provider=fake_ai_provider,

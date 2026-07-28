@@ -103,7 +103,7 @@ async def search_document(
 
     try:
         results = await retrieve_relevant_chunks(
-            document_id=document_id,
+            document_ids=[document_id],
             query=payload.query,
             db=db,
             embedding_provider=embedding_provider,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { indexDocument, sendChatMessage } from "../api/chat";
+import { indexDocument, sendChatMessage, sendMultiDocumentChatMessage } from "../api/chat";
 
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
@@ -34,6 +34,12 @@ function ChatMessageBubble({ message }) {
             <ul className="mt-2 space-y-2">
               {message.sources.map((source) => (
                 <li key={source.chunk_id} className="border-t border-slate-100 pt-2 first:border-t-0 first:pt-0">
+                  {/* Only present for multi-document chat (see MultiDocumentSourceItem
+                      in schemas/chat.py) — single-document sources omit it since
+                      there's only one document to begin with. */}
+                  {source.document_name && (
+                    <p className="mb-1 font-medium text-slate-500">{source.document_name}</p>
+                  )}
                   <p className="line-clamp-3 text-slate-600">{source.content}</p>
                   <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
                     Match score: {source.score.toFixed(2)}
@@ -48,7 +54,10 @@ function ChatMessageBubble({ message }) {
   );
 }
 
-function ChatPanel({ documentId }) {
+function ChatPanel({ documents }) {
+  const documentIds = documents.map((document) => document.id);
+  const isMultiDocument = documentIds.length > 1;
+
   const [indexStatus, setIndexStatus] = useState("indexing"); // indexing | ready | error
   const [indexError, setIndexError] = useState("");
 
@@ -62,7 +71,11 @@ function ChatPanel({ documentId }) {
     setIndexStatus("indexing");
     setIndexError("");
     try {
-      await indexDocument(documentId);
+      // Every selected document needs to be indexed before it can be
+      // searched — each call is independent (a document indexed for
+      // one conversation stays indexed), so these run in parallel
+      // rather than one at a time.
+      await Promise.all(documentIds.map((documentId) => indexDocument(documentId)));
       setIndexStatus("ready");
     } catch (error) {
       setIndexStatus("error");
@@ -70,15 +83,15 @@ function ChatPanel({ documentId }) {
     }
   }
 
-  // Runs once when this document's chat panel mounts (HomePage keys
-  // ChatPanel by document id, so opening a different document or
-  // uploading a new one remounts a fresh instance — that's also what
-  // resets `messages` back to an empty conversation, with no extra
-  // reset logic needed here).
+  // Runs once when this panel mounts. HomePage keys ChatPanel by the
+  // current document selection, so selecting a different set of
+  // documents (or uploading a new one) remounts a fresh instance —
+  // that's also what resets `messages` back to an empty conversation,
+  // with no extra reset logic needed here.
   useEffect(() => {
     prepareChat();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId]);
+  }, [documentIds.join(",")]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -105,7 +118,15 @@ function ChatPanel({ documentId }) {
     setSendStatus("sending");
 
     try {
-      const result = await sendChatMessage(documentId, trimmedQuestion, { history });
+      // Single document keeps using the original, unchanged endpoint
+      // (POST /documents/{id}/chat) — same call as before multi-
+      // document chat existed. Multiple documents use the new
+      // POST /documents/chat, which also returns which document each
+      // source came from (see ChatMessageBubble).
+      const result = isMultiDocument
+        ? await sendMultiDocumentChatMessage(documentIds, trimmedQuestion, { history })
+        : await sendChatMessage(documentIds[0], trimmedQuestion, { history });
+
       setMessages((previous) => [
         ...previous,
         {
@@ -132,6 +153,7 @@ function ChatPanel({ documentId }) {
 
   const isSending = sendStatus === "sending";
   const inputDisabled = indexStatus !== "ready" || isSending;
+  const documentsLabel = isMultiDocument ? "documents" : "document";
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -143,15 +165,20 @@ function ChatPanel({ documentId }) {
               className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-accent-600"
               aria-hidden="true"
             />
-            Preparing document...
+            Preparing {documentsLabel}...
           </span>
         )}
       </div>
 
+      {/* Which documents this conversation is grounded in is shown by
+          the caller (see HomePage's chip row above this panel, which
+          also lets the user remove one) — not repeated here, so the
+          same information isn't shown twice back-to-back. */}
+
       {indexStatus === "error" && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
           <p className="text-sm text-red-700">
-            Couldn&apos;t prepare this document for chat. {indexError}
+            Couldn&apos;t prepare {documentsLabel} for chat. {indexError}
           </p>
           <button onClick={prepareChat} className={SECONDARY_BUTTON_CLASSES}>
             Try again
@@ -164,7 +191,7 @@ function ChatPanel({ documentId }) {
           <div className="max-h-96 min-h-[8rem] space-y-3 overflow-y-auto rounded-lg bg-slate-50/50 p-3">
             {messages.length === 0 && indexStatus === "ready" && (
               <p className="text-sm text-slate-500">
-                Ask a question about this document to get started.
+                Ask a question about the selected {documentsLabel} to get started.
               </p>
             )}
 
@@ -194,7 +221,9 @@ function ChatPanel({ documentId }) {
               onChange={(event) => setQuestion(event.target.value)}
               disabled={inputDisabled}
               placeholder={
-                indexStatus === "indexing" ? "Preparing document..." : "Ask a question about this document..."
+                indexStatus === "indexing"
+                  ? `Preparing ${documentsLabel}...`
+                  : `Ask a question about the selected ${documentsLabel}...`
               }
               className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             />

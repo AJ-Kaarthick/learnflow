@@ -13,7 +13,8 @@ LearnFlow is an AI-powered learning assistant that helps students study from PDF
 - Built with a provider-swappable AI architecture
 - Semantic document indexing (RAG foundation)
 - Chat with PDF using Retrieval-Augmented Generation (RAG)
-- Multi-turn conversational memory for natural follow-up questions
+- Multi-turn conversational memory for natural conversations
+- Multi-document Chat
 
 ---
 
@@ -43,7 +44,7 @@ LearnFlow currently supports:
 - 🔎 Semantic search over indexed documents
 - 💬 Chat with PDF documents using Retrieval-Augmented Generation (RAG)
 - 🧠 Multi-turn conversational memory
-- 📚 Context-aware follow-up questions
+- 📚 Multi-document Chat
 - 📖 Grounded responses with supporting source references
 
 ---
@@ -125,19 +126,24 @@ LearnFlow currently supports:
 
 - Conversational Memory
 - Multi-turn Chat
-- Context-aware Follow-up Questions
 - Conversation History Management
 - Automatic History Trimming
 
-### 🔮 Planned Next
+#### Milestone 5
 
 - Multi-document Chat
+- Compare information across selected documents
+- Multi-document grounded retrieval
+- Shared conversation across selected documents
+
+### 🔮 Planned Next
+
+- Query Rewriting for Better Conversational Retrieval
 - DOCX / PPTX support
 - Authentication
 - PostgreSQL
 - Docker
 - Deployment
-- Query Rewriting for Better Conversational Retrieval
 
 
 ---
@@ -222,9 +228,9 @@ npm run dev
 - ✅ RAG foundation
 - ✅ Chat with PDF
 - ✅ Conversational Memory
+- ✅ Multi-document Chat
 
 ### Planned
-- 🔜 Multi-document chat
 - 🔜 DOCX / PPTX support
 - 🔜 Authentication
 - 🔜 PostgreSQL

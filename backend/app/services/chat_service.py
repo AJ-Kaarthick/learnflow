@@ -1,17 +1,17 @@
 """
-Orchestrates a single grounded question-answer turn over one document:
-retrieve relevant chunks (retrieval_service.py, unchanged), build a
-prompt that restricts the model to only that context plus a short
-window of recent conversation, and generate an answer (AIProvider,
-unchanged).
+Orchestrates a single grounded question-answer turn over one or more
+documents: retrieve relevant chunks (retrieval_service.py, unchanged
+in shape, generalized to take a list of document ids), build a prompt
+that restricts the model to only that context plus a short window of
+recent conversation, and generate an answer (AIProvider, unchanged).
 
 Deliberately thin: this module owns exactly one new thing — turning
-"chunks + a question (+ recent history)" into a grounded prompt — and
-reuses everything else. Retrieval and generation stay separate
-responsibilities (this file calls both, but is neither):
-retrieve_relevant_chunks() still knows nothing about chat or
-conversation history, and AIProvider still knows nothing about where
-its prompt's context came from.
+"chunks (possibly from several documents) + a question (+ recent
+history)" into a grounded prompt — and reuses everything else.
+Retrieval and generation stay separate responsibilities (this file
+calls both, but is neither): retrieve_relevant_chunks() still knows
+nothing about chat or conversation history, and AIProvider still knows
+nothing about where its prompt's context came from.
 """
 
 from dataclasses import dataclass
@@ -67,10 +67,21 @@ class ChatAnswer:
 
 
 def build_chat_prompt(
-    question: str, chunks: list[ScoredChunk], history: list[HistoryTurn] | None = None
+    question: str,
+    chunks: list[ScoredChunk],
+    documents_by_id: dict[str, Document],
+    history: list[HistoryTurn] | None = None,
 ) -> str:
+    # Every excerpt is labeled with its source document's filename, not
+    # just a bare index. For a single document this is a little
+    # redundant (every label names the same file) but harmless; for
+    # multiple documents it's what lets the model actually compare
+    # across them ("deadlocks in Operating Systems" vs "deadlocks in
+    # DBMS") instead of seeing an undifferentiated pile of excerpts —
+    # one prompt format handles both cases rather than branching.
     context = "\n\n".join(
-        f"[Excerpt {index + 1}]\n{scored.chunk.content}"
+        f"[Excerpt {index + 1} — {documents_by_id[scored.chunk.document_id].original_filename}]\n"
+        f"{scored.chunk.content}"
         for index, scored in enumerate(chunks)
     )
 
@@ -92,11 +103,14 @@ def build_chat_prompt(
         )
 
     return (
-        "You are answering a student's question about a document, using "
-        "ONLY the excerpts below. Do not use any outside knowledge, and do "
-        "not guess or make anything up. If the excerpts do not contain "
-        "enough information to answer the question, respond with exactly "
-        f'this sentence and nothing else: "{NO_CONTEXT_ANSWER}"\n\n'
+        "You are answering a student's question using ONLY the document "
+        "excerpts below. Do not use any outside knowledge, and do not "
+        "guess or make anything up. Each excerpt is labeled with the "
+        "document it came from — if the question asks you to compare "
+        "documents, use those labels to say which document each part of "
+        "your answer is drawn from. If the excerpts do not contain enough "
+        "information to answer the question, respond with exactly this "
+        f'sentence and nothing else: "{NO_CONTEXT_ANSWER}"\n\n'
         f"Document excerpts:\n{context}\n\n"
         f"{history_section}"
         f"Question: {question}\n\n"
@@ -105,7 +119,7 @@ def build_chat_prompt(
 
 
 async def answer_question(
-    document: Document,
+    documents: list[Document],
     question: str,
     db: Session,
     ai_provider: AIProvider,
@@ -114,11 +128,18 @@ async def answer_question(
     history: list[HistoryTurn] | None = None,
 ) -> ChatAnswer:
     """
-    Retrieves the chunks most relevant to `question` and asks the AI
-    provider to answer using only those chunks, optionally taking a
-    short window of recent conversation into account so follow-up
-    questions ("explain that more simply") don't need to repeat the
-    original topic.
+    Retrieves the chunks most relevant to `question` across every
+    document in `documents` and asks the AI provider to answer using
+    only those chunks, optionally taking a short window of recent
+    conversation into account so follow-up questions ("explain that
+    more simply") don't need to repeat the original topic.
+
+    `documents` — plural — is what makes this multi-document chat:
+    single-document chat (routes_chat.py's original endpoint) is just
+    the len(documents) == 1 case of this same function, not a separate
+    code path. `top_k` here means "up to top_k chunks per document",
+    not "top_k chunks total" — see retrieve_relevant_chunks for why —
+    so a question about N documents can surface up to N * top_k chunks.
 
     `history` is frontend-managed, not persisted: the caller (see
     routes_chat.py) sends whatever it's currently holding in memory,
@@ -127,16 +148,10 @@ async def answer_question(
     validate ordering or pairing of `history`; it trusts the caller to
     send turns oldest-first, which is what a client replaying its own
     conversation state naturally does.
-
-    Single-document today by design (`document`, not `document_ids`) —
-    matching this milestone's scope. Multi-document chat would extend
-    retrieve_relevant_chunks() (or add a sibling that queries across
-    several document ids) and this function's `document` parameter
-    would become a list; the prompt-building and grounding logic below
-    wouldn't need to change.
     """
+    document_ids = [document.id for document in documents]
     chunks = await retrieve_relevant_chunks(
-        document_id=document.id,
+        document_ids=document_ids,
         query=question,
         db=db,
         embedding_provider=embedding_provider,
@@ -144,7 +159,7 @@ async def answer_question(
     )
 
     if not chunks:
-        # No indexed chunks for this document at all — there's no
+        # No indexed chunks for any of these documents — there's no
         # context an AI call could possibly ground an answer in, so
         # skip the call rather than risk it answering from outside
         # knowledge. (Routes should generally reject un-indexed
@@ -152,8 +167,9 @@ async def answer_question(
         # but this keeps the service itself safe to call directly too.)
         return ChatAnswer(answer=NO_CONTEXT_ANSWER, chunks=[], grounded=False)
 
+    documents_by_id = {document.id: document for document in documents}
     recent_history = history[-MAX_HISTORY_TURNS:] if history else []
-    prompt = build_chat_prompt(question, chunks, recent_history)
+    prompt = build_chat_prompt(question, chunks, documents_by_id, recent_history)
     answer = await ai_provider.generate_text(prompt)
 
     return ChatAnswer(answer=answer.strip(), chunks=chunks, grounded=True)

@@ -1,6 +1,6 @@
 """
-The "read path" of the RAG foundation: given a document and a
-natural-language query, returns the chunks most semantically similar
+The "read path" of the RAG foundation: given one or more documents and
+a natural-language query, returns the chunks most semantically similar
 to that query.
 
 This is deliberately the ONLY thing this file does. It doesn't build a
@@ -64,40 +64,65 @@ def _cosine_similarity(vector_a: list[float], vector_b: list[float]) -> float:
 
 
 async def retrieve_relevant_chunks(
-    document_id: str,
+    document_ids: list[str],
     query: str,
     db: Session,
     embedding_provider: EmbeddingProvider,
     top_k: int = DEFAULT_TOP_K,
 ) -> list[ScoredChunk]:
     """
-    Returns this document's `top_k` chunks most semantically similar to
-    `query`, most similar first.
+    Returns the chunks most semantically similar to `query`, most
+    similar first — scored and ranked independently *within each*
+    document in `document_ids`, then merged, rather than pooling every
+    document's chunks together and taking one global top_k.
 
-    This is a brute-force scan — load every chunk for the document,
-    score each one, sort — not an indexed lookup. See the note on
-    DocumentChunk in db/models.py for why that's the right tradeoff at
-    LearnFlow's current scale, and _cosine_similarity above for why
-    scoring itself doesn't need a numerical library either.
+    That distinction only matters once `document_ids` has more than
+    one entry, but it matters a lot then: for a multi-document question
+    like "compare deadlocks in Operating Systems and DBMS", one global
+    top_k could easily return five chunks that are all from whichever
+    single document happens to score highest overall, leaving the
+    other selected document completely unrepresented in the answer's
+    context — the opposite of what multi-document chat is for.
+    Guaranteeing each selected document gets up to `top_k` chunks means
+    a comparison question always has something from every document
+    selected to compare, at the cost of a somewhat larger combined
+    context than one global top_k would produce — worth it at
+    LearnFlow's scale.
 
-    Returns an empty list if the document has no chunks yet (it hasn't
-    been indexed) rather than raising — "no results" and "not indexed"
-    are both legitimately "nothing to return" from retrieval's point of
-    view; a caller that needs to tell those apart (see routes_rag.py)
-    checks for indexing separately, before calling this.
+    Single-document retrieval (search, single-document chat) is just
+    the len(document_ids) == 1 case of this same function — there's
+    one code path for both, not a separate implementation.
+
+    Still a brute-force scan per document, not an indexed lookup — see
+    the note on DocumentChunk in db/models.py — and the embedding
+    query itself only runs once and is reused across every document,
+    so retrieving across several documents costs the same one
+    embedding call as retrieving from one.
+
+    Returns an empty list if none of `document_ids` have any indexed
+    chunks yet, rather than raising — same reasoning as the
+    single-document version had: "no results" and "not indexed" are
+    both legitimately "nothing to return" from retrieval's point of
+    view; a caller that needs to tell those apart (see routes_rag.py,
+    routes_chat.py) checks for indexing separately, before calling this.
     """
-    chunks = (
-        db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).all()
-    )
-    if not chunks:
+    if not document_ids:
         return []
 
     query_embedding = await embedding_provider.embed_query(query)
 
-    scored_chunks = [
-        ScoredChunk(chunk=chunk, score=_cosine_similarity(query_embedding, chunk.embedding))
-        for chunk in chunks
-    ]
-    scored_chunks.sort(key=lambda scored: scored.score, reverse=True)
+    scored_chunks: list[ScoredChunk] = []
+    for document_id in document_ids:
+        chunks = db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).all()
+        if not chunks:
+            continue
 
-    return scored_chunks[:top_k]
+        scored_for_document = [
+            ScoredChunk(chunk=chunk, score=_cosine_similarity(query_embedding, chunk.embedding))
+            for chunk in chunks
+        ]
+        scored_for_document.sort(key=lambda scored: scored.score, reverse=True)
+        scored_chunks.extend(scored_for_document[:top_k])
+
+    scored_chunks.sort(key=lambda scored: scored.score, reverse=True)
+    return scored_chunks

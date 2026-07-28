@@ -104,10 +104,30 @@ Chat Service
 ↓
 
 Conversation History
+                │
+                ▼
+Grounded Prompt Builder
+
+Question
+        │
+        ▼
+Retrieval Service
 
 ↓
 
-Retrieval Service
+Embedding Provider
+
+↓
+
+Relevant Chunks
+
+↓
+
+Grounded Prompt Builder
+
+↓
+
+AI Provider
 
 ↓
 
@@ -194,8 +214,11 @@ backend/app/services/rag/
 - Chat does not implicitly trigger indexing
 - Stateless chat requests
 - Conversation history is client-managed
-- Recent conversation provides context, not factual grounding
-- Prompt construction combines conversation history with retrieved document context
+- Recent conversation provides conversational context only
+- Conversation history is never used as factual evidence
+- Retrieval is performed using the current user query
+- Prompt construction combines retrieved document context with recent conversation
+- Documents remain the single source of truth
 
 
 ## UX Principles (V1.1)
@@ -259,7 +282,7 @@ Implemented:
 - Expandable supporting source references
 - Consistent chat interface matching existing LearnFlow styling
 - Multi-turn conversations
-- Natural follow-up questions
+- Natural multi-turn conversations
 - Conversation history preserved during active sessions
 - Recent history automatically trimmed
 
@@ -299,7 +322,7 @@ Implemented:
 Current Release: V2.0.0 (In Development)
 
 Current Development:
-V2.0 — Milestone 3 Complete
+V2.0 — Milestone 5 Complete
 
 Open Existing Document
         OR
@@ -363,14 +386,27 @@ The RAG foundation now powers Chat with PDF. Retrieved chunks are passed to the 
 ### Chat Pipeline
 
 Question
+        │
+        ▼
+Semantic Retrieval
 
 ↓
+
+Relevant Chunks
 
 Conversation History
+        │
+        ▼
+
+Grounded Prompt
 
 ↓
 
-Semantic Retrieval
+Gemini
+
+↓
+
+Grounded Answer
 
 ↓
 

@@ -49,7 +49,15 @@ function splitFilename(filename) {
   return { base: filename.slice(0, lastDot), extension: filename.slice(lastDot) };
 }
 
-function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete }) {
+function DocumentList({
+  documents,
+  activeDocumentId,
+  selectedDocumentIds,
+  onOpen,
+  onRename,
+  onDelete,
+  onToggleSelect,
+}) {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
   const [editError, setEditError] = useState(null);
@@ -111,6 +119,8 @@ function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete 
         const isEditing = editingId === doc.id;
         const isActive = doc.id === activeDocumentId;
         const isBusy = busyId === doc.id;
+        const isSelected = selectedDocumentIds.includes(doc.id);
+        const canSelect = doc.status === "ready";
 
         return (
           <li
@@ -119,6 +129,21 @@ function DocumentList({ documents, activeDocumentId, onOpen, onRename, onDelete 
               isActive ? "-mx-2 rounded-md bg-accent-50/50 px-2" : ""
             }`}
           >
+            {!isEditing && (
+              <input
+                type="checkbox"
+                checked={isSelected}
+                disabled={!canSelect}
+                onChange={() => onToggleSelect(doc)}
+                title={
+                  canSelect
+                    ? `Include "${doc.original_filename}" in chat`
+                    : "Only ready documents can be included in chat"
+                }
+                aria-label={`Include ${doc.original_filename} in chat`}
+                className="h-4 w-4 shrink-0 rounded border-slate-300 text-accent-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 disabled:cursor-not-allowed disabled:opacity-40"
+              />
+            )}
             <div className="min-w-0 flex-1">
               {isEditing ? (
                 <div className="space-y-1">

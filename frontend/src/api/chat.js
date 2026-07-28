@@ -55,3 +55,35 @@ export async function sendChatMessage(documentId, question, { topK, history } = 
 
   return response.json();
 }
+
+/**
+ * Same idea as sendChatMessage, but grounded across several documents
+ * at once (POST /documents/chat, not scoped to one document id) — for
+ * questions like "compare X and Y" where the answer may draw on more
+ * than one selected document. Each returned source includes which
+ * document it came from (document_id/document_name), which
+ * sendChatMessage's sources don't need since there's only one document
+ * to begin with.
+ */
+export async function sendMultiDocumentChatMessage(documentIds, question, { topK, history } = {}) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/documents/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      document_ids: documentIds,
+      question,
+      ...(topK ? { top_k: topK } : {}),
+      ...(history && history.length > 0 ? { history } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 502) {
+      throw new Error("The AI couldn't answer right now. Please try again in a moment.");
+    }
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.detail || `Chat request failed (status ${response.status})`);
+  }
+
+  return response.json();
+}
