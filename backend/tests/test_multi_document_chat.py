@@ -177,6 +177,34 @@ def test_multi_document_chat_labels_excerpts_by_document_in_prompt():
     app.dependency_overrides.clear()
 
 
+def test_multi_document_chat_prompt_prefers_filenames_over_generic_labels():
+    """
+    The prompt must steer the model toward calling a document by its
+    filename (already available via the excerpt labels) rather than a
+    generic, unpolished label like "Document 1" or "Document 2" when
+    it needs to refer to one — without weakening any grounding
+    instruction already covered by
+    test_multi_document_chat_labels_excerpts_by_document_in_prompt.
+    """
+    fake_ai_provider = FakeAIProvider()
+    app.dependency_overrides[get_ai_provider] = lambda: fake_ai_provider
+    app.dependency_overrides[get_embedding_provider] = lambda: KeywordEmbeddingProvider()
+    client = TestClient(app)
+    cats_id, dogs_id = _upload_cats_and_dogs(client)
+
+    client.post(
+        "/api/v1/documents/chat",
+        json={"document_ids": [cats_id, dogs_id], "question": "Compare cats and dogs"},
+    )
+
+    prompt = fake_ai_provider.last_prompt
+    assert prompt is not None
+    assert "filename" in prompt.lower()
+    assert '"Document 1"' in prompt
+
+    app.dependency_overrides.clear()
+
+
 def test_multi_document_chat_includes_conversation_history():
     fake_ai_provider = FakeAIProvider()
     app.dependency_overrides[get_ai_provider] = lambda: fake_ai_provider

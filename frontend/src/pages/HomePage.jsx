@@ -70,16 +70,23 @@ function HomePage() {
     setDocument(doc);
     setCachedContent(null);
 
-    // Opening a document also includes it in the chat selection, so
-    // the old single-document experience (open a document, chat with
-    // it, no extra step) still works exactly as before — the user can
-    // still add more documents via the library's checkboxes, or
-    // uncheck this one, without affecting what's "open".
-    setSelectedDocuments((previous) =>
-      previous.some((selected) => selected.id === doc.id)
-        ? previous
-        : [...previous, { id: doc.id, original_filename: doc.original_filename }]
-    );
+    // Deliberately does NOT touch selectedDocuments. Opening a document
+    // is a "view this document's study tools" action (Summary/
+    // Flashcards/Quiz/Mind Map below), separate from "include this
+    // document in the chat" — which the checkbox in DocumentList
+    // already owns exclusively, and says so directly ("Check the box
+    // next to a document to include it in the chat below"). Letting
+    // open() also silently mutate the chat selection made that
+    // checkbox a lie: whether opening a second document pulled both
+    // into chat depended on whatever was already checked, which the
+    // user has no way to see while browsing the library. It also meant
+    // just opening a document to glance at its flashcards could
+    // silently reset an unrelated, in-progress multi-document
+    // conversation (selection changes remount ChatPanel — see below).
+    // The one place the old "opening also selects" convenience is kept
+    // is handleUploadComplete, where the action is unambiguous: you
+    // just created this document, so starting a chat with it needs no
+    // extra click.
 
     // Timestamp the open server-side (powers the "Recently Opened"
     // sort) and refresh the library so it reflects the new order.
@@ -98,6 +105,19 @@ function HomePage() {
 
   async function handleUploadComplete(newDocument) {
     await openDocument(newDocument);
+    // Unlike opening an existing document from the library (see
+    // openDocument above), uploading is a deliberate, unambiguous
+    // action — the user just created this document, so it's added to
+    // the chat selection immediately, the same "no extra step" flow
+    // the app has always had for a freshly uploaded document. Existing
+    // selections are kept, not replaced, so uploading a new file while
+    // already chatting across others extends that conversation to
+    // include it rather than starting over.
+    setSelectedDocuments((previous) =>
+      previous.some((selected) => selected.id === newDocument.id)
+        ? previous
+        : [...previous, { id: newDocument.id, original_filename: newDocument.original_filename }]
+    );
   }
 
   async function handleRename(documentId, newName) {

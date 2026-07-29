@@ -1,9 +1,11 @@
 """
 Orchestrates a single grounded question-answer turn over one or more
-documents: retrieve relevant chunks (retrieval_service.py, unchanged
-in shape, generalized to take a list of document ids), build a prompt
-that restricts the model to only that context plus a short window of
-recent conversation, and generate an answer (AIProvider, unchanged).
+documents: resolve what to search for (query_condensation.py, new in
+Milestone 6 — see below), retrieve relevant chunks (retrieval_service.py,
+still unchanged in shape, generalized to take a list of document ids),
+build a prompt that restricts the model to only that context plus a
+short window of recent conversation, and generate an answer
+(AIProvider, unchanged).
 
 Deliberately thin: this module owns exactly one new thing — turning
 "chunks (possibly from several documents) + a question (+ recent
@@ -12,6 +14,23 @@ Retrieval and generation stay separate responsibilities (this file
 calls both, but is neither): retrieve_relevant_chunks() still knows
 nothing about chat or conversation history, and AIProvider still knows
 nothing about where its prompt's context came from.
+
+Milestone 6 — conversational retrieval: Milestone 5 shipped multi-
+document chat and diagnosed a real limitation — retrieve_relevant_chunks
+was always called with the raw current-turn question, so a follow-up
+like "Explain it." retrieved chunks for the literal phrase "Explain
+it." instead of whatever "it" referred to, even though the history
+already sent to the model made the reference obvious to a human. This
+module now closes that gap with one added step: before retrieval,
+query_condensation.condense_query() turns "question + recent history"
+into a standalone search query ("Explain how the ls command works").
+That resolved query is used ONLY to decide what to retrieve.
+build_chat_prompt below still receives the user's original, unedited
+`question` — the model always answers the question the user actually
+asked, grounded only in whatever retrieval found, exactly as before.
+Conversation history still never becomes a source of facts; it now
+additionally helps decide what to search for, which is a retrieval
+concern, not a grounding one.
 """
 
 from dataclasses import dataclass
@@ -21,6 +40,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Document
 from app.services.ai.base_provider import AIProvider
 from app.services.ai.embedding_provider import EmbeddingProvider
+from app.services.rag.query_condensation import condense_query
 from app.services.rag.retrieval_service import DEFAULT_TOP_K, ScoredChunk, retrieve_relevant_chunks
 
 # One prior turn: {"role": "user" | "assistant", "content": str}. Kept
@@ -107,9 +127,12 @@ def build_chat_prompt(
         "excerpts below. Do not use any outside knowledge, and do not "
         "guess or make anything up. Each excerpt is labeled with the "
         "document it came from — if the question asks you to compare "
-        "documents, use those labels to say which document each part of "
-        "your answer is drawn from. If the excerpts do not contain enough "
-        "information to answer the question, respond with exactly this "
+        "documents, or your answer otherwise needs to refer to a "
+        "document, call it by its filename (e.g. \"the excerpt from "
+        "ls.pdf\" or \"ls.pdf says...\") — never by a generic label like "
+        "\"Document 1\" or \"the first document\". If the excerpts do not "
+        "contain enough information to answer the question, respond with "
+        "exactly this "
         f'sentence and nothing else: "{NO_CONTEXT_ANSWER}"\n\n'
         f"Document excerpts:\n{context}\n\n"
         f"{history_section}"
@@ -148,11 +171,27 @@ async def answer_question(
     validate ordering or pairing of `history`; it trusts the caller to
     send turns oldest-first, which is what a client replaying its own
     conversation state naturally does.
+
+    Milestone 6: what gets *retrieved* and what gets *asked* are no
+    longer necessarily the same string. `condense_query` (see
+    query_condensation.py) turns `question` + `recent_history` into a
+    standalone query and that's what's searched for — but `question`
+    itself, unedited, is still what's sent to the model in
+    build_chat_prompt below. A follow-up like "Explain it." is
+    therefore retrieved as if the user had asked "Explain how the ls
+    command works" (whatever the resolved topic is), while the model
+    still sees, and answers, the literal "Explain it." it was asked —
+    resolving what to search for is a retrieval concern; resolving
+    what the user meant when generating the reply was already handled,
+    unchanged, by history_section in build_chat_prompt.
     """
     document_ids = [document.id for document in documents]
+    recent_history = history[-MAX_HISTORY_TURNS:] if history else []
+    retrieval_query = await condense_query(question, recent_history, ai_provider)
+
     chunks = await retrieve_relevant_chunks(
         document_ids=document_ids,
-        query=question,
+        query=retrieval_query,
         db=db,
         embedding_provider=embedding_provider,
         top_k=top_k,
@@ -168,7 +207,6 @@ async def answer_question(
         return ChatAnswer(answer=NO_CONTEXT_ANSWER, chunks=[], grounded=False)
 
     documents_by_id = {document.id: document for document in documents}
-    recent_history = history[-MAX_HISTORY_TURNS:] if history else []
     prompt = build_chat_prompt(question, chunks, documents_by_id, recent_history)
     answer = await ai_provider.generate_text(prompt)
 

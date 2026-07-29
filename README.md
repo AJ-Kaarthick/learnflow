@@ -15,6 +15,7 @@ LearnFlow is an AI-powered learning assistant that helps students study from PDF
 - Chat with PDF using Retrieval-Augmented Generation (RAG)
 - Multi-turn conversational memory for natural conversations
 - Multi-document Chat
+- History-aware conversational retrieval for natural follow-up questions
 
 ---
 
@@ -44,6 +45,7 @@ LearnFlow currently supports:
 - 🔎 Semantic search over indexed documents
 - 💬 Chat with PDF documents using Retrieval-Augmented Generation (RAG)
 - 🧠 Multi-turn conversational memory
+- History-aware conversational retrieval
 - 📚 Multi-document Chat
 - 📖 Grounded responses with supporting source references
 
@@ -96,10 +98,9 @@ LearnFlow currently supports:
 - Shared Markdown Export Utilities
 - Consistent Download Experience
 
-### 🚧 V2.0 (In Progress)
+### ✅ V2.0
 
 #### Milestone 1
-
 - RAG Foundation
 - Document Chunking
 - Semantic Embeddings
@@ -107,7 +108,6 @@ LearnFlow currently supports:
 - Semantic Search API
 
 #### Milestone 2
-
 - Chat with PDF (Backend)
 - Grounded Answer Generation
 - Hallucination Prevention
@@ -115,7 +115,6 @@ LearnFlow currently supports:
 - Source Chunk References
 
 #### Milestone 3
-
 - Chat with PDF Frontend
 - Conversation History
 - Automatic Document Indexing
@@ -123,22 +122,33 @@ LearnFlow currently supports:
 - Responsive Chat Interface
 
 #### Milestone 4
-
 - Conversational Memory
 - Multi-turn Chat
 - Conversation History Management
 - Automatic History Trimming
 
 #### Milestone 5
-
 - Multi-document Chat
 - Compare information across selected documents
 - Multi-document grounded retrieval
 - Shared conversation across selected documents
 
+#### Milestone 6
+- Conversational Retrieval
+- Query Condensation
+- History-aware Retrieval
+- Better Follow-up Questions
+- Filename-based Document References
+- Improved Chat UX
+- Test Isolation Improvements
+
 ### 🔮 Planned Next
 
-- Query Rewriting for Better Conversational Retrieval
+- V2.1 UI / UX Improvements
+- Right-side Copilot-style Chat Layout
+- Better Document Selection Workflow
+- Chat-side Document Picker
+- Better Follow-up Handling after Out-of-Scope Questions
 - DOCX / PPTX support
 - Authentication
 - PostgreSQL
@@ -237,3 +247,26 @@ npm run dev
 - 🔜 Docker
 - 🔜 Deployment
 - 🔜 Query Rewriting
+
+
+## Future Roadmap
+
+### V2.1 — UI / UX Improvements
+
+- Copilot-style right sidebar chat
+- Better document selection workflow
+- Chat-side document picker
+- Improved source panel
+- Better follow-up handling after unrelated questions
+
+### V2.2
+
+- DOCX support
+- PPTX support
+
+### V3
+
+- Authentication
+- PostgreSQL
+- Docker
+- Deployment

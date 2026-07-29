@@ -42,7 +42,7 @@ function ChatMessageBubble({ message }) {
                   )}
                   <p className="line-clamp-3 text-slate-600">{source.content}</p>
                   <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
-                    Match score: {source.score.toFixed(2)}
+                    {Math.round(source.score * 100)}% match
                   </p>
                 </li>
               ))}
@@ -66,6 +66,16 @@ function ChatPanel({ documents }) {
   const [sendStatus, setSendStatus] = useState("idle"); // idle | sending
 
   const messagesEndRef = useRef(null);
+  // Tracks whether the scroll-to-latest-message effect below is
+  // running for this panel's first render. HomePage remounts ChatPanel
+  // (via its `key`) every time the document selection changes —
+  // opening a document from the library, or checking/unchecking one —
+  // which made the effect fire on that very first render too and pull
+  // the whole page down to an empty, just-mounted chat panel the user
+  // hadn't asked to see. Skipping the first run keeps the intended
+  // behavior (scroll to the newest message as the conversation grows)
+  // while no longer moving the page on mount.
+  const isFirstRender = useRef(true);
 
   async function prepareChat() {
     setIndexStatus("indexing");
@@ -94,6 +104,10 @@ function ChatPanel({ documents }) {
   }, [documentIds.join(",")]);
 
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sendStatus]);
 

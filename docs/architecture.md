@@ -221,6 +221,16 @@ backend/app/services/rag/
 - Documents remain the single source of truth
 
 
+### Hallucination Prevention
+
+LearnFlow prevents hallucinations by ensuring:
+
+- Documents are the only factual source.
+- Conversation history only resolves references.
+- Retrieval always happens before generation.
+- If retrieval finds no supporting content, the model returns a fixed "not found" response.
+
+
 ## UX Principles (V1.1)
 
 The V1.1 update focuses on improving usability without changing the underlying architecture.
@@ -427,3 +437,33 @@ Grounded Answer
 ↓
 
 Supporting Sources
+
+
+## Conversational Retrieval (V2 Milestone 6)
+
+Traditional semantic retrieval only considers the user's current question.
+
+Conversational Retrieval first rewrites follow-up questions into standalone queries using recent conversation history.
+
+Example:
+
+User:
+What is ls?
+
+↓
+
+Explain it.
+
+↓
+
+Retrieval Query:
+
+Explain the Linux "ls" command.
+
+The rewritten query is used only for retrieval.
+
+The original user question is still passed to the AI model.
+
+Conversation history never becomes factual evidence.
+
+Retrieved document chunks remain the only source of truth.

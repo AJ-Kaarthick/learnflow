@@ -863,3 +863,60 @@ Extend Chat with PDF to support grounded conversations across multiple selected 
 ## Result
 
 LearnFlow now supports grounded conversations across multiple selected documents while preserving the existing Retrieval-Augmented Generation architecture. Each selected document participates in semantic retrieval, allowing users to summarize, compare, and discuss multiple PDFs within a single conversation.
+
+
+# V2 — Milestone 6
+
+## Goal:
+
+Improve conversational Retrieval-Augmented Generation by enabling history-aware retrieval while preserving the existing architecture and hallucination prevention.
+
+## Features Completed
+
+Conversational retrieval
+Query condensation
+History-aware retrieval
+Filename-based document references
+Improved chat UX
+Backend regression tests
+Test isolation improvements
+
+## Learned
+
+Query rewriting vs conversational retrieval
+History-aware semantic retrieval
+Separating retrieval from generation
+Regression testing AI workflows
+Test isolation using temporary databases
+UX trade-offs in conversational interfaces
+
+## Problems Faced
+
+Follow-up questions such as "Explain it." retrieved irrelevant chunks because retrieval only saw the current turn.
+Generic document references ("Document 1") reduced answer readability.
+Chat panel scrolled unexpectedly during document selection.
+Backend tests polluted the development database across repeated runs.
+
+## Solutions
+
+Added query condensation before retrieval.
+Preserved the original user question for generation.
+Used filenames in grounded responses.
+Prevented chat auto-scroll on initial mount.
+Isolated backend tests using temporary databases and uploads.
+
+## Verification
+
+Backend tests: 145 passed
+Frontend production build successful
+Manual browser testing completed
+Single-document conversations verified
+Multi-document conversations verified
+Follow-up questions verified
+Hallucination prevention regression tested
+Repeated backend test runs verified
+Filename references verified
+
+## Result
+
+LearnFlow now supports natural conversational retrieval while preserving grounded Retrieval-Augmented Generation. Follow-up questions retrieve the correct document context without weakening hallucination prevention, multi-document chat remains fully supported, and the testing infrastructure is now isolated and repeatable.
