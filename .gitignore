@@ -2,14 +2,21 @@
 # Backend (Python)
 # ==========================
 
-# Virtual environment
+# Virtual environments
 backend/.venv/
+.venv/
+venv/
+env/
 
 # Environment variables
 backend/.env
+frontend/.env
+.env
+.env.*
 
-# SQLite database
+# SQLite databases
 backend/*.db
+*.sqlite3
 
 # Uploaded files
 backend/uploads/
@@ -23,11 +30,18 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.pyre/
+.pytype/
 
 # Coverage reports
 .coverage
 .coverage.*
 htmlcov/
+
+# Python packaging
+build/
+dist/
+*.egg-info/
 
 # ==========================
 # Frontend (React + Vite)
@@ -39,24 +53,24 @@ frontend/node_modules/
 # Production build
 frontend/dist/
 
-# Environment variables
-frontend/.env
+# Vite cache
+frontend/.vite/
 
 # ==========================
-# Global Environment Files
-# ==========================
-
-.env
-.venv/
-venv/
-env/
-
-# ==========================
-# IDE / OS
+# IDE / Editors
 # ==========================
 
 .vscode/
 .idea/
+
+# Vim
+*.swp
+*.swo
+
+# ==========================
+# Operating System
+# ==========================
+
 .DS_Store
 Thumbs.db
 
@@ -65,3 +79,15 @@ Thumbs.db
 # ==========================
 
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================
+# Temporary / Backup files
+# ==========================
+
+*.tmp
+*.temp
+*.bak
