@@ -1,4 +1,5 @@
 import ChatPanel from "./ChatPanel";
+import { getConversationKey } from "../utils/persistence";
 
 // The right panel (≈26%) of the workspace: a persistent home for the
 // AI assistant. `min-h-0` on the flex column plus `h-full` here (its
@@ -44,14 +45,14 @@ function AssistantPanel({ selectedDocuments, onToggleSelect }) {
         </div>
       ) : (
         <div className="min-h-0 flex-1">
-          {/* Keyed by the sorted selection so adding/removing any
-              document starts a fresh conversation — unchanged
-              behavior from before this panel existed. */}
+          {/* Keyed by the same sorted-document-ids logic ChatPanel
+              uses for its storage key (getConversationKey), so
+              switching to a different document combination always
+              remounts into — and restores — the right conversation,
+              never a stale one left over from the previous
+              selection. */}
           <ChatPanel
-            key={`chat-${selectedDocuments
-              .map((selected) => selected.id)
-              .sort()
-              .join(",")}`}
+            key={`chat-${getConversationKey(selectedDocuments.map((selected) => selected.id))}`}
             documents={selectedDocuments}
           />
         </div>

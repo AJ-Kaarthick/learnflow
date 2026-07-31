@@ -16,6 +16,9 @@ LearnFlow is an AI-powered study workspace that transforms PDF documents into su
 - Multi-document Chat
 - History-aware conversational retrieval for natural follow-up questions
 - Persistent AI learning workspace
+- Workspace session persistence
+- Per-document conversation history
+- Automatic workspace restoration after refresh
 
 ---
 
@@ -48,6 +51,12 @@ LearnFlow currently supports:
 - 🧭 History-aware conversational retrieval
 - 📚 Multi-document Chat
 - 📖 Grounded responses with supporting source references
+- 💾 Workspace session persistence
+- 💬 Per-document conversation history
+- 🔄 Multi-document conversation persistence
+- 📂 Automatic workspace restoration after refresh
+- 🆕 New Conversation for independent chat sessions
+- 📑 Persistent study tab selection
 
 ---
 
@@ -160,10 +169,22 @@ LearnFlow currently supports:
 - Responsive layout improvements
 
 
+#### Milestone 2 ✅
+- Workspace session persistence
+- Automatic workspace restoration
+- Per-document conversation history
+- Multi-document conversation persistence
+- New Conversation support
+- Persistent study tab selection
+- Persistent document selection
+- Persistent search and sorting
+- Library scroll position restoration
+- Centralized persistence utility
+
+
 ### 🔮 Planned Next
 
 #### V2.1
-- Workspace Session Persistence
 - Theme Customization
 
 #### V2.2
@@ -262,6 +283,7 @@ npm run dev
 - Multi-document Chat
 - History-aware Conversational Retrieval
 - Workspace UX Polish
+- Workspace Session Persistence
 
 ### Planned
 - 🔜 DOCX / PPTX support
@@ -275,9 +297,6 @@ npm run dev
 ## Future Roadmap
 
 ### V2.1
-
-Milestone 2
-- Workspace Session Persistence
 
 Milestone 3
 - Theme Customization

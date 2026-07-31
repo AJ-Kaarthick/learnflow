@@ -2,6 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { listDocuments } from "../api/documents";
 import DocumentList from "./DocumentList";
 import UploadForm from "./UploadForm";
+import {
+  loadLibraryFilters,
+  loadLibraryScrollTop,
+  saveLibraryFilters,
+  saveLibraryScrollTop,
+} from "../utils/persistence";
+
+// How long to wait after the user stops scrolling before saving the
+// new position — scroll events fire continuously while scrolling, so
+// writing to storage on every one would be wasteful.
+const SCROLL_SAVE_DEBOUNCE_MS = 200;
 
 const SORT_OPTIONS = [
   { value: "uploaded_newest", label: "Upload Date (Newest First)" },
@@ -36,12 +47,24 @@ function LibraryPanel({
   onToggleSelect,
   onUploadComplete,
 }) {
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("uploaded_newest");
+  // Search and sort both restore from last session (V2.1 Milestone 2,
+  // features 7 & 8) — read once via lazy initializers so the very
+  // first fetch below (in the [search, sort, refreshSignal] effect)
+  // already requests the previously filtered/sorted results, rather
+  // than fetching the default view and then re-fetching a moment
+  // later.
+  const [searchInput, setSearchInput] = useState(() => loadLibraryFilters().search);
+  const [search, setSearch] = useState(() => loadLibraryFilters().search);
+  const [sort, setSort] = useState(() => loadLibraryFilters().sort);
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const hasLoadedOnce = useRef(false);
+
+  // The scrollable results list — restoring/saving scroll position
+  // (feature 9) is applied directly to this element.
+  const scrollContainerRef = useRef(null);
+  const hasRestoredScrollRef = useRef(false);
+  const scrollSaveTimeoutRef = useRef(null);
 
   // Debounce the search box so typing doesn't fire a request per
   // keystroke, while still updating results live as the user types.
@@ -49,6 +72,14 @@ function LibraryPanel({
     const timeoutId = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timeoutId);
   }, [searchInput]);
+
+  // Persist search/sort together whenever the *debounced* search
+  // settles or sort changes — not on every keystroke, same cadence as
+  // the fetch effect below so a save never lags behind what's on
+  // screen.
+  useEffect(() => {
+    saveLibraryFilters({ search, sort });
+  }, [search, sort]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +104,38 @@ function LibraryPanel({
 
   const showInitialLoading = loading && !hasLoadedOnce.current;
   const isSearchActive = search.length > 0;
+
+  // Restores the saved scroll position once, right after the results
+  // list first finishes loading (restoring any earlier — while the
+  // list is still empty/showing a loading state — would have nothing
+  // to scroll). Only ever runs this once per mount; later re-fetches
+  // (new search, new sort, a refresh elsewhere) intentionally don't
+  // re-trigger it; a new search producing a shorter list, for
+  // instance, should just show its own top, not fight to reapply an
+  // old scroll offset that may no longer make sense for it.
+  useEffect(() => {
+    if (hasRestoredScrollRef.current || showInitialLoading) return;
+    hasRestoredScrollRef.current = true;
+    const savedScrollTop = loadLibraryScrollTop();
+    if (savedScrollTop > 0 && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = savedScrollTop;
+    }
+  }, [showInitialLoading]);
+
+  function handleResultsScroll(event) {
+    const scrollTop = event.currentTarget.scrollTop;
+    if (scrollSaveTimeoutRef.current) clearTimeout(scrollSaveTimeoutRef.current);
+    scrollSaveTimeoutRef.current = setTimeout(
+      () => saveLibraryScrollTop(scrollTop),
+      SCROLL_SAVE_DEBOUNCE_MS
+    );
+  }
+
+  useEffect(() => {
+    return () => {
+      if (scrollSaveTimeoutRef.current) clearTimeout(scrollSaveTimeoutRef.current);
+    };
+  }, []);
 
   return (
     <div className="flex h-full min-w-0 flex-col gap-5">
@@ -134,7 +197,11 @@ function LibraryPanel({
           </select>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-slate-100 bg-white lg:mt-1">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleResultsScroll}
+          className="min-h-0 flex-1 overflow-y-auto rounded-md border border-slate-100 bg-white lg:mt-1"
+        >
           {showInitialLoading ? (
             <p className="p-4 text-sm text-slate-500">Loading documents...</p>
           ) : documents.length === 0 ? (

@@ -298,12 +298,42 @@ Implemented:
 - Better responsive flex layouts
 - Browser page scroll prevention
 - Search input overflow fixes
+- Workspace session persistence
+- Automatic workspace restoration
+- Per-document conversation persistence
+- Multi-document conversation persistence
+- Persistent study tab selection
+- Persistent library state
+- Persistent document selection
+- New Conversation workflow
 
+
+## Workspace Persistence (V2.1)
+
+Frontend workspace state is persisted locally to provide seamless continuity across page refreshes and browser restarts.
+
+Persisted state includes:
+
+- Active document
+- Active study tab
+- Selected documents
+- Search query
+- Sort preference
+- Library scroll position
+- Per-document conversations
+- Multi-document conversations
+
+Persistence is implemented through a centralized frontend persistence utility using browser localStorage.
+
+Conversation state is keyed by document IDs rather than filenames, ensuring conversations survive document renames.
+
+Multi-document conversations are keyed using sorted document IDs so identical document sets always restore the same conversation regardless of selection order.
 
 ## Current Milestones
 
 ### ✅ Milestone 0
-- Project setup
+- Project setupMilestone 2
+- Workspace Session Persistence
 
 ### ✅ Milestone 1
 - PDF upload
@@ -329,8 +359,8 @@ Implemented:
 
 ## Version
 
-Current Release:V2.1.0 
-
+Current Development:
+V2.1 (Milestone 2 Complete)
 
 Open Existing Document
         OR

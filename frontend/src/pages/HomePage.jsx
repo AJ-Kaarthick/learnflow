@@ -1,10 +1,16 @@
-import { useState } from "react";
-import { deleteDocument, markDocumentOpened, renameDocument } from "../api/documents";
+import { useEffect, useRef, useState } from "react";
+import { deleteDocument, getDocument, markDocumentOpened, renameDocument } from "../api/documents";
 import { getFlashcards } from "../api/flashcards";
 import { getMindMap } from "../api/mindmap";
 import { getQuiz } from "../api/quiz";
 import { getSummary } from "../api/summary";
 import WorkspaceShell from "../components/WorkspaceShell";
+import {
+  loadActiveDocumentId,
+  loadSelectedDocumentIds,
+  saveActiveDocumentId,
+  saveSelectedDocumentIds,
+} from "../utils/persistence";
 
 // Loads everything already generated for a document in one place, so
 // individual panels don't each decide independently when to fetch —
@@ -57,6 +63,97 @@ function HomePage() {
       return [...previous, { id: doc.id, original_filename: doc.original_filename }];
     });
   }
+
+  // Guards the two "persist on change" effects below so the very
+  // first render — before restoreWorkspace (below) has had a chance
+  // to run — doesn't immediately overwrite last session's saved
+  // document/selection with this render's still-empty initial state.
+  // Flipped to true once restoreWorkspace finishes, whether or not it
+  // found anything to restore.
+  const hasRestoredRef = useRef(false);
+
+  // Restores the previous session's active document and selected
+  // documents on first mount (V2.1 Milestone 2, features 1 & 6).
+  // Runs once: fetches only the documents actually referenced by
+  // saved state (not the whole library), and drops any id that no
+  // longer resolves (the document was deleted in a previous session)
+  // both from what gets restored here and from what stays in storage,
+  // so a stale id doesn't linger forever.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreWorkspace() {
+      try {
+        const persistedActiveId = loadActiveDocumentId();
+        const persistedSelectedIds = loadSelectedDocumentIds();
+        const idsToFetch = Array.from(
+          new Set([...(persistedSelectedIds || []), persistedActiveId].filter(Boolean))
+        );
+        if (idsToFetch.length === 0) return;
+
+        const results = await Promise.allSettled(idsToFetch.map((id) => getDocument(id)));
+        if (cancelled) return;
+
+        const foundById = new Map();
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            foundById.set(idsToFetch[index], result.value);
+          }
+        });
+
+        const restoredSelected = (persistedSelectedIds || [])
+          .filter((id) => foundById.has(id))
+          .map((id) => {
+            const doc = foundById.get(id);
+            return { id: doc.id, original_filename: doc.original_filename };
+          });
+        if (restoredSelected.length > 0) {
+          setSelectedDocuments(restoredSelected);
+        }
+        if (restoredSelected.length !== (persistedSelectedIds || []).length) {
+          saveSelectedDocumentIds(restoredSelected.map((doc) => doc.id));
+        }
+
+        if (persistedActiveId && foundById.has(persistedActiveId)) {
+          const activeDoc = foundById.get(persistedActiveId);
+          setDocument(activeDoc);
+          if (activeDoc.status === "ready") {
+            setContentLoading(true);
+            const content = await loadCachedContent(activeDoc.id);
+            if (!cancelled) {
+              setCachedContent(content);
+              setContentLoading(false);
+            }
+          }
+        } else if (persistedActiveId) {
+          // The previously active document is gone — nothing to
+          // restore it to, and no point keeping the stale id around.
+          saveActiveDocumentId(null);
+        }
+      } finally {
+        if (!cancelled) hasRestoredRef.current = true;
+      }
+    }
+
+    restoreWorkspace();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keeps storage in sync with the live active document / selection
+  // as the user works, so the *next* refresh restores wherever they
+  // ended up — not just wherever restoreWorkspace found them.
+  useEffect(() => {
+    if (!hasRestoredRef.current) return;
+    saveActiveDocumentId(document?.id ?? null);
+  }, [document]);
+
+  useEffect(() => {
+    if (!hasRestoredRef.current) return;
+    saveSelectedDocumentIds(selectedDocuments.map((selected) => selected.id));
+  }, [selectedDocuments]);
 
   async function openDocument(doc) {
     setDocument(doc);

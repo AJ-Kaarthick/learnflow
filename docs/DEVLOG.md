@@ -981,3 +981,65 @@ Existing V2 regression testing completed
 ## Result
 
 LearnFlow now provides a significantly more polished and intuitive study workspace. Navigation is smoother, chat remains synchronized with the active document, scrolling behaves predictably, and the overall experience better supports extended study sessions.
+
+
+# V2.1 — Milestone 2
+
+## Goal
+
+Implement workspace session persistence so users can seamlessly continue studying after refreshing the page or switching between documents.
+
+## Features Completed
+
+- Workspace session persistence
+- Automatic workspace restoration
+- Per-document conversation history
+- Multi-document conversation persistence
+- New Conversation action
+- Persistent study tab selection
+- Persistent document selection
+- Search persistence
+- Sort persistence
+- Library scroll position restoration
+- Centralized persistence utility
+
+## Learned
+
+- Browser localStorage architecture
+- Persisting React application state
+- Separating UI state from backend state
+- Designing reusable persistence utilities
+- Stable key generation using document IDs
+
+## Problems Faced
+
+- Restoring workspace state without race conditions
+- Preserving conversations across document renames
+- Managing separate conversations for different document combinations
+- Preventing persistence logic from being scattered across components
+
+## Solutions
+
+- Introduced a centralized persistence utility
+- Stored conversations using document IDs instead of filenames
+- Generated multi-document keys using sorted document IDs
+- Persisted only meaningful workspace state while excluding temporary UI state
+
+## Verification
+
+- Backend tests: **145 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- Workspace restoration verified
+- Per-document conversations verified
+- Multi-document conversations verified
+- New Conversation verified
+- Search persistence verified
+- Sort persistence verified
+- Library scroll restoration verified
+- Rename regression verified
+- Existing V2 regression testing completed
+
+## Result
+
+LearnFlow now preserves the user's entire study workspace across page refreshes and browser restarts. Documents, conversations, study tabs, search state, sorting preferences, and workspace context are restored automatically, creating a significantly smoother and more professional learning experience.

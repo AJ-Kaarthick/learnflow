@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { indexDocument, sendChatMessage, sendMultiDocumentChatMessage } from "../api/chat";
+import { clearConversation, getConversationKey, loadConversation, saveConversation } from "../utils/persistence";
 
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
@@ -130,10 +131,21 @@ function ChatPanel({ documents }) {
   const documentIds = documents.map((document) => document.id);
   const isMultiDocument = documentIds.length > 1;
 
+  // One conversation per unique set of documents, keyed by sorted
+  // document ids (never filenames — see getConversationKey). Stable
+  // across this component's whole lifetime: AssistantPanel remounts
+  // ChatPanel (via its `key`) whenever the document selection
+  // actually changes, so `documents` — and therefore this key — never
+  // changes out from under an already-mounted instance.
+  const conversationKey = getConversationKey(documentIds);
+
   const [indexStatus, setIndexStatus] = useState("indexing"); // indexing | ready | error
   const [indexError, setIndexError] = useState("");
 
-  const [messages, setMessages] = useState([]);
+  // Restored lazily from storage on mount rather than always starting
+  // at [] — this is what makes returning to a document (or document
+  // combination) bring its previous conversation back automatically.
+  const [messages, setMessages] = useState(() => loadConversation(conversationKey));
   const [question, setQuestion] = useState("");
   const [sendStatus, setSendStatus] = useState("idle"); // idle | sending
 
@@ -200,12 +212,31 @@ function ChatPanel({ documents }) {
   // Runs once when this panel mounts. AssistantPanel keys ChatPanel by
   // the current document selection, so selecting a different set of
   // documents (or uploading a new one) remounts a fresh instance —
-  // that's also what resets `messages` back to an empty conversation,
-  // with no extra reset logic needed here.
+  // that's also what starts a *different* conversation (see
+  // conversationKey / loadConversation above), with no extra reset
+  // logic needed here.
   useEffect(() => {
     prepareChat();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentIds.join(",")]);
+
+  // Keeps this conversation's saved copy in sync as it grows (or is
+  // cleared — see handleNewConversation) so switching away and back,
+  // or refreshing the page, picks it back up from here.
+  useEffect(() => {
+    saveConversation(conversationKey, messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationKey, messages]);
+
+  // If this mount restored a non-empty conversation (see the
+  // `messages` initializer above), jump straight to its most recent
+  // message instead of showing the top of a long history — instant,
+  // not smooth, since this is establishing the initial view rather
+  // than reacting to a new message arriving.
+  useEffect(() => {
+    scrollMessagesToBottom("auto");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -281,6 +312,20 @@ function ChatPanel({ documents }) {
     }
   }
 
+  // Starts a fresh conversation for the *current* chat context only.
+  // Deliberately narrow: it clears `messages` and this conversation's
+  // entry in storage, and nothing else — not other conversations
+  // (they're stored under their own keys), not this document's
+  // summary/flashcards/quiz/mind map (entirely separate state, owned
+  // by StudyWorkspace's panels, never touched here).
+  function handleNewConversation() {
+    setMessages([]);
+    clearConversation(conversationKey);
+    setQuestion("");
+    isAtBottomRef.current = true;
+    setShowScrollToLatest(false);
+  }
+
   const isSending = sendStatus === "sending";
   const inputDisabled = indexStatus !== "ready" || isSending;
   const documentsLabel = isMultiDocument ? "documents" : "document";
@@ -289,15 +334,25 @@ function ChatPanel({ documents }) {
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold tracking-tight text-slate-900">Chat</h3>
-        {indexStatus === "indexing" && (
-          <span className="flex items-center gap-2 text-xs text-slate-500">
-            <span
-              className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-accent-600"
-              aria-hidden="true"
-            />
-            Preparing {documentsLabel}...
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {indexStatus === "indexing" && (
+            <span className="flex items-center gap-2 text-xs text-slate-500">
+              <span
+                className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-accent-600"
+                aria-hidden="true"
+              />
+              Preparing {documentsLabel}...
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleNewConversation}
+            disabled={messages.length === 0 || isSending}
+            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            New conversation
+          </button>
+        </div>
       </div>
 
       {/* Which documents this conversation is grounded in is shown by
