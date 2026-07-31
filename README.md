@@ -142,11 +142,35 @@ LearnFlow currently supports:
 - Improved Chat UX
 - Test Isolation Improvements
 
+
+### 🚧 V2.1
+
+#### Milestone 1 ✅
+- Redesigned three-panel workspace
+- Workspace layout polish
+- Improved visual spacing and hierarchy
+- Guided empty workspace
+- Sticky AI chat composer
+- Independent chat scrolling
+- Automatic single-document chat synchronization
+- Improved multi-document workflow
+- Scroll-to-latest button
+- Lightweight Markdown rendering
+- Browser page scroll prevention
+- Responsive layout improvements
+
+
 ### 🔮 Planned Next
 
+#### V2.1
 - Workspace Session Persistence
 - Theme Customization
-- DOCX / PPTX Support
+
+#### V2.2
+- DOCX Support
+- PPTX Support
+
+#### V3
 - Authentication
 - PostgreSQL
 - Docker
@@ -230,12 +254,14 @@ npm run dev
 ## Roadmap
 
 ### Completed
-- ✅ AI-generated learning content
-- ✅ Persistent document library
-- ✅ RAG foundation
-- ✅ Chat with PDF
-- ✅ Conversational Memory
-- ✅ Multi-document Chat
+- AI-generated learning content
+- Persistent document library
+- Retrieval-Augmented Generation (RAG)
+- Chat with PDF
+- Conversational Memory
+- Multi-document Chat
+- History-aware Conversational Retrieval
+- Workspace UX Polish
 
 ### Planned
 - 🔜 DOCX / PPTX support
@@ -248,18 +274,20 @@ npm run dev
 
 ## Future Roadmap
 
-### V2.1 — UI / UX Improvements
+### V2.1
 
-- Copilot-style right sidebar chat
-- Better document selection workflow
-- Chat-side document picker
-- Improved source panel
-- Better follow-up handling after unrelated questions
+Milestone 2
+- Workspace Session Persistence
+
+Milestone 3
+- Theme Customization
+- Light / Dark mode
+- Accent colors
 
 ### V2.2
 
-- DOCX support
-- PPTX support
+- DOCX Support
+- PPTX Support
 
 ### V3
 
