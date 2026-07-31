@@ -920,3 +920,64 @@ Filename references verified
 ## Result
 
 LearnFlow now supports natural conversational retrieval while preserving grounded Retrieval-Augmented Generation. Follow-up questions retrieve the correct document context without weakening hallucination prevention, multi-document chat remains fully supported, and the testing infrastructure is now isolated and repeatable.
+
+
+
+# V2.1 — Workspace Polish
+
+## Goal:
+
+Transform LearnFlow into a polished AI study workspace by improving layout, navigation, scrolling behavior, and overall usability without changing the backend architecture.
+
+## Features Completed
+
+Redesigned three-panel workspace
+Improved visual spacing and hierarchy
+Guided empty workspace
+Upload action moved to top of library
+Sticky AI chat composer
+Independent chat scrolling
+Automatic single-document chat synchronization
+Improved multi-document workflow
+Scroll-to-latest button
+Lightweight Markdown rendering
+Browser page scroll prevention
+Responsive flex layout fixes
+Search input overflow fixes
+
+## Learned
+
+Flexbox layout architecture
+Scroll container design
+React layout composition
+UX trade-offs for AI applications
+Derived state vs duplicated state
+
+## Problems Faced
+
+Browser page jumped during chat updates
+Chat context could drift from the selected document
+Nested flex layouts caused overflow bugs
+Sidebar search controls clipped on narrower widths
+
+## Solutions
+
+Isolated scrolling to the chat container
+Introduced automatic document-chat synchronization
+Reworked flex layout with flex-1 and min-h-0
+Simplified responsive layouts to avoid clipping
+
+## Verification
+
+Backend tests: 145 passed
+Frontend production build successful
+Manual browser testing completed
+Independent scrolling verified
+Multi-document chat verified
+Automatic document synchronization verified
+Browser page scroll prevention verified
+Existing V2 regression testing completed
+
+## Result
+
+LearnFlow now provides a significantly more polished and intuitive study workspace. Navigation is smoother, chat remains synchronized with the active document, scrolling behaves predictably, and the overall experience better supports extended study sessions.

@@ -131,22 +131,6 @@ AI Provider
 
 ↓
 
-Embedding Provider
-
-↓
-
-Relevant Chunks
-
-↓
-
-Grounded Prompt Builder
-
-↓
-
-AI Provider
-
-↓
-
 Grounded Answer
 
 ↓
@@ -299,6 +283,22 @@ Implemented:
 
 ---
 
+## UX Principles (V2.1)
+
+Implemented:
+
+- Unified three-panel workspace
+- Automatic single-document chat synchronization
+- Multi-document selection workflow
+- Independent scrolling for chat and study workspace
+- Sticky chat composer
+- Guided empty workspace
+- Improved spacing and visual hierarchy
+- Floating "Scroll to latest" action
+- Better responsive flex layouts
+- Browser page scroll prevention
+- Search input overflow fixes
+
 
 ## Current Milestones
 
@@ -329,10 +329,8 @@ Implemented:
 
 ## Version
 
-Current Release: V2.0.0 (In Development)
+Current Release:V2.1.0
 
-Current Development:
-V2.0 — Milestone 5 Complete
 
 Open Existing Document
         OR
@@ -467,3 +465,16 @@ The original user question is still passed to the AI model.
 Conversation history never becomes factual evidence.
 
 Retrieved document chunks remain the only source of truth.
+
+
+
+Workspace
+
+┌──────────────┬──────────────────────┬───────────────┐
+│ Library      │ Study Workspace      │ AI Assistant  │
+│              │                      │               │
+│ Upload       │ Summary              │ Chat          │
+│ Search       │ Flashcards           │ Sources       │
+│ Sort         │ Quiz                 │ Conversation  │
+│ Documents    │ Mind Map             │               │
+└──────────────┴──────────────────────┴───────────────┘

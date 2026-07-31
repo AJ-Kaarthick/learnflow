@@ -4,22 +4,7 @@ import { getFlashcards } from "../api/flashcards";
 import { getMindMap } from "../api/mindmap";
 import { getQuiz } from "../api/quiz";
 import { getSummary } from "../api/summary";
-import BackendStatus from "../components/BackendStatus";
-import ChatPanel from "../components/ChatPanel";
-import DocumentLibrary from "../components/DocumentLibrary";
-import FlashcardsPanel from "../components/FlashcardsPanel";
-import MindMapPanel from "../components/MindMapPanel";
-import QuizPanel from "../components/QuizPanel";
-import SummaryPanel from "../components/SummaryPanel";
-import UploadForm from "../components/UploadForm";
-
-// Maps the raw backend status value to copy a student should actually
-// read, rather than the internal state name ("ready", "failed").
-function statusLabel(status) {
-  if (status === "ready") return "Ready";
-  if (status === "failed") return "Couldn't process this file";
-  return status;
-}
+import WorkspaceShell from "../components/WorkspaceShell";
 
 // Loads everything already generated for a document in one place, so
 // individual panels don't each decide independently when to fetch —
@@ -37,23 +22,30 @@ async function loadCachedContent(documentId) {
   return { summary, flashcards, quiz, mindmap };
 }
 
+// HomePage is still a thin composition root: hook extraction is a
+// deliberate later milestone, not done here. `openDocument` now
+// includes the automatic single-document chat sync added in this
+// polish pass (see its comment) — everything else is unchanged from
+// the V2.1 workspace milestone.
 function HomePage() {
-  // Bumped whenever an action outside DocumentLibrary's own
-  // search/sort controls changes the underlying document data (open,
-  // rename, delete, upload) so it knows to re-fetch.
+  // Bumped whenever an action outside LibraryPanel's own search/sort
+  // controls changes the underlying document data (open, rename,
+  // delete, upload) so it knows to re-fetch.
   const [refreshSignal, setRefreshSignal] = useState(0);
 
   const [document, setDocument] = useState(null);
   const [cachedContent, setCachedContent] = useState(null);
   const [contentLoading, setContentLoading] = useState(false);
 
-  // Documents currently included in the chat conversation below —
-  // separate from `document` (the single one whose Summary/Flashcards/
-  // Quiz/Mind Map are shown), since chatting across several documents
-  // doesn't require any of them to be "open" in that sense. Holds
-  // {id, original_filename} rather than bare ids so the chat section
-  // can show readable chips without needing DocumentLibrary to expose
-  // its whole fetched list.
+  // Documents currently included in the chat conversation in the right
+  // panel. Kept as its own piece of state rather than always being
+  // derived from `document` because multi-document mode (2+ manually
+  // checked) is explicit and independent of whichever single document
+  // is open in the center panel — see openDocument for how the two
+  // stay in sync in the common single-document case. Holds
+  // {id, original_filename} rather than bare ids so the assistant
+  // panel can show readable chips without needing LibraryPanel to
+  // expose its whole fetched list.
   const [selectedDocuments, setSelectedDocuments] = useState([]);
 
   function handleToggleSelect(doc) {
@@ -70,23 +62,28 @@ function HomePage() {
     setDocument(doc);
     setCachedContent(null);
 
-    // Deliberately does NOT touch selectedDocuments. Opening a document
-    // is a "view this document's study tools" action (Summary/
-    // Flashcards/Quiz/Mind Map below), separate from "include this
-    // document in the chat" — which the checkbox in DocumentList
-    // already owns exclusively, and says so directly ("Check the box
-    // next to a document to include it in the chat below"). Letting
-    // open() also silently mutate the chat selection made that
-    // checkbox a lie: whether opening a second document pulled both
-    // into chat depended on whatever was already checked, which the
-    // user has no way to see while browsing the library. It also meant
-    // just opening a document to glance at its flashcards could
-    // silently reset an unrelated, in-progress multi-document
-    // conversation (selection changes remount ChatPanel — see below).
-    // The one place the old "opening also selects" convenience is kept
-    // is handleUploadComplete, where the action is unambiguous: you
-    // just created this document, so starting a chat with it needs no
-    // extra click.
+    // Automatic single-document chat selection: clicking a document
+    // makes it both the active study document AND the active chat
+    // document, and switching documents switches the conversation with
+    // it — no separate checkbox click required for the common case.
+    //
+    // "Multi-document mode" isn't a separate flag — it's derived from
+    // selectedDocuments itself: 0 or 1 selected is "single/automatic"
+    // mode, where opening a document keeps the two in sync; 2+ selected
+    // (only reachable by manually checking a second box — see
+    // handleToggleSelect) is "multi-document mode", where the selection
+    // is entirely explicit and opening a document to peek at its study
+    // tools must NOT silently derail an in-progress multi-document
+    // conversation. Unchecking back down to one document (or deleting
+    // one — see handleDelete) drops the count back to <=1 with no
+    // special-case code needed, which is exactly "leaving multi-
+    // document mode automatically returns to single-document behavior":
+    // it's the same rule, just read the other direction.
+    setSelectedDocuments((previous) =>
+      previous.length <= 1
+        ? [{ id: doc.id, original_filename: doc.original_filename }]
+        : previous
+    );
 
     // Timestamp the open server-side (powers the "Recently Opened"
     // sort) and refresh the library so it reflects the new order.
@@ -105,14 +102,15 @@ function HomePage() {
 
   async function handleUploadComplete(newDocument) {
     await openDocument(newDocument);
-    // Unlike opening an existing document from the library (see
-    // openDocument above), uploading is a deliberate, unambiguous
-    // action — the user just created this document, so it's added to
-    // the chat selection immediately, the same "no extra step" flow
-    // the app has always had for a freshly uploaded document. Existing
-    // selections are kept, not replaced, so uploading a new file while
-    // already chatting across others extends that conversation to
-    // include it rather than starting over.
+    // openDocument's automatic sync above only replaces the selection
+    // with [newDocument] in single/automatic mode (0 or 1 previously
+    // selected) — in multi-document mode it deliberately leaves the
+    // existing selection untouched (see openDocument's comment), which
+    // for an upload isn't what we want: uploading a new file is an
+    // unambiguous "include this too", not a reason to derail an
+    // existing multi-document conversation. This patches it in for
+    // that case; in single/automatic mode it's already there and this
+    // is a no-op.
     setSelectedDocuments((previous) =>
       previous.some((selected) => selected.id === newDocument.id)
         ? previous
@@ -143,146 +141,19 @@ function HomePage() {
     setRefreshSignal((count) => count + 1);
   }
 
-  const extractedVeryLittleText =
-    document && document.status === "ready" && document.character_count < 50;
-
   return (
-    <main className="min-h-screen bg-slate-50">
-      <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
-        <header>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            Learn<span className="text-accent-600">Flow</span>
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Pick up where you left off, or upload a new PDF.
-          </p>
-        </header>
-
-        <section className="w-full rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <DocumentLibrary
-            refreshSignal={refreshSignal}
-            activeDocumentId={document?.id ?? null}
-            selectedDocumentIds={selectedDocuments.map((selected) => selected.id)}
-            onOpen={openDocument}
-            onRename={handleRename}
-            onDelete={handleDelete}
-            onToggleSelect={handleToggleSelect}
-          />
-        </section>
-
-        <section className="w-full space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <BackendStatus />
-
-          <UploadForm onUploadComplete={handleUploadComplete} />
-
-          {document && (
-            <div className="space-y-2 border-t border-slate-200 pt-4">
-              <p className="text-sm font-medium text-slate-900">{document.original_filename}</p>
-              <p className="text-xs text-slate-500">
-                Status: {statusLabel(document.status)}
-                {document.status === "ready" && (
-                  <>
-                    {" "}
-                    &middot; {document.character_count} characters extracted
-                  </>
-                )}
-              </p>
-
-              {extractedVeryLittleText && (
-                <p className="text-xs text-amber-600">
-                  Very little text was extracted. This might be a scanned/image-only PDF, which
-                  isn&apos;t supported yet.
-                </p>
-              )}
-
-              {document.status === "failed" && (
-                <p className="text-sm text-red-600">
-                  We couldn&apos;t read this PDF — it may be corrupted or scanned without a text
-                  layer. Try uploading a different file.
-                </p>
-              )}
-
-              {document.status === "ready" && (
-                <p className="max-w-3xl text-sm text-slate-700 whitespace-pre-wrap">
-                  {document.text_preview}
-                  {document.character_count > document.text_preview.length && "…"}
-                </p>
-              )}
-            </div>
-          )}
-        </section>
-
-        {document &&
-          document.status === "ready" &&
-          (contentLoading || !cachedContent ? (
-            <p className="text-center text-sm text-slate-500">Loading saved content...</p>
-          ) : (
-            <div className="space-y-4">
-              <SummaryPanel
-                key={`summary-${document.id}`}
-                documentId={document.id}
-                initialSummary={cachedContent.summary}
-              />
-              <FlashcardsPanel
-                key={`flashcards-${document.id}`}
-                documentId={document.id}
-                initialFlashcards={cachedContent.flashcards}
-              />
-              <QuizPanel
-                key={`quiz-${document.id}`}
-                documentId={document.id}
-                initialQuestions={cachedContent.quiz}
-              />
-              <MindMapPanel
-                key={`mindmap-${document.id}`}
-                documentId={document.id}
-                initialMindmap={cachedContent.mindmap}
-              />
-            </div>
-          ))}
-
-        {selectedDocuments.length > 0 && (
-          <section className="w-full space-y-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold tracking-tight text-slate-900">
-                Chat across selected documents
-              </h2>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {selectedDocuments.map((selected) => (
-                  <span
-                    key={selected.id}
-                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
-                  >
-                    {selected.original_filename}
-                    <button
-                      type="button"
-                      onClick={() => handleToggleSelect(selected)}
-                      aria-label={`Remove ${selected.original_filename} from chat`}
-                      className="text-slate-400 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
-                    >
-                      &times;
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Keyed by the sorted selection so adding/removing any
-                document starts a fresh conversation — the same
-                predictable "changing what you're chatting with resets
-                the chat" rule as before, just generalized from "switch
-                document" to "change the selection". */}
-            <ChatPanel
-              key={`chat-${selectedDocuments
-                .map((selected) => selected.id)
-                .sort()
-                .join(",")}`}
-              documents={selectedDocuments}
-            />
-          </section>
-        )}
-      </div>
-    </main>
+    <WorkspaceShell
+      refreshSignal={refreshSignal}
+      document={document}
+      selectedDocuments={selectedDocuments}
+      contentLoading={contentLoading}
+      cachedContent={cachedContent}
+      onOpen={openDocument}
+      onRename={handleRename}
+      onDelete={handleDelete}
+      onToggleSelect={handleToggleSelect}
+      onUploadComplete={handleUploadComplete}
+    />
   );
 }
 
