@@ -39,11 +39,24 @@ function WorkspaceShell({
   onUploadComplete,
 }) {
   return (
-    <div className="flex flex-col bg-white lg:h-screen lg:overflow-hidden">
+    <div className="flex flex-col bg-surface lg:h-screen lg:overflow-hidden">
+      {/* Visually hidden until focused — lets a keyboard user jump
+          straight past the library panel to the study workspace,
+          rather than tabbing through every document row first. */}
+      <a
+        href="#study-workspace"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-accent-600 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+      >
+        Skip to study workspace
+      </a>
+
       <TopBar />
 
       <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
-        <aside className="min-w-0 shrink-0 border-b border-slate-200 bg-slate-50/60 p-6 lg:h-full lg:w-[22%] lg:min-w-[260px] lg:max-w-[360px] lg:overflow-hidden lg:border-b-0 lg:border-r lg:p-8">
+        <aside
+          aria-label="Document library"
+          className="min-w-0 shrink-0 border-b border-slate-200 bg-slate-50/60 p-6 lg:h-full lg:w-[22%] lg:min-w-[260px] lg:max-w-[360px] lg:overflow-hidden lg:border-b-0 lg:border-r lg:p-8"
+        >
           <LibraryPanel
             refreshSignal={refreshSignal}
             activeDocumentId={document?.id ?? null}
@@ -56,15 +69,23 @@ function WorkspaceShell({
           />
         </aside>
 
-        <section className="min-w-0 flex-1 p-6 lg:h-full lg:overflow-y-auto lg:p-10">
+        <main
+          id="study-workspace"
+          tabIndex={-1}
+          aria-label="Study workspace"
+          className="min-w-0 flex-1 p-6 lg:h-full lg:overflow-y-auto lg:p-10"
+        >
           <StudyWorkspace
             document={document}
             contentLoading={contentLoading}
             cachedContent={cachedContent}
           />
-        </section>
+        </main>
 
-        <aside className="min-w-0 shrink-0 border-t border-slate-200 bg-slate-50/60 p-6 lg:h-full lg:w-[26%] lg:min-w-[300px] lg:max-w-[420px] lg:overflow-hidden lg:border-t-0 lg:border-l lg:p-6">
+        <aside
+          aria-label="AI assistant"
+          className="min-w-0 shrink-0 border-t border-slate-200 bg-slate-50/60 p-6 lg:h-full lg:w-[26%] lg:min-w-[300px] lg:max-w-[420px] lg:overflow-hidden lg:border-t-0 lg:border-l lg:p-6"
+        >
           <AssistantPanel selectedDocuments={selectedDocuments} onToggleSelect={onToggleSelect} />
         </aside>
       </div>

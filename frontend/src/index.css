@@ -1,19 +1,349 @@
 @import "tailwindcss";
 
-/* LearnFlow's single accent color: a deliberately deep, calm teal
-   rather than the default indigo/violet most AI-assisted UIs reach
-   for. Defining it here (Tailwind v4's @theme) generates the full
-   set of accent utility classes automatically, no extra dependency
-   required. */
+/* ---------------------------------------------------------------------
+   LearnFlow personalization system (V2.1 Milestone 3).
+
+   Everything below is driven entirely by attributes/classes on
+   <html>, applied in one place by PersonalizationProvider (see
+   src/context/PersonalizationContext.jsx) and, for the very first
+   paint, by the inline script in index.html:
+
+     <html class="dark"? data-accent="blue|purple|green|orange"
+           data-density="comfortable|compact" data-motion="enabled|disabled">
+
+   No component ever branches on theme/accent/density/animation
+   itself — they just use ordinary Tailwind utilities (`bg-surface`,
+   `text-slate-700`, `bg-accent-600`, `p-6`, `transition-colors`, ...)
+   and the rules here make those utilities respond to the active
+   personalization. This is what "centralized, not scattered" means
+   in practice: adding a fifth accent color or a third density is a
+   few lines here, not a `dark:`/`data-density:` prefix hunted down
+   across a dozen component files.
+
+   This works because Tailwind v4 compiles color utilities to
+   `var(--color-*)` references (confirmed by inspecting the build
+   output) rather than inlining literal values — so redefining a
+   `--color-*` variable for a given scope (`.dark`, `[data-accent=...]`)
+   rethemes every utility that uses it, with zero component changes.
+   --------------------------------------------------------------- */
+
+/* Tailwind v4 defaults to the `prefers-color-scheme` media query for
+   `dark:`. This app needs an explicit, user-controlled Light/Dark/
+   System choice (not just "follow the OS"), so `dark:` is redefined
+   to key off a `.dark` class on <html> instead — same variant name,
+   same usage in JSX, different trigger. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --color-accent-50: #f0fbfa;
-  --color-accent-100: #d6f3f0;
-  --color-accent-200: #ade7e0;
-  --color-accent-300: #7ad6cb;
-  --color-accent-400: #4abfb1;
-  --color-accent-500: #2aa294;
-  --color-accent-600: #1f8478;
-  --color-accent-700: #1c6a62;
-  --color-accent-800: #1a5650;
-  --color-accent-900: #184744;
+  /* Accent color: "Blue" is the default of the four accent options
+     (Appearance settings § Accent Color). Defining it in @theme, same
+     as before, generates the full accent-50..900 utility set — the
+     rest of the app never needed to change to gain a swappable
+     accent, only these definitions did. */
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-200: #bfdbfe;
+  --color-accent-300: #93c5fd;
+  --color-accent-400: #60a5fa;
+  --color-accent-500: #3b82f6;
+  --color-accent-600: #2563eb;
+  --color-accent-700: #1d4ed8;
+  --color-accent-800: #1e40af;
+  --color-accent-900: #1e3a8a;
+
+  /* Semantic "surface" color: panel/card/input backgrounds that need
+     to flip in dark mode. Deliberately separate from `white` itself
+     (`--color-white` is left untouched) because `text-white` is also
+     used for text sitting on solid accent-colored buttons, which
+     must stay light in both themes — only surfaces flip. */
+  --color-surface: #ffffff;
+}
+
+/* -----------------------------------------------------------------
+   Accent color options. Selecting a color in Settings sets
+   data-accent on <html>; only the palette for the active one is in
+   effect, so accent-* utilities everywhere (buttons, focus rings,
+   chips, links) update immediately with no component changes.
+   Adding a fifth color is one more block here plus one more entry in
+   ACCENT_OPTIONS (PersonalizationContext) and the Settings panel.
+   ----------------------------------------------------------------- */
+
+[data-accent="purple"] {
+  --color-accent-50: #f5f3ff;
+  --color-accent-100: #ede9fe;
+  --color-accent-200: #ddd6fe;
+  --color-accent-300: #c4b5fd;
+  --color-accent-400: #a78bfa;
+  --color-accent-500: #8b5cf6;
+  --color-accent-600: #7c3aed;
+  --color-accent-700: #6d28d9;
+  --color-accent-800: #5b21b6;
+  --color-accent-900: #4c1d95;
+}
+
+[data-accent="green"] {
+  --color-accent-50: #f0fdf4;
+  --color-accent-100: #dcfce7;
+  --color-accent-200: #bbf7d0;
+  --color-accent-300: #86efac;
+  --color-accent-400: #4ade80;
+  --color-accent-500: #22c55e;
+  --color-accent-600: #16a34a;
+  --color-accent-700: #15803d;
+  --color-accent-800: #166534;
+  --color-accent-900: #14532d;
+}
+
+[data-accent="orange"] {
+  --color-accent-50: #fff7ed;
+  --color-accent-100: #ffedd5;
+  --color-accent-200: #fed7aa;
+  --color-accent-300: #fdba74;
+  --color-accent-400: #fb923c;
+  --color-accent-500: #f97316;
+  --color-accent-600: #ea580c;
+  --color-accent-700: #c2410c;
+  --color-accent-800: #9a3412;
+  --color-accent-900: #7c2d12;
+}
+
+/* -----------------------------------------------------------------
+   Dark mode. LearnFlow's neutrals are exclusively the Tailwind
+   `slate` scale (text, borders, muted backgrounds) plus `surface`
+   for panel/card backgrounds — nothing else needed a literal color —
+   so re-pointing just those two things at dark-appropriate values
+   re-themes the entire workspace. Accent chip backgrounds (the
+   -50/-100 steps, used at near-full opacity behind -700/-800 text)
+   get their own dark overrides per accent color, since a very light
+   background behind dark text would otherwise become unreadable.
+   ----------------------------------------------------------------- */
+
+.dark {
+  --color-surface: #1e293b; /* slate-800 */
+
+  --color-slate-50: #0f172a;
+  --color-slate-100: #1e293b;
+  --color-slate-200: #334155;
+  --color-slate-300: #475569;
+  --color-slate-400: #64748b;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #cbd5e1;
+  --color-slate-700: #e2e8f0;
+  --color-slate-800: #f1f5f9;
+  --color-slate-900: #f8fafc;
+
+  /* Status colors (ready/failed/generating pills, error banners):
+     lighter text, darker/translucent backgrounds, so they read as
+     tinted panels rather than paper-white blobs on a dark page. */
+  --color-emerald-50: color-mix(in oklch, var(--color-emerald-500) 18%, transparent);
+  --color-emerald-700: #6ee7b7;
+  --color-red-50: color-mix(in oklch, var(--color-red-500) 18%, transparent);
+  --color-red-200: color-mix(in oklch, var(--color-red-500) 35%, transparent);
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-amber-50: color-mix(in oklch, var(--color-amber-500) 18%, transparent);
+  --color-amber-600: #fbbf24;
+  --color-amber-700: #fcd34d;
+}
+
+.dark[data-accent="blue"] {
+  --color-accent-50: color-mix(in oklch, var(--color-accent-500) 16%, var(--color-slate-100));
+  --color-accent-100: color-mix(in oklch, var(--color-accent-500) 26%, var(--color-slate-100));
+  --color-accent-800: #bfdbfe;
+}
+
+.dark[data-accent="purple"] {
+  --color-accent-50: color-mix(in oklch, var(--color-accent-500) 16%, var(--color-slate-100));
+  --color-accent-100: color-mix(in oklch, var(--color-accent-500) 26%, var(--color-slate-100));
+  --color-accent-800: #ddd6fe;
+}
+
+.dark[data-accent="green"] {
+  --color-accent-50: color-mix(in oklch, var(--color-accent-500) 16%, var(--color-slate-100));
+  --color-accent-100: color-mix(in oklch, var(--color-accent-500) 26%, var(--color-slate-100));
+  --color-accent-800: #bbf7d0;
+}
+
+.dark[data-accent="orange"] {
+  --color-accent-50: color-mix(in oklch, var(--color-accent-500) 16%, var(--color-slate-100));
+  --color-accent-100: color-mix(in oklch, var(--color-accent-500) 26%, var(--color-slate-100));
+  --color-accent-800: #fed7aa;
+}
+
+/* -----------------------------------------------------------------
+   Workspace density. "Compact" tightens the workspace's larger,
+   structural paddings and gaps (panel padding, section spacing) —
+   the ones that most define how much of the workspace feels like
+   whitespace versus content — while leaving small, already-tight
+   spacing (icon gaps, pill padding, message bubble padding) alone,
+   per the brief's "still readable, not cramped." Centralized here as
+   attribute-scoped overrides of the exact utility classes the
+   workspace uses, rather than a `data-density` prefix added to every
+   className in every panel.
+   ----------------------------------------------------------------- */
+
+[data-density="compact"] .p-10 {
+  padding: 1.75rem;
+}
+[data-density="compact"] .p-8 {
+  padding: 1.25rem;
+}
+[data-density="compact"] .p-6 {
+  padding: 1rem;
+}
+[data-density="compact"] .p-5 {
+  padding: 0.875rem;
+}
+[data-density="compact"] .p-4 {
+  padding: 0.75rem;
+}
+[data-density="compact"] .px-8 {
+  padding-inline: 1.25rem;
+}
+[data-density="compact"] .px-6 {
+  padding-inline: 1rem;
+}
+[data-density="compact"] .py-3 {
+  padding-block: 0.5rem;
+}
+[data-density="compact"] .py-2\.5 {
+  padding-block: 0.5rem;
+}
+[data-density="compact"] .py-2 {
+  padding-block: 0.375rem;
+}
+[data-density="compact"] .pt-5 {
+  padding-top: 0.875rem;
+}
+[data-density="compact"] .pb-6 {
+  padding-bottom: 1rem;
+}
+[data-density="compact"] .gap-6 {
+  gap: 1rem;
+}
+[data-density="compact"] .gap-5 {
+  gap: 0.75rem;
+}
+[data-density="compact"] .gap-4 {
+  gap: 0.625rem;
+}
+[data-density="compact"] .gap-3 {
+  gap: 0.5rem;
+}
+[data-density="compact"] .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+[data-density="compact"] .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.625rem;
+}
+[data-density="compact"] .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.5rem;
+}
+
+/* Comfortable is the default, but left as plain, unscaled Tailwind
+   spacing it sat too close to Compact's reduced values to read as a
+   distinct mode. These bump the same structural paddings/gaps
+   *above* their normal Tailwind size, so Comfortable and Compact
+   sit clearly apart on either side of the base spacing instead of
+   Compact being the only mode that visibly differs. */
+[data-density="comfortable"] .p-10 {
+  padding: 3rem;
+}
+[data-density="comfortable"] .p-8 {
+  padding: 2.5rem;
+}
+[data-density="comfortable"] .p-6 {
+  padding: 1.875rem;
+}
+[data-density="comfortable"] .p-5 {
+  padding: 1.5rem;
+}
+[data-density="comfortable"] .p-4 {
+  padding: 1.25rem;
+}
+[data-density="comfortable"] .px-8 {
+  padding-inline: 2.5rem;
+}
+[data-density="comfortable"] .px-6 {
+  padding-inline: 1.875rem;
+}
+[data-density="comfortable"] .py-3 {
+  padding-block: 1rem;
+}
+[data-density="comfortable"] .py-2\.5 {
+  padding-block: 0.875rem;
+}
+[data-density="comfortable"] .py-2 {
+  padding-block: 0.625rem;
+}
+[data-density="comfortable"] .pt-5 {
+  padding-top: 1.5rem;
+}
+[data-density="comfortable"] .pb-6 {
+  padding-bottom: 1.875rem;
+}
+[data-density="comfortable"] .gap-6 {
+  gap: 2rem;
+}
+[data-density="comfortable"] .gap-5 {
+  gap: 1.625rem;
+}
+[data-density="comfortable"] .gap-4 {
+  gap: 1.25rem;
+}
+[data-density="comfortable"] .gap-3 {
+  gap: 1rem;
+}
+[data-density="comfortable"] .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 2rem;
+}
+[data-density="comfortable"] .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1.375rem;
+}
+[data-density="comfortable"] .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+
+/* -----------------------------------------------------------------
+   Animation preference + reduced motion. `data-motion="disabled"` is
+   set either because the user turned animations off in Settings, or
+   (on first run, before they've visited Settings at all) because
+   their OS already asked for reduced motion — see the default in
+   utils/persistence.js. The standard "shrink to near-zero" rather
+   than "display: none" approach is used so elements that depend on a
+   transition/animation *ending* (spinners, `group-open` rotations)
+   don't get stuck mid-state.
+   ----------------------------------------------------------------- */
+
+[data-motion="disabled"] *,
+[data-motion="disabled"] *::before,
+[data-motion="disabled"] *::after {
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Note: there is deliberately no global `:focus-visible { outline: ... }`
+   fallback here. Every interactive element in the app already declares
+   its own `focus-visible:ring-*` (or, for the rename input's wrapper,
+   `focus-within:ring-*`) styling — a blanket fallback rule would be a
+   second, independent focus-style source stacking on top of each
+   element's own ring (visible as two concentric outlines: the
+   element's inset ring plus this rule's own offset outline), not an
+   actual fallback for anything left unstyled. */
+
+body {
+  background-color: var(--color-surface);
 }

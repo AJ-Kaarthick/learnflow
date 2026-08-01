@@ -25,7 +25,7 @@ function AssistantPanel({ selectedDocuments, onToggleSelect }) {
                   type="button"
                   onClick={() => onToggleSelect(selected)}
                   aria-label={`Remove ${selected.original_filename} from chat`}
-                  className="shrink-0 rounded-full text-accent-400 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+                  className="shrink-0 rounded-full text-accent-400 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
                 >
                   &times;
                 </button>

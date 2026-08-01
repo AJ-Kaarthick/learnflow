@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
 import EmptyWorkspaceState from "./EmptyWorkspaceState";
+import ExpandableText from "./ExpandableText";
 import FlashcardsPanel from "./FlashcardsPanel";
 import MindMapPanel from "./MindMapPanel";
 import QuizPanel from "./QuizPanel";
 import SummaryPanel from "./SummaryPanel";
 import { loadActiveStudyTab, saveActiveStudyTab } from "../utils/persistence";
+
+// The backend truncates `text_preview` at a fixed character count,
+// which can land mid-word (e.g. "...system s"). Trimming back to the
+// last whole word before adding the ellipsis guarantees the preview
+// always ends cleanly, without touching how the backend generates it.
+function cleanTruncatedPreview(preview, isTruncated) {
+  if (!isTruncated) return preview;
+  const trimmedToWordBoundary = preview.replace(/\s+\S*$/, "");
+  return `${trimmedToWordBoundary || preview}…`;
+}
 
 // Maps the raw backend status value to copy a student should actually
 // read, rather than the internal state name ("ready", "failed").
@@ -90,10 +101,15 @@ function StudyWorkspace({ document, contentLoading, cachedContent }) {
         )}
 
         {document.status === "ready" && (
-          <p className="max-w-3xl text-sm text-slate-700 whitespace-pre-wrap">
-            {document.text_preview}
-            {document.character_count > document.text_preview.length && "…"}
-          </p>
+          <ExpandableText
+            text={cleanTruncatedPreview(
+              document.text_preview,
+              document.character_count > document.text_preview.length
+            )}
+            className="max-w-3xl"
+            textClassName="text-sm text-slate-700"
+            fadeFromClassName="from-surface"
+          />
         )}
       </div>
 
@@ -109,7 +125,7 @@ function StudyWorkspace({ document, contentLoading, cachedContent }) {
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 ${
+                  className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset ${
                     isActive
                       ? "border-accent-600 text-accent-700"
                       : "border-transparent text-slate-500 hover:text-slate-800"

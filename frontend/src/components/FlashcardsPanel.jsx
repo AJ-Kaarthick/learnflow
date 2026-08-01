@@ -4,7 +4,7 @@ import { downloadTextFile } from "../utils/downloadFile";
 import { flashcardsToMarkdown } from "../utils/markdownExport";
 
 const SECONDARY_BUTTON_CLASSES =
-  "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
+  "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
 
 function flashcardsToText(flashcards) {
   return flashcards.map((card) => `Q: ${card.question}\nA: ${card.answer}`).join("\n\n");
@@ -65,7 +65,7 @@ function FlashcardsPanel({ documentId, initialFlashcards = [] }) {
   const isLoading = status === "loading";
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-surface p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold tracking-tight text-slate-900">Flashcards</h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -82,7 +82,7 @@ function FlashcardsPanel({ documentId, initialFlashcards = [] }) {
           <button
             onClick={handleGenerate}
             disabled={isLoading}
-            className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
           >
             {isLoading && (
               <span
@@ -113,7 +113,7 @@ function FlashcardsPanel({ documentId, initialFlashcards = [] }) {
                 type="button"
                 onClick={() => toggleFlip(card.id)}
                 disabled={isLoading}
-                className="text-left rounded-lg border border-slate-200 p-3 transition-colors hover:border-accent-300 hover:bg-accent-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+                className="text-left rounded-lg border border-slate-200 p-3 transition-colors hover:border-accent-300 hover:bg-accent-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-accent-700">

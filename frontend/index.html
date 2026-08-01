@@ -4,6 +4,45 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LearnFlow</title>
+    <script>
+      // Applies theme/accent/density/motion to <html> before React
+      // mounts and before first paint, so the page never flashes light
+      // (or the wrong accent/density) for a dark-mode user on load.
+      // This is the one deliberate exception to "every localStorage
+      // read goes through utils/persistence.js" — it has to run here,
+      // synchronously, in plain HTML, before any JS module (including
+      // that one) has loaded. It reads the exact same
+      // `learnflow:settings:v1` key persistence.js owns and mirrors
+      // its defaults; PersonalizationProvider re-derives this same
+      // state on mount as the single source of truth from then on —
+      // this script only ever affects the very first paint.
+      (function () {
+        try {
+          var raw = window.localStorage.getItem("learnflow:settings:v1");
+          var settings = raw ? JSON.parse(raw) : {};
+          var theme = settings.theme || "system";
+          var isDark =
+            theme === "dark" ||
+            (theme === "system" &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var root = document.documentElement;
+          if (isDark) root.classList.add("dark");
+          root.setAttribute("data-accent", settings.accent || "blue");
+          root.setAttribute("data-density", settings.density || "comfortable");
+          var reducedMotion =
+            settings.animations === "disabled" ||
+            (!settings.animations &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+          root.setAttribute("data-motion", reducedMotion ? "disabled" : "enabled");
+        } catch (error) {
+          // Storage unavailable/corrupt — fall back to the app's
+          // normal defaults, applied a moment later by
+          // PersonalizationProvider once React mounts.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

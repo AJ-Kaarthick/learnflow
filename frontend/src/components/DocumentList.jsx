@@ -141,14 +141,14 @@ function DocumentList({
                     : "Only ready documents can be included in chat"
                 }
                 aria-label={`Include ${doc.original_filename} in chat`}
-                className="h-4 w-4 shrink-0 rounded border-slate-300 text-accent-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-4 w-4 shrink-0 rounded border-slate-300 text-accent-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40"
               />
             )}
             <div className="min-w-0 flex-1">
               {isEditing ? (
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="flex min-w-0 flex-1 items-center rounded-md border border-slate-300 bg-white pr-2 focus-within:ring-2 focus-within:ring-accent-500">
+                    <div className="flex min-w-0 flex-1 items-center gap-1 rounded-md border border-slate-300 bg-surface px-2 transition-colors focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-inset focus-within:ring-accent-500">
                       <input
                         type="text"
                         value={editValue}
@@ -161,7 +161,7 @@ function DocumentList({
                           if (event.key === "Escape") cancelRename();
                         }}
                         autoFocus
-                        className="w-full min-w-0 flex-1 rounded-md border-0 px-2 py-1 text-sm focus-visible:outline-none"
+                        className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-slate-900 caret-accent-600 outline-none placeholder:text-slate-400"
                       />
                       {splitFilename(doc.original_filename).extension && (
                         <span
@@ -171,21 +171,23 @@ function DocumentList({
                           {splitFilename(doc.original_filename).extension}
                         </span>
                       )}
-                    </span>
-                    <button
-                      onClick={() => saveRename(doc)}
-                      disabled={isBusy}
-                      className="text-xs font-medium text-accent-700 hover:text-accent-800 disabled:opacity-40"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={cancelRename}
-                      disabled={isBusy}
-                      className="text-xs font-medium text-slate-500 hover:text-slate-700 disabled:opacity-40"
-                    >
-                      Cancel
-                    </button>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        onClick={() => saveRename(doc)}
+                        disabled={isBusy}
+                        className="rounded-md bg-accent-600 px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-500 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={cancelRename}
+                        disabled={isBusy}
+                        className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-500 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                   {editError ? (
                     <p role="alert" className="pl-2 text-[11px] font-medium text-red-600">
@@ -202,7 +204,7 @@ function DocumentList({
                   type="button"
                   onClick={() => onOpen(doc)}
                   title={doc.original_filename}
-                  className="block w-full truncate rounded text-left text-sm font-medium text-slate-900 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+                  className="block w-full truncate rounded text-left text-sm font-medium text-slate-900 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
                 >
                   {doc.original_filename}
                 </button>
@@ -243,7 +245,7 @@ function DocumentList({
                   type="button"
                   onClick={() => startRename(doc)}
                   disabled={isBusy}
-                  className="rounded text-xs font-medium text-slate-500 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 disabled:opacity-40"
+                  className="rounded text-xs font-medium text-slate-500 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
                 >
                   Rename
                 </button>
@@ -251,7 +253,7 @@ function DocumentList({
                   type="button"
                   onClick={() => handleDelete(doc)}
                   disabled={isBusy}
-                  className="rounded text-xs font-medium text-slate-500 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 disabled:opacity-40"
+                  className="rounded text-xs font-medium text-slate-500 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
                 >
                   {isBusy ? "..." : "Delete"}
                 </button>

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { indexDocument, sendChatMessage, sendMultiDocumentChatMessage } from "../api/chat";
 import { clearConversation, getConversationKey, loadConversation, saveConversation } from "../utils/persistence";
+import ExpandableText from "./ExpandableText";
 
 const SECONDARY_BUTTON_CLASSES =
-  "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
+  "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
 
 // How close to the bottom (in pixels) still counts as "at the
 // bottom" for auto-scroll purposes — a few pixels of rounding/
@@ -75,14 +76,14 @@ function ChatMessageBubble({ message }) {
               ? "rounded-2xl rounded-tr-sm bg-accent-600 px-4 py-2.5 text-sm leading-relaxed text-white"
               : message.isError
                 ? "rounded-2xl rounded-tl-sm border border-red-200 bg-red-50 px-4 py-2.5 text-sm leading-relaxed text-red-700"
-                : "space-y-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-2.5 text-sm leading-relaxed text-slate-800"
+                : "space-y-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-surface px-4 py-2.5 text-sm leading-relaxed text-slate-800"
           }
         >
           {renderMessageContent(message.content)}
         </div>
 
         {!isUser && message.sources && message.sources.length > 0 && (
-          <details className="group rounded-xl border border-slate-200 bg-white text-xs text-slate-600">
+          <details className="group rounded-xl border border-slate-200 bg-surface text-xs text-slate-600">
             <summary className="cursor-pointer select-none list-none px-3 py-2 font-medium text-slate-500 marker:content-none hover:text-slate-700">
               <span className="inline-flex items-center gap-1">
                 Sources ({message.sources.length})
@@ -112,11 +113,11 @@ function ChatMessageBubble({ message }) {
                         {source.document_name}
                       </p>
                     )}
-                    <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-slate-400">
+                    <span className="shrink-0 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-slate-400">
                       {Math.round(source.score * 100)}% match
                     </span>
                   </div>
-                  <p className="line-clamp-3 text-slate-600">{source.content}</p>
+                  <ExpandableText text={source.content} textClassName="text-slate-600" fadeFromClassName="from-slate-50" />
                 </li>
               ))}
             </ul>
@@ -348,7 +349,7 @@ function ChatPanel({ documents }) {
             type="button"
             onClick={handleNewConversation}
             disabled={messages.length === 0 || isSending}
-            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40"
           >
             New conversation
           </button>
@@ -391,7 +392,7 @@ function ChatPanel({ documents }) {
 
               {isSending && (
                 <div className="flex justify-start">
-                  <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-500">
+                  <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-surface px-4 py-2.5 text-sm text-slate-500">
                     <span
                       className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-accent-600"
                       aria-hidden="true"
@@ -409,7 +410,7 @@ function ChatPanel({ documents }) {
                   scrollMessagesToBottom();
                   setShowScrollToLatest(false);
                 }}
-                className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-slate-900/90 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur transition-colors hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
+                className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-slate-900/90 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur transition-colors hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
               >
                 <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
                   <path
@@ -434,12 +435,12 @@ function ChatPanel({ documents }) {
                   ? `Preparing ${documentsLabel}...`
                   : `Ask about the selected ${documentsLabel}...`
               }
-              className="min-w-0 flex-1 rounded-full border border-slate-300 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-w-0 flex-1 rounded-full border border-slate-300 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-60"
             />
             <button
               type="submit"
               disabled={inputDisabled || !question.trim()}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-accent-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
+              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-accent-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
             >
               Send
             </button>

@@ -19,6 +19,7 @@ const SCHEMA_VERSION = 1;
 
 const WORKSPACE_KEY = `${NAMESPACE}:workspace:v${SCHEMA_VERSION}`;
 const CONVERSATIONS_KEY = `${NAMESPACE}:conversations:v${SCHEMA_VERSION}`;
+const SETTINGS_KEY = `${NAMESPACE}:settings:v${SCHEMA_VERSION}`;
 
 // Only meaningful, restorable state lives here — no loading flags,
 // in-flight requests, or transient UI (typing indicators, temporary
@@ -151,4 +152,42 @@ export function clearConversation(conversationKey) {
   const all = loadConversationsMap();
   delete all[conversationKey];
   writeRaw(CONVERSATIONS_KEY, JSON.stringify(all));
+}
+
+// ---------------------------------------------------------------------
+// Personalization settings: theme, accent color, workspace density,
+// and animation preference (V2.1 Milestone 3). Kept in their own key,
+// separate from workspace/conversation state, because they're
+// conceptually different (persistent preferences vs. session/content
+// state) and are read synchronously and very early — before first
+// paint, from index.html's inline script (see the "flash of wrong
+// theme" note there) — so isolating them keeps that early read cheap
+// and avoids ever parsing conversation history just to know the
+// theme. Same localStorage-via-this-module discipline as the rest of
+// the file: no component reads or writes `learnflow:settings:*`
+// directly.
+const DEFAULT_SETTINGS = {
+  theme: "system", // "light" | "dark" | "system"
+  accent: "blue", // "blue" | "purple" | "green" | "orange"
+  density: "comfortable", // "comfortable" | "compact"
+  // Defaults to the OS-level reduced-motion preference on first run
+  // (nothing saved yet) so a user who has already told their system
+  // to minimize motion gets that respected immediately, without
+  // having to find this app's own setting first. Once something is
+  // saved, that explicit choice always wins over the OS preference.
+  animations:
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "disabled"
+      : "enabled",
+};
+
+export function loadSettings() {
+  const stored = safeParseObject(readRaw(SETTINGS_KEY), {});
+  return { ...DEFAULT_SETTINGS, ...stored };
+}
+
+export function saveSettings(settings) {
+  writeRaw(SETTINGS_KEY, JSON.stringify(settings));
 }

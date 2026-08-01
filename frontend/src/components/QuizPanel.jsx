@@ -4,7 +4,7 @@ import { downloadTextFile } from "../utils/downloadFile";
 import { quizToMarkdown } from "../utils/markdownExport";
 
 const SECONDARY_BUTTON_CLASSES =
-  "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
+  "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
 
 function quizToText(questions) {
   return questions
@@ -75,7 +75,7 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
   );
 
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="space-y-4 rounded-xl border border-slate-300 bg-surface p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold tracking-tight text-slate-900">Quiz</h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -92,7 +92,7 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
           <button
             onClick={handleGenerate}
             disabled={isLoading}
-            className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
           >
             {isLoading && (
               <span
@@ -123,16 +123,26 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
               const isSelected = selectedAnswers[question.id] === optionIndex;
               const isCorrect = optionIndex === question.correct_answer_index;
 
-              let stateClasses = "border-slate-200";
+              // Each state pairs a border/background with a text color
+              // strong enough to read on its own — the option button
+              // previously had no text color at all, so it silently
+              // fell back to the browser's default button text color
+              // instead of following the theme, which is what made it
+              // unreadable in dark mode specifically.
+              let stateClasses = "border-slate-300 bg-surface text-slate-800";
               let marker = null;
               if (submitted && isCorrect) {
-                stateClasses = "border-emerald-400 bg-emerald-50";
+                stateClasses = "border-emerald-500 bg-emerald-50 text-emerald-700 font-medium";
                 marker = <span className="font-medium text-emerald-700">&#10003; Correct</span>;
               } else if (submitted && isSelected && !isCorrect) {
-                stateClasses = "border-red-400 bg-red-50";
+                stateClasses = "border-red-500 bg-red-50 text-red-700 font-medium";
                 marker = <span className="font-medium text-red-700">&#10007; Your answer</span>;
+              } else if (submitted) {
+                // Unselected, incorrect options after submission — kept
+                // visible but visually secondary to the two states above.
+                stateClasses = "border-slate-200 bg-surface text-slate-400";
               } else if (isSelected) {
-                stateClasses = "border-accent-500 bg-accent-50";
+                stateClasses = "border-accent-500 bg-accent-100 text-accent-800 font-medium";
               }
 
               return (
@@ -141,7 +151,11 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
                   type="button"
                   onClick={() => selectAnswer(question.id, optionIndex)}
                   disabled={isLoading}
-                  className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 ${stateClasses}`}
+                  className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40 ${
+                    !submitted && !isSelected
+                      ? "hover:border-accent-300 hover:bg-slate-50"
+                      : ""
+                  } ${stateClasses}`}
                 >
                   <span>{option}</span>
                   {marker && <span className="text-xs whitespace-nowrap">{marker}</span>}
@@ -156,7 +170,7 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
         <button
           onClick={() => setSubmitted(true)}
           disabled={answeredCount < questions.length || isLoading}
-          className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
+          className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
         >
           Submit answers ({answeredCount}/{questions.length})
         </button>

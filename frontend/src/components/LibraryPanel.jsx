@@ -144,7 +144,7 @@ function LibraryPanel({
           documents exist. It's the first thing in the column now,
           styled as a clear, self-contained action rather than a form
           tacked onto the end of the list. */}
-      <div className="shrink-0 rounded-lg border border-dashed border-slate-300 bg-white p-4">
+      <div className="shrink-0 rounded-lg border border-dashed border-slate-300 bg-surface p-4">
         <UploadForm onUploadComplete={onUploadComplete} />
       </div>
 
@@ -181,13 +181,13 @@ function LibraryPanel({
             onChange={(event) => setSearchInput(event.target.value)}
             placeholder="Search by filename..."
             aria-label="Search documents by filename"
-            className="w-full min-w-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+            className="w-full min-w-0 rounded-md border border-slate-300 bg-surface px-3 py-1.5 text-sm text-slate-900 caret-accent-600 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
           />
           <select
             value={sort}
             onChange={(event) => setSort(event.target.value)}
             aria-label="Sort documents"
-            className="w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+            className="w-full min-w-0 rounded-md border border-slate-300 bg-surface px-2 py-1.5 text-sm text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -200,7 +200,7 @@ function LibraryPanel({
         <div
           ref={scrollContainerRef}
           onScroll={handleResultsScroll}
-          className="min-h-0 flex-1 overflow-y-auto rounded-md border border-slate-100 bg-white lg:mt-1"
+          className="min-h-0 flex-1 overflow-y-auto rounded-md border border-slate-100 bg-surface lg:mt-1"
         >
           {showInitialLoading ? (
             <p className="p-4 text-sm text-slate-500">Loading documents...</p>

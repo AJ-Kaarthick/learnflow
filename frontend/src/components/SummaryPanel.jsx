@@ -4,7 +4,7 @@ import { downloadTextFile } from "../utils/downloadFile";
 import { summaryToMarkdown } from "../utils/markdownExport";
 
 const SECONDARY_BUTTON_CLASSES =
-  "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
+  "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
 
 function SummaryPanel({ documentId, initialSummary = null }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
@@ -48,7 +48,7 @@ function SummaryPanel({ documentId, initialSummary = null }) {
   const isLoading = status === "loading";
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-surface p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold tracking-tight text-slate-900">Summary</h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -69,7 +69,7 @@ function SummaryPanel({ documentId, initialSummary = null }) {
           <button
             onClick={handleGenerate}
             disabled={isLoading}
-            className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
           >
             {isLoading && (
               <span
