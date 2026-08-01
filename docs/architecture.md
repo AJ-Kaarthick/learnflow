@@ -283,7 +283,7 @@ Implemented:
 
 ---
 
-## UX Principles (V2.1)
+## UX Principles (V2.1 — Milestones 1–3)
 
 Implemented:
 
@@ -306,7 +306,14 @@ Implemented:
 - Persistent library state
 - Persistent document selection
 - New Conversation workflow
-
+- Theme customization
+- Light / Dark / System themes
+- Accent color system
+- Workspace personalization
+- Comfortable & Compact density modes
+- Persistent appearance settings
+- Reduced motion support
+- Accessibility improvements
 
 ## Workspace Persistence (V2.1)
 
@@ -332,7 +339,7 @@ Multi-document conversations are keyed using sorted document IDs so identical do
 ## Current Milestones
 
 ### ✅ Milestone 0
-- Project setupMilestone 2
+- Project setup
 - Workspace Session Persistence
 
 ### ✅ Milestone 1
@@ -360,7 +367,7 @@ Multi-document conversations are keyed using sorted document IDs so identical do
 ## Version
 
 Current Development:
-V2.1 (Milestone 2 Complete)
+V2.1 (Milestone 3 Complete)
 
 Open Existing Document
         OR

@@ -19,6 +19,10 @@ LearnFlow is an AI-powered study workspace that transforms PDF documents into su
 - Workspace session persistence
 - Per-document conversation history
 - Automatic workspace restoration after refresh
+- Theme customization (Light / Dark / System)
+- Multiple accent color themes
+- Workspace personalization
+- Accessible UI with persistent appearance preferences
 
 ---
 
@@ -57,6 +61,11 @@ LearnFlow currently supports:
 - 📂 Automatic workspace restoration after refresh
 - 🆕 New Conversation for independent chat sessions
 - 📑 Persistent study tab selection
+- 🎨 Theme customization (Light / Dark / System)
+- 🌈 Multiple accent color themes
+- ⚙️ Workspace personalization
+- 📐 Comfortable & Compact density modes
+- ♿ Accessibility improvements
 
 ---
 
@@ -168,7 +177,6 @@ LearnFlow currently supports:
 - Browser page scroll prevention
 - Responsive layout improvements
 
-
 #### Milestone 2 ✅
 - Workspace session persistence
 - Automatic workspace restoration
@@ -181,11 +189,22 @@ LearnFlow currently supports:
 - Library scroll position restoration
 - Centralized persistence utility
 
+#### Milestone 3 ✅
+- Theme customization
+- Light / Dark / System themes
+- Multiple accent colors
+- Comfortable / Compact density modes
+- Workspace personalization
+- Persistent appearance settings
+- Accessibility improvements
+- Reduced motion support
+- Final UI polish
+
 
 ### 🔮 Planned Next
 
 #### V2.1
-- Theme Customization
+- Productivity & Workflow Improvements (Milestone 4)
 
 #### V2.2
 - DOCX Support
@@ -284,6 +303,7 @@ npm run dev
 - History-aware Conversational Retrieval
 - Workspace UX Polish
 - Workspace Session Persistence
+- Workspace Personalization
 
 ### Planned
 - 🔜 DOCX / PPTX support
@@ -298,10 +318,8 @@ npm run dev
 
 ### V2.1
 
-Milestone 3
-- Theme Customization
-- Light / Dark mode
-- Accent colors
+Milestone 4
+- Productivity & Workflow Improvements
 
 ### V2.2
 

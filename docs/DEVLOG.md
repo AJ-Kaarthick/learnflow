@@ -1043,3 +1043,56 @@ Implement workspace session persistence so users can seamlessly continue studyin
 ## Result
 
 LearnFlow now preserves the user's entire study workspace across page refreshes and browser restarts. Documents, conversations, study tabs, search state, sorting preferences, and workspace context are restored automatically, creating a significantly smoother and more professional learning experience.
+
+# V2.1 — Milestone 3
+
+## Goal
+
+Allow users to personalize the workspace while improving accessibility and visual consistency without changing application architecture.
+
+## Features Completed
+
+- Theme customization
+- Light / Dark / System themes
+- Accent color themes
+- Comfortable and Compact density modes
+- Persistent appearance settings
+- Settings panel
+- Accessibility improvements
+- Reduced motion support
+- Final UI polish
+
+## Learned
+
+- CSS variable based theming
+- Theme persistence
+- Accessibility fundamentals
+- Centralized UI state management
+- Designing scalable design systems
+
+## Problems Faced
+
+- Supporting multiple themes without duplicating styles
+- Preventing flash of incorrect theme during page load
+- Maintaining accessibility while adding customization
+
+## Solutions
+
+- Introduced centralized personalization context
+- Built CSS-variable driven theming
+- Persisted appearance preferences
+- Added accessibility improvements throughout the workspace
+
+## Verification
+
+- Backend tests: **145 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- Theme switching verified
+- Appearance persistence verified
+- Accessibility verified
+- Existing feature regression testing completed
+
+## Result
+
+LearnFlow now provides a fully customizable study workspace. Users can personalize appearance while maintaining accessibility, consistency, and persistent preferences across sessions.
