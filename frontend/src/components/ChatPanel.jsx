@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { indexDocument, sendChatMessage, sendMultiDocumentChatMessage } from "../api/chat";
 import { clearConversation, getConversationKey, loadConversation, saveConversation } from "../utils/persistence";
+import { NEW_CONVERSATION_EVENT } from "../utils/shortcutEvents";
 import ExpandableText from "./ExpandableText";
 
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
+
+// Small icon-only buttons under an assistant message (Copy/Regenerate)
+// share this — smaller and quieter than SECONDARY_BUTTON_CLASSES,
+// which is sized for a labeled action, not an icon sitting quietly
+// under a bubble until it's needed.
+const MESSAGE_ACTION_BUTTON_CLASSES =
+  "inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
 
 // How close to the bottom (in pixels) still counts as "at the
 // bottom" for auto-scroll purposes — a few pixels of rounding/
@@ -12,64 +22,86 @@ const SECONDARY_BUTTON_CLASSES =
 // deliberately scrolled up.
 const BOTTOM_THRESHOLD_PX = 56;
 
-// Very small, dependency-free formatting for assistant answers: splits
-// on blank lines into paragraphs, turns a block of "- "/"* " lines into
-// a real list, and renders **bold** spans — enough to make lists and
-// emphasis in a model's answer readable instead of every line
-// (including "- point one", "- point two") running together inside one
-// pre-wrapped block. Not a full markdown parser — headings, links,
-// code fences, etc. are left as plain text — this only covers the
-// patterns AI-generated answers actually tend to use.
-function renderInline(text, keyPrefix) {
-  const segments = text.split(/(\*\*[^*]+\*\*)/g).filter((segment) => segment.length > 0);
-  return segments.map((segment, index) =>
-    segment.startsWith("**") && segment.endsWith("**") ? (
-      <strong key={`${keyPrefix}-${index}`} className="font-semibold text-slate-900">
-        {segment.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={`${keyPrefix}-${index}`}>{segment}</span>
-    )
+// How long the "Copied!" confirmation stays up before reverting.
+const COPY_FEEDBACK_MS = 1500;
+
+function formatTimestamp(epochMs) {
+  if (!epochMs) return null;
+  try {
+    return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(
+      new Date(epochMs)
+    );
+  } catch {
+    return null;
+  }
+}
+
+// Assistant answers render as real markdown now (Milestone 4) instead
+// of the old hand-rolled bold+bullet-list-only formatter — react-
+// markdown + remark-gfm (tables, strikethrough) covers everything the
+// brief asks for (headings, emphasis, code, ordered/nested lists,
+// blockquotes, hr, tables) without a bespoke parser to maintain.
+// Styled via @tailwindcss/typography's `prose`, re-themed to
+// LearnFlow's own tokens in the `.chat-markdown` rules in index.css
+// rather than typography's default palette. User messages deliberately
+// stay plain text below (see ChatMessageBubble) — a raw question is
+// rarely markdown, and rendering it as such would be more likely to
+// mangle a stray "*" or "_" than to help.
+function ChatMarkdown({ content }) {
+  return (
+    <div className="chat-markdown prose prose-sm max-w-none prose-p:my-2 prose-headings:my-2 first:prose-p:mt-0 last:prose-p:mb-0 first:prose-headings:mt-0">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+          table: (props) => (
+            <div className="overflow-x-auto">
+              <table {...props} />
+            </div>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }
 
-function renderMessageContent(content) {
-  const blocks = content.split(/\n{2,}/);
+// Match-score badge for a retrieved source chunk (Milestone 4: "better
+// source presentation"). Purely a presentation tier over the same
+// `source.score` the backend already returns — no backend change, no
+// change to what score means, just three visual bands so a skim of
+// the source list shows at a glance which excerpts the retrieval was
+// most confident in.
+function MatchScoreBadge({ score }) {
+  const percent = Math.round(score * 100);
+  const tierClasses =
+    percent >= 80
+      ? "bg-accent-50 text-accent-700"
+      : percent >= 60
+        ? "bg-amber-50 text-amber-700"
+        : "bg-slate-100 text-slate-500";
 
-  return blocks.map((block, blockIndex) => {
-    const lines = block.split("\n").filter((line) => line.trim().length > 0);
-    const isBulletList = lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line.trim()));
-
-    if (isBulletList) {
-      return (
-        <ul key={blockIndex} className="list-disc space-y-1 pl-5">
-          {lines.map((line, lineIndex) => (
-            <li key={lineIndex}>
-              {renderInline(line.trim().replace(/^[-*]\s+/, ""), `${blockIndex}-${lineIndex}`)}
-            </li>
-          ))}
-        </ul>
-      );
-    }
-
-    return (
-      <p key={blockIndex} className="whitespace-pre-wrap">
-        {renderInline(block, `${blockIndex}`)}
-      </p>
-    );
-  });
+  return (
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${tierClasses}`}>
+      {percent}% match
+    </span>
+  );
 }
 
 // Renders one turn of the conversation. Kept inside this file rather
 // than a separate component file, same as every other panel's small
 // per-item renderers (e.g. flashcard cards in FlashcardsPanel) —
 // reusable within the panel without needing its own file.
-function ChatMessageBubble({ message }) {
+function ChatMessageBubble({ message, isLast, isSending, copiedMessageId, onCopy, onRegenerate }) {
   const isUser = message.role === "user";
+  const isCopied = copiedMessageId === message.id;
+  const timestamp = formatTimestamp(message.createdAt);
+  const canRegenerate = isLast && !isUser && !message.isError && !isSending;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[92%] space-y-2 ${isUser ? "items-end" : "items-start"}`}>
+      <div className={`max-w-[92%] space-y-1 ${isUser ? "items-end" : "items-start"}`}>
         <div
           className={
             isUser
@@ -79,43 +111,81 @@ function ChatMessageBubble({ message }) {
                 : "space-y-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-surface px-4 py-2.5 text-sm leading-relaxed text-slate-800"
           }
         >
-          {renderMessageContent(message.content)}
+          {isUser || message.isError ? (
+            <p className="whitespace-pre-wrap">{message.content}</p>
+          ) : (
+            <ChatMarkdown content={message.content} />
+          )}
+        </div>
+
+        {/* Timestamp + actions row. Timestamp is optional per the
+            brief ("if they integrate naturally") — it only renders for
+            messages that have one, so conversations restored from
+            before this milestone (no `createdAt` in storage) just
+            show the actions without a blank gap. */}
+        <div className={`flex items-center gap-2 px-1 ${isUser ? "justify-end" : "justify-start"}`}>
+          {timestamp && <span className="text-[11px] text-slate-400">{timestamp}</span>}
+          {!isUser && !message.isError && (
+            <>
+              <button
+                type="button"
+                onClick={() => onCopy(message)}
+                className={MESSAGE_ACTION_BUTTON_CLASSES}
+              >
+                {isCopied ? "Copied!" : "Copy"}
+              </button>
+              {canRegenerate && (
+                <button type="button" onClick={onRegenerate} className={MESSAGE_ACTION_BUTTON_CLASSES}>
+                  Regenerate
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         {!isUser && message.sources && message.sources.length > 0 && (
-          <details className="group rounded-xl border border-slate-200 bg-surface text-xs text-slate-600">
-            <summary className="cursor-pointer select-none list-none px-3 py-2 font-medium text-slate-500 marker:content-none hover:text-slate-700">
-              <span className="inline-flex items-center gap-1">
-                Sources ({message.sources.length})
-                <svg
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="h-3.5 w-3.5 transition-transform group-open:rotate-180"
-                  aria-hidden="true"
-                >
+          <details className="group overflow-hidden rounded-xl border border-slate-200 bg-surface text-xs text-slate-600">
+            <summary className="flex cursor-pointer select-none list-none items-center justify-between gap-2 px-3.5 py-2.5 font-medium text-slate-500 marker:content-none transition-colors hover:bg-slate-50 hover:text-slate-700">
+              <span className="inline-flex items-center gap-1.5">
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-slate-400" aria-hidden="true">
                   <path
                     fillRule="evenodd"
-                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.24 4.5a.75.75 0 0 1-1.08 0l-4.24-4.5a.75.75 0 0 1 .02-1.06Z"
+                    d="M4 4a2 2 0 0 1 2-2h5.172a2 2 0 0 1 1.414.586l2.828 2.828A2 2 0 0 1 16 6.828V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm7 1a1 1 0 1 0-2 0v3.586L7.707 7.293a1 1 0 0 0-1.414 1.414l3 3a1 1 0 0 0 1.414 0l3-3a1 1 0 0 0-1.414-1.414L11 8.586V5Z"
                     clipRule="evenodd"
                   />
                 </svg>
+                {message.sources.length} {message.sources.length === 1 ? "source" : "sources"}
               </span>
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.24 4.5a.75.75 0 0 1-1.08 0l-4.24-4.5a.75.75 0 0 1 .02-1.06Z"
+                  clipRule="evenodd"
+                />
+              </svg>
             </summary>
-            <ul className="space-y-2.5 border-t border-slate-100 px-3 py-2.5">
-              {message.sources.map((source) => (
-                <li key={source.chunk_id} className="rounded-lg bg-slate-50 p-2.5">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    {/* Only present for multi-document chat (see MultiDocumentSourceItem
-                        in schemas/chat.py) — single-document sources omit it since
-                        there's only one document to begin with. */}
-                    {source.document_name && (
-                      <p className="truncate font-medium text-slate-600">
-                        {source.document_name}
-                      </p>
-                    )}
-                    <span className="shrink-0 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-slate-400">
-                      {Math.round(source.score * 100)}% match
-                    </span>
+            <ul className="space-y-2 border-t border-slate-100 p-2.5">
+              {message.sources.map((source, index) => (
+                <li key={source.chunk_id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="shrink-0 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                        {index + 1}
+                      </span>
+                      {/* Only present for multi-document chat (see
+                          MultiDocumentSourceItem in schemas/chat.py) —
+                          single-document sources omit it since there's
+                          only one document to begin with. */}
+                      {source.document_name && (
+                        <p className="truncate font-medium text-slate-600">{source.document_name}</p>
+                      )}
+                    </div>
+                    <MatchScoreBadge score={source.score} />
                   </div>
                   <ExpandableText text={source.content} textClassName="text-slate-600" fadeFromClassName="from-slate-50" />
                 </li>
@@ -149,6 +219,17 @@ function ChatPanel({ documents }) {
   const [messages, setMessages] = useState(() => loadConversation(conversationKey));
   const [question, setQuestion] = useState("");
   const [sendStatus, setSendStatus] = useState("idle"); // idle | sending
+  const [copiedMessageId, setCopiedMessageId] = useState(null);
+
+  // The in-flight request's AbortController (Milestone 4: "Stop
+  // generation"). This endpoint isn't streamed — there's no partial
+  // answer to interrupt mid-token — so "stop" means "stop waiting on
+  // and discard whatever comes back", not "cut off the model
+  // mid-sentence". That's still a meaningful, honest version of the
+  // feature for a non-streaming architecture: it immediately frees the
+  // input for a new question instead of forcing a wait.
+  const abortControllerRef = useRef(null);
+  const copiedTimeoutRef = useRef(null);
 
   // The scrollable message list itself — scrolling is applied
   // directly to this element (el.scrollTo), never via
@@ -254,8 +335,87 @@ function ChatPanel({ documents }) {
     }
   }, [messages, sendStatus]);
 
+  // Cleans up the abort controller and the "Copied!" timeout if the
+  // panel unmounts mid-request/mid-feedback — e.g. the user switches
+  // documents while a question is still in flight.
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+    };
+  }, []);
+
+  // Shared by both a normal send and a regenerate — the only
+  // difference between them is what `question`/`history` they pass in
+  // and what they've already done to `messages` before calling this
+  // (see handleSubmit and handleRegenerate below), so the actual
+  // network call, abort wiring, and success/error handling live here
+  // once rather than twice.
+  async function askQuestion(trimmedQuestion, history) {
+    setSendStatus("sending");
+    isAtBottomRef.current = true;
+    setShowScrollToLatest(false);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      // Single document keeps using the original, unchanged endpoint
+      // (POST /documents/{id}/chat) — same call as before multi-
+      // document chat existed. Multiple documents use the new
+      // POST /documents/chat, which also returns which document each
+      // source came from (see ChatMessageBubble).
+      const result = isMultiDocument
+        ? await sendMultiDocumentChatMessage(documentIds, trimmedQuestion, {
+            history,
+            signal: controller.signal,
+          })
+        : await sendChatMessage(documentIds[0], trimmedQuestion, {
+            history,
+            signal: controller.signal,
+          });
+
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `${Date.now()}-assistant`,
+          role: "assistant",
+          content: result.answer,
+          sources: result.sources,
+          createdAt: Date.now(),
+        },
+      ]);
+    } catch (error) {
+      if (error.name === "AbortError") {
+        // User pressed Stop — an intentional cancellation, not a
+        // failure, so no error bubble.
+        return;
+      }
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `${Date.now()}-error`,
+          role: "assistant",
+          content: error.message,
+          isError: true,
+          createdAt: Date.now(),
+        },
+      ]);
+    } finally {
+      abortControllerRef.current = null;
+      setSendStatus("idle");
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
+    submitCurrentQuestion();
+  }
+
+  // Split out from handleSubmit so the Ctrl/Cmd+Enter handler on the
+  // input (below) can trigger the exact same send without needing a
+  // fake form-submit event.
+  function submitCurrentQuestion() {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion || sendStatus === "sending" || indexStatus !== "ready") return;
 
@@ -269,48 +429,58 @@ function ChatPanel({ documents }) {
       .filter((message) => !message.isError)
       .map((message) => ({ role: message.role, content: message.content }));
 
-    const userMessage = { id: `${Date.now()}-user`, role: "user", content: trimmedQuestion };
+    const userMessage = {
+      id: `${Date.now()}-user`,
+      role: "user",
+      content: trimmedQuestion,
+      createdAt: Date.now(),
+    };
     setMessages((previous) => [...previous, userMessage]);
     setQuestion("");
-    setSendStatus("sending");
-    // Sending a message is always something the user wants to follow,
-    // regardless of where they were scrolled — same as ChatGPT/Gemini,
-    // the act of sending re-anchors the view to the bottom.
-    isAtBottomRef.current = true;
-    setShowScrollToLatest(false);
+    askQuestion(trimmedQuestion, history);
+  }
 
-    try {
-      // Single document keeps using the original, unchanged endpoint
-      // (POST /documents/{id}/chat) — same call as before multi-
-      // document chat existed. Multiple documents use the new
-      // POST /documents/chat, which also returns which document each
-      // source came from (see ChatMessageBubble).
-      const result = isMultiDocument
-        ? await sendMultiDocumentChatMessage(documentIds, trimmedQuestion, { history })
-        : await sendChatMessage(documentIds[0], trimmedQuestion, { history });
+  // Regenerate (Milestone 4): re-asks the same last question, in place
+  // of the last assistant answer. Only ever enabled for the most
+  // recent turn (see ChatMessageBubble's `canRegenerate`), same as
+  // ChatGPT/Claude — regenerating an answer from the middle of a
+  // conversation would leave the turns after it referring to an
+  // answer that no longer exists.
+  function handleRegenerate() {
+    if (sendStatus === "sending" || messages.length < 2) return;
+    const lastMessage = messages[messages.length - 1];
+    const lastUserMessage = messages[messages.length - 2];
+    if (lastMessage.role !== "assistant" || lastMessage.isError) return;
+    if (lastUserMessage.role !== "user") return;
 
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: `${Date.now()}-assistant`,
-          role: "assistant",
-          content: result.answer,
-          sources: result.sources,
-        },
-      ]);
-    } catch (error) {
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: `${Date.now()}-error`,
-          role: "assistant",
-          content: error.message,
-          isError: true,
-        },
-      ]);
-    } finally {
-      setSendStatus("idle");
-    }
+    const history = messages
+      .slice(0, messages.length - 2)
+      .filter((message) => !message.isError)
+      .map((message) => ({ role: message.role, content: message.content }));
+
+    // Drop the answer being replaced first, so the "Thinking..."
+    // indicator appears in its place while the new one is generated.
+    setMessages((previous) => previous.slice(0, previous.length - 1));
+    askQuestion(lastUserMessage.content, history);
+  }
+
+  function handleStop() {
+    abortControllerRef.current?.abort();
+  }
+
+  function handleCopyMessage(message) {
+    if (!navigator.clipboard) return;
+    navigator.clipboard
+      .writeText(message.content)
+      .then(() => {
+        if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+        setCopiedMessageId(message.id);
+        copiedTimeoutRef.current = setTimeout(() => setCopiedMessageId(null), COPY_FEEDBACK_MS);
+      })
+      .catch(() => {
+        // Clipboard access denied/unavailable — nothing useful to do
+        // beyond leaving the button in its normal state.
+      });
   }
 
   // Starts a fresh conversation for the *current* chat context only.
@@ -318,13 +488,38 @@ function ChatPanel({ documents }) {
   // entry in storage, and nothing else — not other conversations
   // (they're stored under their own keys), not this document's
   // summary/flashcards/quiz/mind map (entirely separate state, owned
-  // by StudyWorkspace's panels, never touched here).
+  // by StudyWorkspace's panels, never touched here). Guarded
+  // internally (not just via the button's `disabled`) so the Ctrl/Cmd+
+  // Shift+N shortcut below can call it unconditionally and safely.
   function handleNewConversation() {
+    if (messages.length === 0 || sendStatus === "sending") return;
     setMessages([]);
     clearConversation(conversationKey);
     setQuestion("");
     isAtBottomRef.current = true;
     setShowScrollToLatest(false);
+  }
+
+  // Ctrl/Cmd+Shift+N (Milestone 4) is caught globally in WorkspaceShell
+  // (it isn't scoped to any particular input) and relayed here via a
+  // CustomEvent — see utils/shortcutEvents.js for why. Only the
+  // currently-mounted ChatPanel, if any, is listening, so this is a
+  // safe no-op whenever the assistant panel has no document open.
+  useEffect(() => {
+    window.addEventListener(NEW_CONVERSATION_EVENT, handleNewConversation);
+    return () => window.removeEventListener(NEW_CONVERSATION_EVENT, handleNewConversation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, sendStatus, conversationKey]);
+
+  function handleQuestionKeyDown(event) {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      // Plain Enter already submits natively (single-line input inside
+      // a <form>) — this only matters for the Ctrl/Cmd+Enter combo
+      // itself, and preventDefault here stops that same keypress from
+      // also triggering the native submit a second time.
+      event.preventDefault();
+      submitCurrentQuestion();
+    }
   }
 
   const isSending = sendStatus === "sending";
@@ -386,18 +581,34 @@ function ChatPanel({ documents }) {
                 </p>
               )}
 
-              {messages.map((message) => (
-                <ChatMessageBubble key={message.id} message={message} />
+              {messages.map((message, index) => (
+                <ChatMessageBubble
+                  key={message.id}
+                  message={message}
+                  isLast={index === messages.length - 1}
+                  isSending={isSending}
+                  copiedMessageId={copiedMessageId}
+                  onCopy={handleCopyMessage}
+                  onRegenerate={handleRegenerate}
+                />
               ))}
 
               {isSending && (
                 <div className="flex justify-start">
-                  <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-surface px-4 py-2.5 text-sm text-slate-500">
+                  <div
+                    className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-slate-200 bg-surface px-4 py-3"
+                    role="status"
+                  >
+                    <span className="sr-only">Thinking…</span>
                     <span
-                      className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-accent-600"
+                      className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.3s]"
                       aria-hidden="true"
                     />
-                    Thinking...
+                    <span
+                      className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.15s]"
+                      aria-hidden="true"
+                    />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300" aria-hidden="true" />
                   </div>
                 </div>
               )}
@@ -429,6 +640,7 @@ function ChatPanel({ documents }) {
               type="text"
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
+              onKeyDown={handleQuestionKeyDown}
               disabled={inputDisabled}
               placeholder={
                 indexStatus === "indexing"
@@ -437,13 +649,24 @@ function ChatPanel({ documents }) {
               }
               className="min-w-0 flex-1 rounded-full border border-slate-300 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-60"
             />
-            <button
-              type="submit"
-              disabled={inputDisabled || !question.trim()}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-accent-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
-            >
-              Send
-            </button>
+            {isSending ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-300 bg-surface px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
+              >
+                <span className="h-2 w-2 rounded-sm bg-slate-500" aria-hidden="true" />
+                Stop
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={inputDisabled || !question.trim()}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-accent-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
+              >
+                Send
+              </button>
+            )}
           </form>
         </>
       )}

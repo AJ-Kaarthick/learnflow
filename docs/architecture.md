@@ -283,7 +283,7 @@ Implemented:
 
 ---
 
-## UX Principles (V2.1 — Milestones 1–3)
+## UX Principles (V2.1)
 
 Implemented:
 
@@ -314,6 +314,17 @@ Implemented:
 - Persistent appearance settings
 - Reduced motion support
 - Accessibility improvements
+- GitHub-flavored Markdown rendering
+- Keyboard shortcuts
+- Keyboard shortcuts dialog
+- Copy AI responses
+- Regenerate responses
+- Stop generation
+- Chat timestamps
+- Improved source presentation
+- Shared modal infrastructure
+- Improved loading indicators
+
 
 ## Workspace Persistence (V2.1)
 
@@ -367,7 +378,7 @@ Multi-document conversations are keyed using sorted document IDs so identical do
 ## Version
 
 Current Development:
-V2.1 (Milestone 3 Complete)
+V2.1 Complete
 
 Open Existing Document
         OR

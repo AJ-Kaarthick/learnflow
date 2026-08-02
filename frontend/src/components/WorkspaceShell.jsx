@@ -1,7 +1,19 @@
+import { useEffect, useState } from "react";
 import AssistantPanel from "./AssistantPanel";
 import LibraryPanel from "./LibraryPanel";
+import ShortcutsDialog from "./ShortcutsDialog";
 import StudyWorkspace from "./StudyWorkspace";
 import TopBar from "./TopBar";
+import { FOCUS_SEARCH_EVENT, NEW_CONVERSATION_EVENT, emitShortcutEvent } from "../utils/shortcutEvents";
+
+// Form fields where a bare letter/slash keystroke is normal typing,
+// not a shortcut attempt — the global listener below ignores its
+// shortcuts entirely while one of these is focused (Milestone 4:
+// "keyboard shortcuts must never interfere with normal typing").
+// Ctrl/Cmd+Enter is the one exception, and it isn't handled here at
+// all — it's a local keydown handler on the chat input itself (see
+// ChatPanel), since that input *is* the intended target for it.
+const TEXT_ENTRY_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
 // The V2.1 workspace layout: a persistent top bar over a three-column
 // desktop workspace (Library ≈20% / Study Workspace ≈60% / AI
@@ -26,6 +38,17 @@ import TopBar from "./TopBar";
 //    Below `lg`, the columns stack and the page scrolls normally,
 //    same as before; the viewport-locked behavior is a desktop-only
 //    guarantee, consistent with this app being desktop-first.
+//
+// Milestone 4 adds one global keydown listener here — the single
+// component mounted for the app's entire lifetime — for the handful
+// of shortcuts that aren't naturally scoped to whichever input already
+// has focus (see ChatPanel's own Ctrl/Cmd+Enter handler for the one
+// that is). Two of the three dispatch a CustomEvent rather than
+// calling into a child directly, since the component that owns the
+// relevant action (LibraryPanel's search input, ChatPanel's
+// conversation) is several layers down and may not even be mounted;
+// see utils/shortcutEvents.js for why that's the deliberately simple
+// choice here over prop drilling or a new context.
 function WorkspaceShell({
   refreshSignal,
   document,
@@ -38,6 +61,38 @@ function WorkspaceShell({
   onToggleSelect,
   onUploadComplete,
 }) {
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      const isModifierHeld = event.metaKey || event.ctrlKey;
+      if (!isModifierHeld) return;
+      if (TEXT_ENTRY_TAGS.has(event.target?.tagName)) return;
+
+      const key = event.key.toLowerCase();
+
+      if (key === "k" && !event.shiftKey) {
+        event.preventDefault();
+        emitShortcutEvent(FOCUS_SEARCH_EVENT);
+      } else if (key === "/" && !event.shiftKey) {
+        event.preventDefault();
+        setShortcutsOpen(true);
+      } else if (key === "n" && event.shiftKey) {
+        // Note: Chrome reserves Ctrl/Cmd+Shift+N for "New Incognito
+        // Window" at the browser-chrome level — preventDefault() here
+        // can't override that, so this combo simply won't reach the
+        // page in Chrome. It works as documented in Firefox and
+        // Safari. Left in per the brief's suggested shortcut list
+        // rather than substituting a different combo unprompted.
+        event.preventDefault();
+        emitShortcutEvent(NEW_CONVERSATION_EVENT);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <div className="flex flex-col bg-surface lg:h-screen lg:overflow-hidden">
       {/* Visually hidden until focused — lets a keyboard user jump
@@ -50,7 +105,7 @@ function WorkspaceShell({
         Skip to study workspace
       </a>
 
-      <TopBar />
+      <TopBar onOpenShortcuts={() => setShortcutsOpen(true)} />
 
       <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
         <aside
@@ -89,6 +144,8 @@ function WorkspaceShell({
           <AssistantPanel selectedDocuments={selectedDocuments} onToggleSelect={onToggleSelect} />
         </aside>
       </div>
+
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* ---------------------------------------------------------------------
    LearnFlow personalization system (V2.1 Milestone 3).
@@ -346,4 +347,45 @@
 
 body {
   background-color: var(--color-surface);
+}
+
+/* -----------------------------------------------------------------
+   Chat markdown (Milestone 4). Assistant responses render through
+   react-markdown + remark-gfm, styled with @tailwindcss/typography's
+   `prose` utility rather than hand-rolled heading/list/code CSS —
+   `prose` already covers every element the brief asks for (headings,
+   lists incl. nested, code, blockquotes, hr, tables via remark-gfm).
+   This just re-points its color variables at LearnFlow's own accent/
+   slate tokens (both already theme-aware — see the dark-mode section
+   above) instead of Tailwind's default gray/blue, and tightens the
+   default spacing/font-size for a chat bubble rather than an article.
+   Scoped to `.chat-markdown` so it can't affect anything else. */
+.chat-markdown {
+  --tw-prose-body: var(--color-slate-800);
+  --tw-prose-headings: var(--color-slate-900);
+  --tw-prose-bold: var(--color-slate-900);
+  --tw-prose-links: var(--color-accent-700);
+  --tw-prose-code: var(--color-accent-700);
+  --tw-prose-quotes: var(--color-slate-600);
+  --tw-prose-quote-borders: var(--color-accent-200);
+  --tw-prose-hr: var(--color-slate-200);
+  --tw-prose-bullets: var(--color-slate-300);
+  --tw-prose-counters: var(--color-slate-400);
+  --tw-prose-th-borders: var(--color-slate-200);
+  --tw-prose-td-borders: var(--color-slate-100);
+  --tw-prose-pre-bg: #0f172a;
+  --tw-prose-pre-code: #e2e8f0;
+}
+.chat-markdown :where(code):not(:where(pre code)) {
+  background-color: var(--color-accent-50);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-weight: 500;
+}
+.chat-markdown :where(code):not(:where(pre code))::before,
+.chat-markdown :where(code):not(:where(pre code))::after {
+  content: none;
+}
+.chat-markdown pre {
+  border-radius: 0.5rem;
 }

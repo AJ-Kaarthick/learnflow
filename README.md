@@ -161,9 +161,9 @@ LearnFlow currently supports:
 - Test Isolation Improvements
 
 
-### 🚧 V2.1
+### ✅ V2.1
 
-#### Milestone 1 ✅
+#### Milestone 1 
 - Redesigned three-panel workspace
 - Workspace layout polish
 - Improved visual spacing and hierarchy
@@ -177,7 +177,7 @@ LearnFlow currently supports:
 - Browser page scroll prevention
 - Responsive layout improvements
 
-#### Milestone 2 ✅
+#### Milestone 2 
 - Workspace session persistence
 - Automatic workspace restoration
 - Per-document conversation history
@@ -189,7 +189,7 @@ LearnFlow currently supports:
 - Library scroll position restoration
 - Centralized persistence utility
 
-#### Milestone 3 ✅
+#### Milestone 3 
 - Theme customization
 - Light / Dark / System themes
 - Multiple accent colors
@@ -200,17 +200,29 @@ LearnFlow currently supports:
 - Reduced motion support
 - Final UI polish
 
+#### Milestone 4
 
-### 🔮 Planned Next
+- Productivity & Workflow Improvements
+- Markdown chat rendering
+- GitHub-flavored Markdown support
+- Keyboard shortcuts
+- Keyboard shortcuts dialog
+- Chat timestamps
+- Copy AI responses
+- Regenerate responses
+- Stop generation
+- Improved source viewer
+- Shared modal component
+- Improved chat loading states
 
-#### V2.1
-- Productivity & Workflow Improvements (Milestone 4)
 
-#### V2.2
+## Planned Next
+
+### V2.2
 - DOCX Support
 - PPTX Support
 
-#### V3
+### V3
 - Authentication
 - PostgreSQL
 - Docker
@@ -314,21 +326,3 @@ npm run dev
 - 🔜 Query Rewriting
 
 
-## Future Roadmap
-
-### V2.1
-
-Milestone 4
-- Productivity & Workflow Improvements
-
-### V2.2
-
-- DOCX Support
-- PPTX Support
-
-### V3
-
-- Authentication
-- PostgreSQL
-- Docker
-- Deployment

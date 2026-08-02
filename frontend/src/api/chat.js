@@ -33,8 +33,14 @@ export async function indexDocument(documentId) {
  * original topic. Nothing is persisted server-side; the backend only
  * uses the most recent few turns of whatever's sent (see
  * MAX_HISTORY_TURNS in chat_service.py).
+ *
+ * `signal` is an optional AbortSignal (Milestone 4's "Stop
+ * generation") — this endpoint isn't streamed, so there's no partial
+ * output to interrupt mid-token; aborting just stops the client from
+ * waiting on/using the eventual response. The backend request may
+ * still complete server-side; nothing here cancels that.
  */
-export async function sendChatMessage(documentId, question, { topK, history } = {}) {
+export async function sendChatMessage(documentId, question, { topK, history, signal } = {}) {
   const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -43,6 +49,7 @@ export async function sendChatMessage(documentId, question, { topK, history } = 
       ...(topK ? { top_k: topK } : {}),
       ...(history && history.length > 0 ? { history } : {}),
     }),
+    signal,
   });
 
   if (!response.ok) {
@@ -65,7 +72,7 @@ export async function sendChatMessage(documentId, question, { topK, history } = 
  * sendChatMessage's sources don't need since there's only one document
  * to begin with.
  */
-export async function sendMultiDocumentChatMessage(documentIds, question, { topK, history } = {}) {
+export async function sendMultiDocumentChatMessage(documentIds, question, { topK, history, signal } = {}) {
   const response = await fetch(`${API_BASE_URL}/api/v1/documents/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -75,6 +82,7 @@ export async function sendMultiDocumentChatMessage(documentIds, question, { topK
       ...(topK ? { top_k: topK } : {}),
       ...(history && history.length > 0 ? { history } : {}),
     }),
+    signal,
   });
 
   if (!response.ok) {

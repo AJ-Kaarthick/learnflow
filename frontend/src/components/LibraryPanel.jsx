@@ -8,6 +8,7 @@ import {
   saveLibraryFilters,
   saveLibraryScrollTop,
 } from "../utils/persistence";
+import { FOCUS_SEARCH_EVENT } from "../utils/shortcutEvents";
 
 // How long to wait after the user stops scrolling before saving the
 // new position — scroll events fire continuously while scrolling, so
@@ -65,6 +66,19 @@ function LibraryPanel({
   const scrollContainerRef = useRef(null);
   const hasRestoredScrollRef = useRef(false);
   const scrollSaveTimeoutRef = useRef(null);
+
+  // Target of the Ctrl/Cmd+K shortcut (Milestone 4) — see
+  // WorkspaceShell for where that's caught and dispatched.
+  const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    function handleFocusSearch() {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }
+    window.addEventListener(FOCUS_SEARCH_EVENT, handleFocusSearch);
+    return () => window.removeEventListener(FOCUS_SEARCH_EVENT, handleFocusSearch);
+  }, []);
 
   // Debounce the search box so typing doesn't fire a request per
   // keystroke, while still updating results live as the user types.
@@ -176,6 +190,7 @@ function LibraryPanel({
             that ever changes. */}
         <div className="flex shrink-0 flex-col gap-2">
           <input
+            ref={searchInputRef}
             type="text"
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}

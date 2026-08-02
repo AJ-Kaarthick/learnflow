@@ -1096,3 +1096,58 @@ Allow users to personalize the workspace while improving accessibility and visua
 ## Result
 
 LearnFlow now provides a fully customizable study workspace. Users can personalize appearance while maintaining accessibility, consistency, and persistent preferences across sessions.
+
+
+# V2.1 — Milestone 4
+
+## Goal
+
+Improve productivity and chat usability through keyboard shortcuts, richer message rendering, reusable UI components, and workflow enhancements without changing the backend architecture.
+
+## Features Completed
+
+- GitHub-flavored Markdown rendering
+- Keyboard shortcuts
+- Keyboard shortcuts dialog
+- Shared modal component
+- Copy AI responses
+- Regenerate responses
+- Stop generation
+- Chat timestamps
+- Improved source viewer
+- Improved loading indicators
+
+## Learned
+
+- Markdown rendering in React
+- Keyboard accessibility
+- Reusable modal architecture
+- AbortController for request cancellation
+- Component composition
+
+## Problems Faced
+
+- Rendering Markdown consistently
+- Preventing shortcut conflicts while typing
+- Supporting cancellation of in-flight requests
+
+## Solutions
+
+- Added react-markdown with remark-gfm
+- Scoped global shortcuts appropriately
+- Added AbortController support
+- Centralized modal behavior
+
+## Verification
+
+- Backend tests: **145 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- Keyboard shortcuts verified
+- Markdown rendering verified
+- Stop generation verified
+- Existing feature regression testing completed
+
+## Result
+
+LearnFlow now provides a more productive and polished study experience through richer chat rendering, keyboard-driven workflows, reusable UI infrastructure, and improved interaction feedback.

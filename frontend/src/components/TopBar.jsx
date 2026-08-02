@@ -13,7 +13,7 @@ import SettingsPanel from "./SettingsPanel";
 // same reason: personalization is app-wide, so its trigger belongs
 // in the one chrome element visible no matter which document or
 // study tool is open.
-function TopBar() {
+function TopBar({ onOpenShortcuts }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
@@ -43,7 +43,9 @@ function TopBar() {
           Settings
         </button>
       </div>
-      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsPanel onClose={() => setSettingsOpen(false)} onOpenShortcuts={onOpenShortcuts} />
+      )}
     </header>
   );
 }
