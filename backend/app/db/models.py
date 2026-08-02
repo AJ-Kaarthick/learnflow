@@ -12,9 +12,12 @@ def generate_uuid() -> str:
 
 class Document(Base):
     """
-    One uploaded PDF. Every future feature (summary, flashcards, quiz,
-    mind map) will store its own results in its own table, linked back
-    to a document by this id.
+    One uploaded document (PDF or DOCX — see
+    document_extraction_service.py for how the text below gets read
+    out of either). Every feature (summary, flashcards, quiz, mind
+    map) stores its own results in its own table, linked back to a
+    document by this id, and none of them care which file format this
+    document actually was — they only ever read `extracted_text`.
     """
 
     __tablename__ = "documents"
@@ -48,13 +51,17 @@ class Document(Base):
     # filesystem call per document on every Document Library load.
     file_size_bytes = Column(Integer, nullable=True)
 
-    # Number of pages, read from the PDF once at upload time (see
-    # pdf_service.get_page_count). Unlike file size, this can't be
-    # derived cheaply on demand — it requires parsing the PDF's page
-    # tree — so it's worth storing rather than recomputing per
-    # request. Nullable so existing rows from before this column
-    # existed, or documents whose page count couldn't be read, just
-    # show nothing instead of erroring.
+    # Number of pages, read once at upload time for formats that have
+    # a well-defined one (currently just PDF — see
+    # document_extraction_service.get_page_count). Unlike file size,
+    # this can't be derived cheaply on demand for PDF — it requires
+    # parsing the page tree — so it's worth storing rather than
+    # recomputing per request. Nullable so existing rows from before
+    # this column existed, documents whose page count couldn't be
+    # read, and documents in a format with no page count at all (e.g.
+    # DOCX, which has no page tree — pagination there depends on
+    # fonts/margins, not anything stored in the file) just show
+    # nothing instead of erroring.
     page_count = Column(Integer, nullable=True)
 
 

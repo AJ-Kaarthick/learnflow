@@ -2,7 +2,7 @@
 
 ## Goal
 
-LearnFlow converts uploaded PDFs into AI-powered learning material and enables grounded question answering using Retrieval-Augmented Generation (RAG).
+LearnFlow converts uploaded PDFs and DOCX documents into AI-powered learning material and enables grounded question answering using Retrieval-Augmented Generation (RAG).
 ---
 
 ## Tech Stack
@@ -47,8 +47,9 @@ Business Services
 
 ├── Storage Service
 
-├── PDF Service
-
+├── Document Extraction Service
+        ├── PDF Service
+        └── DOCX Service
 ├── Summary Service
 
 ├── Flashcard Service
@@ -177,6 +178,12 @@ backend/app/services/rag/
 - Embedding orchestration
 - Semantic retrieval
 
+
+backend/app/services/document_extraction_service.py
+- Dispatches extraction by document type
+
+backend/app/services/docx_service.py
+- DOCX text extraction
 
 
 ---
@@ -378,11 +385,11 @@ Multi-document conversations are keyed using sorted document IDs so identical do
 ## Version
 
 Current Development:
-V2.1 Complete
+V2.2 (Milestone 1 Complete)
 
 Open Existing Document
         OR
-Upload New PDF
+Upload New Document
 
 ↓
 
@@ -407,7 +414,7 @@ LearnFlow now includes the foundational infrastructure required for Retrieval-Au
 
 ### Write Path
 
-PDF
+Document
 
 ↓
 

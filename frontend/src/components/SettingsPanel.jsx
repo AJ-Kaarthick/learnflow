@@ -162,12 +162,12 @@ function SettingsPanel({ onClose, onOpenShortcuts }) {
           <div className="space-y-1.5 text-sm text-slate-600">
             <p className="font-medium text-slate-900">
               Learn<span className="text-accent-600">Flow</span>{" "}
-              <span className="font-normal text-slate-400">v0.1.0 &middot; V2.1</span>
+              <span className="font-normal text-slate-400">v0.1.0 &middot; V2.2</span>
             </p>
             <p>
-              LearnFlow turns uploaded PDFs into study material and lets you chat with them,
-              grounded in their actual content — summaries, flashcards, quizzes, mind maps, and
-              retrieval-augmented chat across one or several documents at once.
+              LearnFlow turns uploaded PDF and DOCX documents into study material and lets you
+              chat with them, grounded in their actual content — summaries, flashcards, quizzes,
+              mind maps, and retrieval-augmented chat across one or several documents at once.
             </p>
             {onOpenShortcuts && (
               <button

@@ -1,21 +1,10 @@
 import { useEffect, useState } from "react";
 import EmptyWorkspaceState from "./EmptyWorkspaceState";
-import ExpandableText from "./ExpandableText";
 import FlashcardsPanel from "./FlashcardsPanel";
 import MindMapPanel from "./MindMapPanel";
 import QuizPanel from "./QuizPanel";
 import SummaryPanel from "./SummaryPanel";
 import { loadActiveStudyTab, saveActiveStudyTab } from "../utils/persistence";
-
-// The backend truncates `text_preview` at a fixed character count,
-// which can land mid-word (e.g. "...system s"). Trimming back to the
-// last whole word before adding the ellipsis guarantees the preview
-// always ends cleanly, without touching how the backend generates it.
-function cleanTruncatedPreview(preview, isTruncated) {
-  if (!isTruncated) return preview;
-  const trimmedToWordBoundary = preview.replace(/\s+\S*$/, "");
-  return `${trimmedToWordBoundary || preview}…`;
-}
 
 // Maps the raw backend status value to copy a student should actually
 // read, rather than the internal state name ("ready", "failed").
@@ -24,6 +13,37 @@ function statusLabel(status) {
   if (status === "ready") return "Ready";
   if (status === "failed") return "Couldn't process this file";
   return status;
+}
+
+function statusPillClasses(status) {
+  if (status === "ready") return "bg-emerald-50 text-emerald-700";
+  if (status === "failed") return "bg-red-50 text-red-700";
+  return "bg-amber-50 text-amber-700";
+}
+
+function formatFileSize(bytes) {
+  if (bytes === null || bytes === undefined) return null;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+function formatPageCount(pageCount) {
+  if (pageCount === null || pageCount === undefined) return null;
+  return `${pageCount} ${pageCount === 1 ? "page" : "pages"}`;
+}
+
+// DOCX (and any future format without a page tree) has no page
+// count — falls back to a file-type label derived from the extension
+// itself, the same way DocumentList.jsx does, so this metadata slot
+// is always populated instead of silently disappearing for some
+// formats.
+function formatPageCountOrFileType(document) {
+  const pageCount = formatPageCount(document.page_count);
+  if (pageCount) return pageCount;
+  const lastDot = document.original_filename.lastIndexOf(".");
+  if (lastDot <= 0) return null;
+  return document.original_filename.slice(lastDot + 1).toUpperCase();
 }
 
 // The four study tools, tabbed rather than stacked (see StudyWorkspace
@@ -51,6 +71,15 @@ const STUDY_TAB_IDS = STUDY_TABS.map((tab) => tab.id);
 // the minimal prerequisite for that requirement: still frontend-only,
 // same visual language as the rest of the workspace, no behavior
 // changes to the four panels themselves.
+//
+// The info block itself used to also show a preview of the extracted
+// text (with a Read More/Show Less toggle) above the tab bar. That's
+// gone as of the V2.2 library/workspace polish pass — the Summary tab
+// one click away already explains the document, so a second, raw
+// excerpt of it here was duplicated information competing for the
+// same space. What's left is just enough to orient the student
+// (title, status, and the same at-a-glance metadata the library
+// shows) before they get to the tools they're actually here for.
 function StudyWorkspace({ document, contentLoading, cachedContent }) {
   // Which study tool is showing. This is a workspace-wide preference
   // (which tool the student was using), not something scoped to a
@@ -74,42 +103,49 @@ function StudyWorkspace({ document, contentLoading, cachedContent }) {
 
   const extractedVeryLittleText =
     document.status === "ready" && document.character_count < 50;
+  const pageOrType = formatPageCountOrFileType(document);
+  const fileSize = formatFileSize(document.file_size_bytes);
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2 border-b border-slate-100 pb-6">
-        <p className="text-lg font-semibold text-slate-900">{document.original_filename}</p>
-        <p className="text-xs text-slate-500">
-          Status: {statusLabel(document.status)}
-          {document.status === "ready" && (
-            <> &middot; {document.character_count} characters extracted</>
+      <div className="space-y-1.5 border-b border-slate-100 pb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-lg font-semibold text-slate-900">{document.original_filename}</p>
+          <span
+            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${statusPillClasses(
+              document.status
+            )}`}
+          >
+            {statusLabel(document.status)}
+          </span>
+        </div>
+
+        <p className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+          {pageOrType && (
+            <span title={formatPageCount(document.page_count) ? "Page count" : "File type"}>
+              {pageOrType}
+            </span>
+          )}
+          {fileSize && (
+            <>
+              <span aria-hidden="true">&middot;</span>
+              <span title="File size">{fileSize}</span>
+            </>
           )}
         </p>
 
         {extractedVeryLittleText && (
           <p className="text-xs text-amber-600">
-            Very little text was extracted. This might be a scanned/image-only PDF, which
+            Very little text was extracted. This might be a scanned/image-only document, which
             isn&apos;t supported yet.
           </p>
         )}
 
         {document.status === "failed" && (
           <p className="text-sm text-red-600">
-            We couldn&apos;t read this PDF — it may be corrupted or scanned without a text layer.
-            Try uploading a different file.
+            We couldn&apos;t read this file — it may be corrupted, password-protected, or in an
+            unsupported format. Try uploading a different file.
           </p>
-        )}
-
-        {document.status === "ready" && (
-          <ExpandableText
-            text={cleanTruncatedPreview(
-              document.text_preview,
-              document.character_count > document.text_preview.length
-            )}
-            className="max-w-3xl"
-            textClassName="text-sm text-slate-700"
-            fadeFromClassName="from-surface"
-          />
         )}
       </div>
 

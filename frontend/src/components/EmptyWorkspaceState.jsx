@@ -9,9 +9,9 @@ function EmptyWorkspaceState() {
     // reusing it here rather than lifting upload state up through
     // WorkspaceShell just to open the native file picker from a
     // second place. Opens the same picker a click on that input
-    // would, so "Upload a PDF" here is a real shortcut, not just copy
-    // pointing at it.
-    document.getElementById("pdf-upload")?.click();
+    // would, so "Upload a document" here is a real shortcut, not just
+    // copy pointing at it.
+    document.getElementById("document-upload")?.click();
   }
 
   return (
@@ -56,7 +56,7 @@ function EmptyWorkspaceState() {
           onClick={focusUpload}
           className="inline-flex items-center gap-2 rounded-md bg-accent-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
         >
-          Upload a PDF
+          Upload a Document
         </button>
       </div>
     </div>

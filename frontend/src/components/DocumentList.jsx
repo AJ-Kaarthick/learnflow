@@ -23,6 +23,23 @@ function formatPageCount(pageCount) {
   return `${pageCount} ${pageCount === 1 ? "page" : "pages"}`;
 }
 
+// Not every format has a page count — DOCX doesn't (pagination there
+// depends on fonts/margins, not anything stored in the file), so
+// `page_count` comes back null for it. Rather than leaving that slot
+// in the metadata line blank, fall back to a file-type label derived
+// from the extension itself (".docx" -> "DOCX") — same "derive from
+// the filename, not a hardcoded format check" approach splitFilename
+// below already uses, so any future page-count-less format falls back
+// the same way with no extra code. Keeps this slot in the metadata
+// line populated for every document, so the items after it (size,
+// last opened) land in the same position regardless of format.
+function formatPageCountOrFileType(doc) {
+  const pageCount = formatPageCount(doc.page_count);
+  if (pageCount) return pageCount;
+  const extension = splitFilename(doc.original_filename).extension;
+  return extension ? extension.slice(1).toUpperCase() : null;
+}
+
 function statusPillClasses(status) {
   if (status === "ready") return "bg-emerald-50 text-emerald-700";
   if (status === "failed") return "bg-red-50 text-red-700";
@@ -47,6 +64,39 @@ function splitFilename(filename) {
     return { base: filename, extension: "" };
   }
   return { base: filename.slice(0, lastDot), extension: filename.slice(lastDot) };
+}
+
+function RenameIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+      <path
+        d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DeleteIcon({ busy = false }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={`h-3.5 w-3.5 ${busy ? "animate-pulse" : ""}`}
+      aria-hidden="true"
+    >
+      <path
+        d="M6 7h12M9.5 7V5.25A1.25 1.25 0 0110.75 4h2.5A1.25 1.25 0 0114.5 5.25V7m2.25 0-.62 12.13A1.75 1.75 0 0114.38 21H9.62a1.75 1.75 0 01-1.75-1.87L7.25 7"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 function DocumentList({
@@ -121,11 +171,13 @@ function DocumentList({
         const isBusy = busyId === doc.id;
         const isSelected = selectedDocumentIds.includes(doc.id);
         const canSelect = doc.status === "ready";
+        const pageOrType = formatPageCountOrFileType(doc);
+        const fileSize = formatFileSize(doc.file_size_bytes);
 
         return (
           <li
             key={doc.id}
-            className={`flex items-center justify-between gap-3 py-2.5 ${
+            className={`flex items-center gap-2 py-1.5 ${
               isActive ? "-mx-2 rounded-md bg-accent-50/50 px-2" : ""
             }`}
           >
@@ -200,62 +252,62 @@ function DocumentList({
                   )}
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => onOpen(doc)}
-                  title={doc.original_filename}
-                  className="block w-full truncate rounded text-left text-sm font-medium text-slate-900 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
-                >
-                  {doc.original_filename}
-                </button>
-              )}
-
-              {!isEditing && (
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 font-medium ${statusPillClasses(
-                      doc.status
-                    )}`}
-                  >
-                    {statusLabel(doc.status)}
-                  </span>
-                  <span title="Upload date">{formatDate(doc.created_at)}</span>
-                  {formatPageCount(doc.page_count) && (
-                    <span title="Page count">
-                      &middot; {formatPageCount(doc.page_count)}
+                <>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onOpen(doc)}
+                      title={doc.original_filename}
+                      className="min-w-0 truncate rounded text-left text-sm font-medium text-slate-900 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
+                    >
+                      {doc.original_filename}
+                    </button>
+                    <span
+                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${statusPillClasses(
+                        doc.status
+                      )}`}
+                    >
+                      {statusLabel(doc.status)}
                     </span>
-                  )}
-                  {formatFileSize(doc.file_size_bytes) && (
-                    <span title="File size">
-                      &middot; {formatFileSize(doc.file_size_bytes)}
-                    </span>
-                  )}
-                  {doc.last_opened_at && (
-                    <span title="Last opened">
-                      &middot; Opened {formatDate(doc.last_opened_at)}
-                    </span>
-                  )}
-                </p>
+                  </div>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-slate-400">
+                    <span title="Upload date">{formatDate(doc.created_at)}</span>
+                    {pageOrType && (
+                      <span title={formatPageCount(doc.page_count) ? "Page count" : "File type"}>
+                        &middot; {pageOrType}
+                      </span>
+                    )}
+                    {fileSize && <span title="File size">&middot; {fileSize}</span>}
+                    {doc.last_opened_at && (
+                      <span title="Last opened">&middot; Opened {formatDate(doc.last_opened_at)}</span>
+                    )}
+                  </p>
+                </>
               )}
             </div>
 
             {!isEditing && (
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex shrink-0 items-center gap-0.5">
                 <button
                   type="button"
                   onClick={() => startRename(doc)}
                   disabled={isBusy}
-                  className="rounded text-xs font-medium text-slate-500 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
+                  title="Rename"
+                  aria-label={`Rename ${doc.original_filename}`}
+                  className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Rename
+                  <RenameIcon />
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDelete(doc)}
                   disabled={isBusy}
-                  className="rounded text-xs font-medium text-slate-500 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
+                  title="Delete"
+                  aria-label={`Delete ${doc.original_filename}`}
+                  aria-busy={isBusy}
+                  className="rounded p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {isBusy ? "..." : "Delete"}
+                  <DeleteIcon busy={isBusy} />
                 </button>
               </div>
             )}

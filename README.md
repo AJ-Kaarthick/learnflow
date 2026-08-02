@@ -5,13 +5,13 @@ LearnFlow is an AI-powered study workspace that transforms PDF documents into su
 
 ## Highlights
 
-- Upload and manage PDF documents
+- Upload and manage PDF and DOCX documents
 - Generate AI-powered summaries, flashcards, quizzes, and mind maps
 - Resume learning from previously uploaded documents
 - Export learning materials as Markdown
 - Built with a provider-swappable AI architecture
 - Semantic document indexing (RAG foundation)
-- Chat with PDF using Retrieval-Augmented Generation (RAG)
+- Chat with PDF and DOCX documents using Retrieval-Augmented Generation (RAG)
 - Multi-turn conversational memory for natural conversations
 - Multi-document Chat
 - History-aware conversational retrieval for natural follow-up questions
@@ -30,8 +30,8 @@ LearnFlow is an AI-powered study workspace that transforms PDF documents into su
 
 LearnFlow currently supports:
 
-- 📄 Upload PDF documents
-- 📑 Extract text from PDFs
+- 📄 Upload PDF and DOCX documents
+- 📑 Extract text from PDF and DOCX documents
 - 🤖 Generate AI-powered summaries
 - 🧠 Generate AI-powered flashcards
 - 📝 Generate AI-powered quizzes
@@ -43,7 +43,8 @@ LearnFlow currently supports:
 - 🗑️ Delete documents
 - 📂 Reopen previously uploaded documents
 - 📅 Display upload date and last opened time
-- 📄 Display file size and page count
+- 📄 Display file size
+- 📑 Display page count for PDF documents
 - 📋 Copy summaries, flashcards, and quizzes
 - 💾 Download summaries, flashcards, quizzes, and mind maps as Markdown
 - 💾 Store generated learning content in SQLite
@@ -216,10 +217,24 @@ LearnFlow currently supports:
 - Improved chat loading states
 
 
+### 🚧 V2.2
+
+#### Milestone 1 ✅
+- DOCX support
+- Generic document extraction pipeline
+- Document extraction abstraction
+- DOCX RAG support
+- PDF + DOCX mixed multi-document chat
+- Generic upload workflow
+- UI polish
+- Simplified document header
+- Compact document library
+
 ## Planned Next
 
 ### V2.2
-- DOCX Support
+
+#### Milestone 2
 - PPTX Support
 
 ### V3
@@ -318,7 +333,7 @@ npm run dev
 - Workspace Personalization
 
 ### Planned
-- 🔜 DOCX / PPTX support
+- 🔜 PPTX support
 - 🔜 Authentication
 - 🔜 PostgreSQL
 - 🔜 Docker

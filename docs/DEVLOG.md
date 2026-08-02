@@ -1151,3 +1151,57 @@ Improve productivity and chat usability through keyboard shortcuts, richer messa
 ## Result
 
 LearnFlow now provides a more productive and polished study experience through richer chat rendering, keyboard-driven workflows, reusable UI infrastructure, and improved interaction feedback.
+
+
+# V2.2 — Milestone 1
+
+## Goal
+
+Extend LearnFlow beyond PDFs by introducing DOCX support while preserving the existing Retrieval-Augmented Generation architecture.
+
+## Features Completed
+
+- DOCX upload support
+- Generic document extraction service
+- DOCX text extraction
+- Shared extraction pipeline
+- Mixed PDF + DOCX multi-document chat
+- Generic upload validation
+- Generic storage workflow
+- Compact document library redesign
+- Simplified workspace header
+- UI polish
+
+## Learned
+
+- Word document structure
+- Generic document processing pipelines
+- Designing format-independent architectures
+- Reusing RAG across multiple document types
+
+## Problems Faced
+
+- DOCX has no reliable page-count metadata.
+- Needed to preserve reading order across paragraphs and tables.
+- Existing upload pipeline assumed PDF-specific services.
+
+## Solutions
+
+- Introduced a document extraction abstraction.
+- Implemented DOCX extraction using python-docx.
+- Made upload/storage workflows format-agnostic.
+- Displayed page count only when available.
+
+## Verification
+
+- Backend tests: **169 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- PDF upload verified
+- DOCX upload verified
+- Mixed PDF + DOCX chat verified
+- Existing regression testing completed
+
+## Result
+
+LearnFlow now supports both PDF and DOCX documents while reusing the same Retrieval-Augmented Generation pipeline, allowing every AI feature to operate on multiple document formats without architectural changes.

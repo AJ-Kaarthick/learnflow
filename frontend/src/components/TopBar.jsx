@@ -23,7 +23,7 @@ function TopBar({ onOpenShortcuts }) {
           Learn<span className="text-accent-600">Flow</span>
         </h1>
         <p className="text-xs text-slate-500">
-          Pick up where you left off, or upload a new PDF.
+          Pick up where you left off, or upload a new document.
         </p>
       </div>
       <div className="flex items-center gap-4">

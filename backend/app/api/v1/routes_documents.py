@@ -7,12 +7,23 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import Document, DocumentChunk, Flashcard, MindMap, QuizQuestion, Summary
 from app.schemas.document import DocumentRenameRequest, DocumentResponse, DocumentSortOption
-from app.services import pdf_service, storage_service
+from app.services import document_extraction_service, storage_service
 from app.utils import filenames
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-ALLOWED_CONTENT_TYPE = "application/pdf"
+# Maps an accepted upload content-type to the file extension it means.
+# The extension drives everything downstream of validation — what gets
+# saved to disk (storage_service.save_uploaded_file) and which
+# extractor runs (document_extraction_service.extract_text) — rather
+# than trusting whatever the original filename happens to end in.
+#
+# Adding a future format (e.g. PPTX) is one new entry here, matched by
+# one new extractor registered in document_extraction_service.py.
+ALLOWED_UPLOAD_TYPES: dict[str, str] = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 
 
@@ -69,8 +80,9 @@ def list_documents(
 async def upload_document(
     file: UploadFile = File(...), db: Session = Depends(get_db)
 ) -> DocumentResponse:
-    if file.content_type != ALLOWED_CONTENT_TYPE:
-        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+    extension = ALLOWED_UPLOAD_TYPES.get(file.content_type)
+    if extension is None:
+        raise HTTPException(status_code=400, detail="Only PDF and DOCX files are accepted.")
 
     file_bytes = await file.read()
 
@@ -79,7 +91,7 @@ async def upload_document(
     if len(file_bytes) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=400, detail="File exceeds the 20 MB limit.")
 
-    stored_filename = storage_service.save_pdf(file_bytes, original_filename=file.filename)
+    stored_filename = storage_service.save_uploaded_file(file_bytes, extension=extension)
 
     # Save a record immediately, before extraction runs, so that even
     # if extraction fails we still know the upload happened and can
@@ -98,9 +110,15 @@ async def upload_document(
 
     try:
         stored_path = storage_service.get_path(stored_filename)
-        text = pdf_service.extract_text(stored_path)
+        # Dispatches to the right extractor (PDF, DOCX, ...) for this
+        # document's extension — see document_extraction_service.py.
+        # A corrupted or malformed file of the right type (e.g. a
+        # truncated/invalid .docx) raises here, same as it always has
+        # for PDFs, and is handled the same way: caught below, and
+        # surfaced as a "failed" status rather than a 500.
+        text = document_extraction_service.extract_text(stored_path, extension)
         document.extracted_text = text
-        document.page_count = pdf_service.get_page_count(stored_path)
+        document.page_count = document_extraction_service.get_page_count(stored_path, extension)
         document.status = "ready"
     except Exception:
         document.status = "failed"
@@ -205,7 +223,7 @@ def delete_document(document_id: str, db: Session = Depends(get_db)) -> None:
     db.query(MindMap).filter(MindMap.document_id == document_id).delete()
     db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
 
-    storage_service.delete_pdf(document.stored_filename)
+    storage_service.delete_file(document.stored_filename)
 
     db.delete(document)
     db.commit()

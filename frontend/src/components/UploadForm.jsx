@@ -2,15 +2,18 @@ import { useRef, useState } from "react";
 import { uploadDocument } from "../api/documents";
 
 // Mirrors the backend's own rules and wording exactly (see
-// ALLOWED_CONTENT_TYPE / MAX_FILE_SIZE_BYTES in routes_documents.py).
+// ALLOWED_UPLOAD_TYPES / MAX_FILE_SIZE_BYTES in routes_documents.py).
 // This is a fast-feedback layer in front of that check, not a
 // replacement for it — the backend still validates every upload.
-const ALLOWED_CONTENT_TYPE = "application/pdf";
+const ALLOWED_CONTENT_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+];
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 function validateFile(file) {
-  if (file.type !== ALLOWED_CONTENT_TYPE) {
-    return "Only PDF files are accepted.";
+  if (!ALLOWED_CONTENT_TYPES.includes(file.type)) {
+    return "Only PDF and DOCX files are accepted.";
   }
   if (file.size === 0) {
     return "Uploaded file is empty.";
@@ -80,13 +83,13 @@ function UploadForm({ onUploadComplete }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <label htmlFor="pdf-upload" className="block text-sm font-medium text-slate-700">
-        Choose a PDF
+      <label htmlFor="document-upload" className="block text-sm font-medium text-slate-700">
+        Choose a PDF or DOCX
       </label>
       <input
-        id="pdf-upload"
+        id="document-upload"
         type="file"
-        accept="application/pdf"
+        accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.docx"
         onChange={handleFileChange}
         disabled={isUploading}
         ref={fileInputRef}
@@ -103,7 +106,7 @@ function UploadForm({ onUploadComplete }) {
             aria-hidden="true"
           />
         )}
-        {isUploading ? "Uploading..." : "Upload PDF"}
+        {isUploading ? "Uploading..." : "Upload Document"}
       </button>
       {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
     </form>
