@@ -1205,3 +1205,52 @@ Extend LearnFlow beyond PDFs by introducing DOCX support while preserving the ex
 ## Result
 
 LearnFlow now supports both PDF and DOCX documents while reusing the same Retrieval-Augmented Generation pipeline, allowing every AI feature to operate on multiple document formats without architectural changes.
+
+
+# V2.2 — Milestone 2
+
+## Goal
+
+Extend LearnFlow's generic document pipeline to support PowerPoint presentations while preserving the existing Retrieval-Augmented Generation architecture.
+
+## Features Completed
+
+- PPTX upload support
+- PPTX text extraction
+- Generic presentation extraction
+- Shared document extraction pipeline
+- Mixed PDF + DOCX + PPTX multi-document chat
+- Generic upload validation
+- Backend tests
+
+## Learned
+
+- PPTX document structure
+- Presentation text extraction
+- Reusing format-independent architectures
+- Generic document processing
+
+## Problems Faced
+
+- Slides contain many different shape types.
+- PPTX has no reliable page-count metadata.
+- Needed to preserve slide reading order.
+
+## Solutions
+
+- Added pptx_service.py.
+- Extended the document extraction dispatcher.
+- Reused the generic upload and RAG pipelines.
+
+## Verification
+
+- Backend tests: **195 passed**
+- Frontend production build successful
+- Manual browser testing completed
+- PPTX upload verified
+- Mixed-format chat verified
+- Regression testing completed
+
+## Result
+
+LearnFlow now supports PDF, DOCX, and PPTX documents through a single reusable extraction pipeline while preserving the existing Retrieval-Augmented Generation architecture.

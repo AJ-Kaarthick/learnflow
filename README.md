@@ -5,18 +5,18 @@ LearnFlow is an AI-powered study workspace that transforms PDF documents into su
 
 ## Highlights
 
-- Upload and manage PDF and DOCX documents
+- Upload and manage PDF, DOCX, and PPTX documents
 - Generate AI-powered summaries, flashcards, quizzes, and mind maps
 - Resume learning from previously uploaded documents
 - Export learning materials as Markdown
 - Built with a provider-swappable AI architecture
 - Semantic document indexing (RAG foundation)
-- Chat with PDF and DOCX documents using Retrieval-Augmented Generation (RAG)
+- Chat with PDF, DOCX, and PPTX documents using RAG
 - Multi-turn conversational memory for natural conversations
 - Multi-document Chat
 - History-aware conversational retrieval for natural follow-up questions
 - Persistent AI learning workspace
-- Workspace session persistence
+- Workspace session persistence     
 - Per-document conversation history
 - Automatic workspace restoration after refresh
 - Theme customization (Light / Dark / System)
@@ -30,8 +30,8 @@ LearnFlow is an AI-powered study workspace that transforms PDF documents into su
 
 LearnFlow currently supports:
 
-- 📄 Upload PDF and DOCX documents
-- 📑 Extract text from PDF and DOCX documents
+- 📄 Upload PDF, DOCX, and PPTX documents
+- 📑 Extract text from PDF, DOCX, and PPTX documents
 - 🤖 Generate AI-powered summaries
 - 🧠 Generate AI-powered flashcards
 - 📝 Generate AI-powered quizzes
@@ -44,14 +44,14 @@ LearnFlow currently supports:
 - 📂 Reopen previously uploaded documents
 - 📅 Display upload date and last opened time
 - 📄 Display file size
-- 📑 Display page count for PDF documents
+- 📄 Display page count when supported (PDF)
 - 📋 Copy summaries, flashcards, and quizzes
 - 💾 Download summaries, flashcards, quizzes, and mind maps as Markdown
 - 💾 Store generated learning content in SQLite
 - 🔄 Provider-swappable AI architecture
 - 🧩 Semantic document indexing (RAG foundation)
 - 🔎 Semantic search over indexed documents
-- 💬 Chat with PDF documents using Retrieval-Augmented Generation (RAG)
+- 💬 Chat with uploaded documents
 - 🧠 Multi-turn conversational memory
 - 🧭 History-aware conversational retrieval
 - 📚 Multi-document Chat
@@ -230,12 +230,22 @@ LearnFlow currently supports:
 - Simplified document header
 - Compact document library
 
+#### Milestone 2 ✅
+
+- PPTX support
+- Generic presentation extraction
+- PPTX RAG support
+- PDF + DOCX + PPTX mixed multi-document chat
+- Generic document processing pipeline
+
+
 ## Planned Next
 
 ### V2.2
 
-#### Milestone 2
-- PPTX Support
+#### Milestone 3
+
+- Intelligent Multi-document Retrieval
 
 ### V3
 - Authentication
@@ -333,7 +343,7 @@ npm run dev
 - Workspace Personalization
 
 ### Planned
-- 🔜 PPTX support
+- 🔜 Intelligent Multi-document Retrieval
 - 🔜 Authentication
 - 🔜 PostgreSQL
 - 🔜 Docker

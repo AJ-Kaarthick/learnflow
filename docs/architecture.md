@@ -2,7 +2,7 @@
 
 ## Goal
 
-LearnFlow converts uploaded PDFs and DOCX documents into AI-powered learning material and enables grounded question answering using Retrieval-Augmented Generation (RAG).
+LearnFlow converts uploaded PDFs, DOCX and PPTX documents into AI-powered learning material and enables grounded question answering using Retrieval-Augmented Generation (RAG).
 ---
 
 ## Tech Stack
@@ -50,6 +50,7 @@ Business Services
 ├── Document Extraction Service
         ├── PDF Service
         └── DOCX Service
+        └── PPTX Service
 ├── Summary Service
 
 ├── Flashcard Service
@@ -184,6 +185,9 @@ backend/app/services/document_extraction_service.py
 
 backend/app/services/docx_service.py
 - DOCX text extraction
+
+backend/app/services/pptx_service.py
+- PPTX text extraction
 
 
 ---
@@ -385,11 +389,11 @@ Multi-document conversations are keyed using sorted document IDs so identical do
 ## Version
 
 Current Development:
-V2.2 (Milestone 1 Complete)
+V2.2 (Milestone 2 Complete) 
 
 Open Existing Document
         OR
-Upload New Document
+Upload PDF / DOCX / PPTX
 
 ↓
 
@@ -405,7 +409,7 @@ Summary
 Flashcards
 Quiz
 Mind Map
-Chat with PDF
+Chat with Documents
 
 
 ## RAG Foundation (V2.0)
@@ -444,7 +448,7 @@ Semantic Retrieval
 
 Relevant Chunks
 
-The RAG foundation now powers Chat with PDF. Retrieved chunks are passed to the existing AI provider, which generates grounded answers while preventing responses that cannot be supported by the indexed document.
+The RAG foundation now powers Chat with Documents. Retrieved chunks are passed to the existing AI provider, which generates grounded answers while preventing responses that cannot be supported by the indexed document.
 
 ### Chat Pipeline
 

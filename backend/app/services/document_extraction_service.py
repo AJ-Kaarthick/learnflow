@@ -7,32 +7,39 @@ file into plain text (and, if the format has one, a page count)".
     document_extraction_service (this file)
        |-- pdf_service   (.pdf)
        |-- docx_service  (.docx)
+       |-- pptx_service  (.pptx)
        |
     Extracted text -> the existing LearnFlow pipeline (chunking,
     embeddings, RAG, summary, flashcards, quiz, mind map, chat), all
     of which only ever read `Document.extracted_text` and have no idea
     what file format it came from.
 
-Adding a future format (PPTX, etc.) means writing one extractor module
-with the same `extract_text(path) -> str` shape as pdf_service.py /
-docx_service.py, and adding one line to `_TEXT_EXTRACTORS` below —
-nothing in routes_documents.py or anywhere downstream has to change.
+Adding a future format means writing one extractor module with the
+same `extract_text(path) -> str` shape as pdf_service.py /
+docx_service.py / pptx_service.py, and adding one line to
+`_TEXT_EXTRACTORS` below — nothing in routes_documents.py or anywhere
+downstream has to change.
 """
 
 from pathlib import Path
 from typing import Callable
 
-from app.services import docx_service, pdf_service
+from app.services import docx_service, pdf_service, pptx_service
 
 _TEXT_EXTRACTORS: dict[str, Callable[[Path], str]] = {
     ".pdf": pdf_service.extract_text,
     ".docx": docx_service.extract_text,
+    ".pptx": pptx_service.extract_text,
 }
 
 # Only PDF has a well-defined, cheap-to-read page count (its page tree).
 # A .docx file's page count depends on page size, margins, and fonts —
 # it's a rendering/pagination outcome, not something stored in the file
-# — so there's deliberately no docx entry here. Document.page_count is
+# — so there's deliberately no docx entry here. A .pptx file has a
+# slide *count*, not a page count, and that's a different concept the
+# UI already handles by falling back to a file-type label (see
+# DocumentList.jsx's formatPageCountOrFileType) — so pptx is left out
+# here too, deliberately, same as docx. Document.page_count is
 # nullable for exactly this: formats without one just show nothing.
 _PAGE_COUNTERS: dict[str, Callable[[Path], int]] = {
     ".pdf": pdf_service.get_page_count,

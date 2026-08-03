@@ -18,11 +18,12 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 # extractor runs (document_extraction_service.extract_text) — rather
 # than trusting whatever the original filename happens to end in.
 #
-# Adding a future format (e.g. PPTX) is one new entry here, matched by
-# one new extractor registered in document_extraction_service.py.
+# Adding a future format is one new entry here, matched by one new
+# extractor registered in document_extraction_service.py.
 ALLOWED_UPLOAD_TYPES: dict[str, str] = {
     "application/pdf": ".pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
 }
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 
@@ -82,7 +83,7 @@ async def upload_document(
 ) -> DocumentResponse:
     extension = ALLOWED_UPLOAD_TYPES.get(file.content_type)
     if extension is None:
-        raise HTTPException(status_code=400, detail="Only PDF and DOCX files are accepted.")
+        raise HTTPException(status_code=400, detail="Only PDF, DOCX, and PPTX files are accepted.")
 
     file_bytes = await file.read()
 

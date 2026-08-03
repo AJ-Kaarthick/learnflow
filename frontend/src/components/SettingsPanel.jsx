@@ -165,7 +165,7 @@ function SettingsPanel({ onClose, onOpenShortcuts }) {
               <span className="font-normal text-slate-400">v0.1.0 &middot; V2.2</span>
             </p>
             <p>
-              LearnFlow turns uploaded PDF and DOCX documents into study material and lets you
+              LearnFlow turns uploaded PDF, DOCX, and PPTX documents into study material and lets you
               chat with them, grounded in their actual content — summaries, flashcards, quizzes,
               mind maps, and retrieval-augmented chat across one or several documents at once.
             </p>

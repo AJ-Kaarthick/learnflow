@@ -222,11 +222,11 @@ def test_extraction_service_extension_matching_is_case_insensitive(tmp_path):
 
 
 def test_extraction_service_raises_for_unsupported_extension(tmp_path):
-    path = tmp_path / "slides.pptx"
-    path.write_bytes(b"not really a pptx")
+    path = tmp_path / "sheet.xlsx"
+    path.write_bytes(b"not really an xlsx")
 
     try:
-        document_extraction_service.extract_text(path, ".pptx")
+        document_extraction_service.extract_text(path, ".xlsx")
         assert False, "expected UnsupportedFileTypeError"
     except document_extraction_service.UnsupportedFileTypeError:
         pass
@@ -295,15 +295,15 @@ def test_upload_rejects_unsupported_file_type():
         "/api/v1/documents/upload",
         files={
             "file": (
-                "slides.pptx",
-                b"not supported yet",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "sheet.xlsx",
+                b"not supported",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         },
     )
 
     assert response.status_code == 400
-    assert "PDF and DOCX" in response.json()["detail"]
+    assert "PDF, DOCX, and PPTX" in response.json()["detail"]
 
 
 def test_get_docx_document_returns_it_after_upload():

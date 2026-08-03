@@ -1,7 +1,7 @@
 import { API_BASE_URL } from "./config";
 
 /**
- * Uploads a document (PDF or DOCX) and returns the created document's metadata
+ * Uploads a document (PDF, DOCX, or PPTX) and returns the created document's metadata
  * (id, status, extracted text preview). Throws with the backend's
  * error message if the upload is rejected (wrong file type, too
  * large, etc.) so the UI can show something meaningful.

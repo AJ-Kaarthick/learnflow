@@ -8,12 +8,13 @@ import { uploadDocument } from "../api/documents";
 const ALLOWED_CONTENT_TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
 ];
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 function validateFile(file) {
   if (!ALLOWED_CONTENT_TYPES.includes(file.type)) {
-    return "Only PDF and DOCX files are accepted.";
+    return "Only PDF, DOCX, and PPTX files are accepted.";
   }
   if (file.size === 0) {
     return "Uploaded file is empty.";
@@ -84,12 +85,12 @@ function UploadForm({ onUploadComplete }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <label htmlFor="document-upload" className="block text-sm font-medium text-slate-700">
-        Choose a PDF or DOCX
+        Choose a PDF, DOCX, or PPTX
       </label>
       <input
         id="document-upload"
         type="file"
-        accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.docx"
+        accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,.pdf,.docx,.pptx"
         onChange={handleFileChange}
         disabled={isUploading}
         ref={fileInputRef}

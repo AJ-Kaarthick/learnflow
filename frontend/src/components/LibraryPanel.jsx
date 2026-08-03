@@ -238,7 +238,7 @@ function LibraryPanel({
               ) : (
                 <>
                   <p className="text-sm font-medium text-slate-700">No documents yet</p>
-                  <p className="text-xs text-slate-400">Upload a PDF or DOCX above to get started.</p>
+                  <p className="text-xs text-slate-400">Upload a PDF, DOCX, or PPTX above to get started.</p>
                 </>
               )}
             </div>
