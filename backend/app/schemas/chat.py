@@ -4,9 +4,6 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.rag import SearchResultItem
 
-# Mirrors DEFAULT_TOP_K in schemas/rag.py — same default, same reason.
-DEFAULT_TOP_K = 5
-
 # Sanity cap on the request payload itself — deliberately generous,
 # and a different concern from chat_service.MAX_HISTORY_TURNS (which
 # decides how much of this actually reaches the model). This just
@@ -46,10 +43,17 @@ class ChatRequest(BaseModel):
     new fields on this same model (e.g. an optional conversation_id
     that, when present, means "load history server-side instead of
     trusting the body") — not a redesign of it.
+
+    `top_k` defaults to `None`, which means "let retrieval decide" —
+    see retrieval_service.compute_adaptive_top_k. Sending an explicit
+    value always overrides that and is honored exactly, same as
+    before this field became optional; the frontend already never
+    sends `top_k` unless a caller explicitly asks for a specific
+    number of sources, so this default change is invisible to it.
     """
 
     question: str
-    top_k: int = DEFAULT_TOP_K
+    top_k: int | None = None
     history: list[ChatHistoryTurn] = Field(default_factory=list, max_length=MAX_HISTORY_TURNS_ACCEPTED)
 
     @field_validator("question")
@@ -62,8 +66,8 @@ class ChatRequest(BaseModel):
 
     @field_validator("top_k")
     @classmethod
-    def positive(cls, value: int) -> int:
-        if value < 1:
+    def positive(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
             raise ValueError("top_k must be at least 1.")
         return value
 
@@ -100,11 +104,16 @@ class MultiDocumentChatRequest(BaseModel):
     as-is via ChatHistoryTurn; conversation memory works the same way
     regardless of how many documents are selected), plus the set of
     documents to search across.
+
+    `top_k` means "up to top_k chunks per selected document" (see
+    retrieve_relevant_chunks), and, as of this milestone, defaults to
+    `None` rather than a fixed number — see ChatRequest.top_k above
+    for why; the same reasoning applies here.
     """
 
     document_ids: list[str] = Field(min_length=1, max_length=MAX_DOCUMENT_IDS)
     question: str
-    top_k: int = DEFAULT_TOP_K
+    top_k: int | None = None
     history: list[ChatHistoryTurn] = Field(default_factory=list, max_length=MAX_HISTORY_TURNS_ACCEPTED)
 
     @field_validator("document_ids")
@@ -131,8 +140,8 @@ class MultiDocumentChatRequest(BaseModel):
 
     @field_validator("top_k")
     @classmethod
-    def positive(cls, value: int) -> int:
-        if value < 1:
+    def positive(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
             raise ValueError("top_k must be at least 1.")
         return value
 
@@ -149,9 +158,41 @@ class MultiDocumentSourceItem(SearchResultItem):
     document_name: str
 
 
+class DocumentSourceGroup(BaseModel):
+    """
+    All retrieved sources from one selected document, together — the
+    grouped view of MultiDocumentChatResponse.sources (Milestone 3,
+    requirement 7). Sources within a group are ordered strongest match
+    first, same ordering convention as everywhere else sources appear.
+
+    One of these exists per document actually requested in
+    MultiDocumentChatRequest.document_ids, in that order, even when
+    `sources` is empty for a document that contributed no evidence —
+    an explicit "this document had nothing relevant" is exactly the
+    clarity this grouping is meant to add over a flat, unordered list.
+    """
+
+    document_id: str
+    document_name: str
+    sources: list[SearchResultItem]
+
+
 class MultiDocumentChatResponse(BaseModel):
     document_ids: list[str]
     question: str
     answer: str
     grounded: bool
+
+    # Unchanged flat shape (document_id/document_name inline on each
+    # item, same fields, same ordering behavior as before this
+    # milestone) — existing callers that only ever read `sources` see
+    # no difference.
     sources: list[MultiDocumentSourceItem]
+
+    # Additive (Milestone 3, requirement 7): the same evidence as
+    # `sources` above, regrouped by document so a caller doesn't have
+    # to do that grouping itself to answer "what did document X
+    # contribute." Never the only way to read the sources — `sources`
+    # keeps working exactly as it always has for any caller that
+    # hasn't been updated to use this.
+    sources_by_document: list[DocumentSourceGroup]

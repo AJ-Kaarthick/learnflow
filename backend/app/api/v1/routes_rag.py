@@ -102,7 +102,7 @@ async def search_document(
         )
 
     try:
-        results = await retrieve_relevant_chunks(
+        retrieval_result = await retrieve_relevant_chunks(
             document_ids=[document_id],
             query=payload.query,
             db=db,
@@ -122,6 +122,6 @@ async def search_document(
                 content=result.chunk.content,
                 score=result.score,
             )
-            for result in results
+            for result in retrieval_result.chunks
         ],
     )

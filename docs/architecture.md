@@ -388,8 +388,8 @@ Multi-document conversations are keyed using sorted document IDs so identical do
 
 ## Version
 
-Current Development:
-V2.2 (Milestone 2 Complete) 
+Current Version:
+V2.2 Complete 
 
 Open Existing Document
         OR
@@ -448,51 +448,36 @@ Semantic Retrieval
 
 Relevant Chunks
 
-The RAG foundation now powers Chat with Documents. Retrieved chunks are passed to the existing AI provider, which generates grounded answers while preventing responses that cannot be supported by the indexed document.
+The RAG foundation powers every conversational feature in LearnFlow, including single-document and multi-document grounded chat. Retrieved chunks are passed to the existing AI provider, which generates grounded answers while preventing responses that cannot be supported by the indexed document.
 
 ### Chat Pipeline
 
-Question
+### Chat Pipeline
+
+User Question
         │
         ▼
-Semantic Retrieval
-
-↓
-
-Relevant Chunks
-
 Conversation History
         │
         ▼
-
-Grounded Prompt
-
-↓
-
-Gemini
-
-↓
-
-Grounded Answer
-
-↓
-
+History-aware Query Rewriting (if needed)
+        │
+        ▼
+Semantic Retrieval
+        │
+        ▼
 Relevant Chunks
-
-↓
-
+        │
+        ▼
 Grounded Prompt
-
-↓
-
+        │
+        ▼
 Gemini
-
-↓
-
+        │
+        ▼
 Grounded Answer
-
-↓
-
+        │
+        ▼
 Supporting Sources
 
 
@@ -537,3 +522,42 @@ Workspace
 │ Sort         │ Quiz                 │ Conversation  │
 │ Documents    │ Mind Map             │               │
 └──────────────┴──────────────────────┴───────────────┘
+
+
+## Multi-format Document Pipeline (V2.2)
+
+Uploaded Document
+
+↓
+
+Document Extraction Service
+
+├── PDF
+├── DOCX
+└── PPTX
+
+↓
+
+Extracted Text
+
+↓
+
+Chunking
+
+↓
+
+Embeddings
+
+↓
+
+Semantic Retrieval
+
+↓
+
+AI Features
+
+• Summary
+• Flashcards
+• Quiz
+• Mind Map
+• Chat

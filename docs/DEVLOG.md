@@ -1254,3 +1254,55 @@ Extend LearnFlow's generic document pipeline to support PowerPoint presentations
 ## Result
 
 LearnFlow now supports PDF, DOCX, and PPTX documents through a single reusable extraction pipeline while preserving the existing Retrieval-Augmented Generation architecture.
+
+
+# V2.2 — Milestone 3
+
+## Goal
+
+Improve multi-document retrieval quality through adaptive retrieval, better ranking, comparison-aware prompting, and smarter evidence selection.
+
+## Features Completed
+
+Adaptive retrieval budget
+Balanced retrieval
+Duplicate chunk removal
+Comparison-aware prompting
+Informative retrieval failures
+Mixed-format retrieval improvements
+Backend tests
+
+## Learned
+
+Retrieval ranking
+Context budgeting
+Prompt specialization
+Multi-document reasoning
+
+## Problems Faced
+
+Fixed retrieval budgets did not scale well.
+Duplicate chunks wasted valuable context.
+Comparison questions required different prompting.
+Generic "not found" responses provided little insight.
+
+## Solutions
+
+Adaptive retrieval budgets based on document count.
+Duplicate chunk filtering while preserving each document's strongest evidence.
+Comparison-aware prompt construction.
+More informative retrieval failures.
+
+## Verification
+
+Backend tests: 211 passed
+Frontend production build successful
+Manual browser testing completed
+Multi-document summarization verified
+Multi-document comparison verified
+Mixed-format retrieval verified
+Regression testing completed
+
+## Result
+
+LearnFlow now performs significantly stronger multi-document retrieval through adaptive evidence selection, better ranking, and comparison-aware prompting while preserving the existing Retrieval-Augmented Generation architecture.

@@ -7,6 +7,7 @@ from app.schemas.chat import (
     ChatHistoryTurn,
     ChatRequest,
     ChatResponse,
+    DocumentSourceGroup,
     MultiDocumentChatRequest,
     MultiDocumentChatResponse,
     MultiDocumentSourceItem,
@@ -30,6 +31,51 @@ def _history_to_plain_dicts(history: list[ChatHistoryTurn]) -> list[dict[str, st
     conversion logic exists in exactly one place.
     """
     return [{"role": turn.role, "content": turn.content} for turn in history]
+
+
+def _group_sources_by_document(
+    sources: list[MultiDocumentSourceItem],
+    document_ids: list[str],
+    documents_by_id: dict[str, Document],
+) -> list[DocumentSourceGroup]:
+    """
+    Regroups a flat, score-ranked `sources` list into one
+    DocumentSourceGroup per requested document (Milestone 3,
+    requirement 7) — the same evidence `sources` already has, just
+    organized the way the requirement describes ("Document A: chunk 2,
+    chunk 6 / Document B: chunk 1, chunk 5") instead of interleaved by
+    score.
+
+    Iterates `document_ids` (the request's own order) rather than
+    whatever order documents happen to appear in `sources`, so a
+    document that contributed zero sources — because deduplication or
+    a low relevance score left it unrepresented — still gets an empty
+    group instead of silently disappearing from the response. That
+    emptiness is itself useful information (see
+    chat_service._build_informative_no_match_answer for the same idea
+    applied to the answer text), not a case worth hiding.
+    """
+    sources_by_document_id: dict[str, list[SearchResultItem]] = {
+        document_id: [] for document_id in document_ids
+    }
+    for source in sources:
+        sources_by_document_id[source.document_id].append(
+            SearchResultItem(
+                chunk_id=source.chunk_id,
+                chunk_index=source.chunk_index,
+                content=source.content,
+                score=source.score,
+            )
+        )
+
+    return [
+        DocumentSourceGroup(
+            document_id=document_id,
+            document_name=documents_by_id[document_id].original_filename,
+            sources=sources_by_document_id[document_id],
+        )
+        for document_id in document_ids
+    ]
 
 
 def _get_indexed_document(document_id: str, db: Session) -> Document:
@@ -165,20 +211,23 @@ async def chat_with_documents(
 
     documents_by_id = {document.id: document for document in documents}
 
+    sources = [
+        MultiDocumentSourceItem(
+            chunk_id=scored.chunk.id,
+            chunk_index=scored.chunk.chunk_index,
+            content=scored.chunk.content,
+            score=scored.score,
+            document_id=scored.chunk.document_id,
+            document_name=documents_by_id[scored.chunk.document_id].original_filename,
+        )
+        for scored in result.chunks
+    ]
+
     return MultiDocumentChatResponse(
         document_ids=payload.document_ids,
         question=payload.question,
         answer=result.answer,
         grounded=result.grounded,
-        sources=[
-            MultiDocumentSourceItem(
-                chunk_id=scored.chunk.id,
-                chunk_index=scored.chunk.chunk_index,
-                content=scored.chunk.content,
-                score=scored.score,
-                document_id=scored.chunk.document_id,
-                document_name=documents_by_id[scored.chunk.document_id].original_filename,
-            )
-            for scored in result.chunks
-        ],
+        sources=sources,
+        sources_by_document=_group_sources_by_document(sources, payload.document_ids, documents_by_id),
     )

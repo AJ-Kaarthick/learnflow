@@ -1,6 +1,10 @@
 # LearnFlow
 
-LearnFlow is an AI-powered study workspace that transforms PDF documents into summaries, flashcards, quizzes, mind maps, and grounded AI conversations using Retrieval-Augmented Generation (RAG).
+
+LearnFlow is an AI-powered study workspace that transforms PDF, DOCX and PPTX documents into summaries, flashcards, quizzes, mind maps, and grounded AI conversations using Retrieval-Augmented Generation (RAG).
+
+> AI-powered study workspace for PDFs, DOCX, and PPTX with Retrieval-Augmented Generation (RAG), multi-document chat, summaries, flashcards, quizzes, and mind maps.
+
 ---
 
 ## Highlights
@@ -51,7 +55,7 @@ LearnFlow currently supports:
 - 🔄 Provider-swappable AI architecture
 - 🧩 Semantic document indexing (RAG foundation)
 - 🔎 Semantic search over indexed documents
-- 💬 Chat with uploaded documents
+- 💬 Grounded AI chat with PDF, DOCX, and PPTX documents
 - 🧠 Multi-turn conversational memory
 - 🧭 History-aware conversational retrieval
 - 📚 Multi-document Chat
@@ -217,7 +221,7 @@ LearnFlow currently supports:
 - Improved chat loading states
 
 
-### 🚧 V2.2
+### ✅ V2.2
 
 #### Milestone 1 ✅
 - DOCX support
@@ -238,14 +242,17 @@ LearnFlow currently supports:
 - PDF + DOCX + PPTX mixed multi-document chat
 - Generic document processing pipeline
 
+#### Milestone 3 ✅
 
-## Planned Next
+- Intelligent multi-document retrieval
+- Adaptive retrieval budget
+- Balanced retrieval across documents
+- Duplicate chunk removal
+- Comparison-aware retrieval
+- Improved document ranking
+- Informative retrieval failures
 
-### V2.2
 
-#### Milestone 3
-
-- Intelligent Multi-document Retrieval
 
 ### V3
 - Authentication
@@ -334,7 +341,7 @@ npm run dev
 - AI-generated learning content
 - Persistent document library
 - Retrieval-Augmented Generation (RAG)
-- Chat with PDF
+- Grounded AI chat
 - Conversational Memory
 - Multi-document Chat
 - History-aware Conversational Retrieval
@@ -343,11 +350,10 @@ npm run dev
 - Workspace Personalization
 
 ### Planned
-- 🔜 Intelligent Multi-document Retrieval
-- 🔜 Authentication
-- 🔜 PostgreSQL
-- 🔜 Docker
-- 🔜 Deployment
-- 🔜 Query Rewriting
-
+- OCR support
+- Image understanding
+- Authentication
+- PostgreSQL
+- Docker
+- Deployment
 
