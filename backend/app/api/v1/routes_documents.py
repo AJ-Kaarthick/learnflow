@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -9,6 +10,8 @@ from app.db.models import Document, DocumentChunk, Flashcard, MindMap, QuizQuest
 from app.schemas.document import DocumentRenameRequest, DocumentResponse, DocumentSortOption
 from app.services import document_extraction_service, storage_service
 from app.utils import filenames
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -24,6 +27,19 @@ ALLOWED_UPLOAD_TYPES: dict[str, str] = {
     "application/pdf": ".pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "image/png": ".png",
+    # Browsers report the same content-type, "image/jpeg", for both a
+    # .jpg and a .jpeg upload -- there's no wire-level distinction
+    # between the two extensions, only ever a filename convention. One
+    # canonical stored extension is picked here (matching the ".jpg"
+    # this maps to), the same way every other entry in this dict picks
+    # one canonical extension per content-type; document_extraction_service
+    # also registers ".jpeg" in its own dispatch table (routed to the
+    # same ocr_service.extract_text as ".jpg") purely so a document
+    # whose *original_filename* happens to end in ".jpeg" -- e.g. after
+    # a rename, which derives its extension from original_filename, not
+    # from this dict -- still dispatches correctly.
+    "image/jpeg": ".jpg",
 }
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 
@@ -83,7 +99,10 @@ async def upload_document(
 ) -> DocumentResponse:
     extension = ALLOWED_UPLOAD_TYPES.get(file.content_type)
     if extension is None:
-        raise HTTPException(status_code=400, detail="Only PDF, DOCX, and PPTX files are accepted.")
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF, DOCX, PPTX, PNG, JPG, and JPEG files are accepted.",
+        )
 
     file_bytes = await file.read()
 
@@ -122,6 +141,22 @@ async def upload_document(
         document.page_count = document_extraction_service.get_page_count(stored_path, extension)
         document.status = "ready"
     except Exception:
+        # Previously this swallowed the exception entirely — a
+        # malformed file and a missing OCR system dependency (see
+        # ocr/dependency_check.py) both landed here and looked
+        # identical from the logs, because nothing was logged at all.
+        # logger.exception captures the real exception type, message,
+        # and traceback, so "why did this document fail" is answered
+        # by the logs instead of by guessing. The document's own
+        # status still becomes "failed" either way — that part of the
+        # contract (and everything downstream that depends on it,
+        # like chat's "not ready for indexing" guard) is unchanged.
+        logger.exception(
+            "Document processing failed: id=%s filename=%r extension=%r",
+            document.id,
+            document.original_filename,
+            extension,
+        )
         document.status = "failed"
 
     db.commit()

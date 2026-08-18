@@ -13,7 +13,7 @@ const transformer = new Transformer();
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
 
-function MindMapPanel({ documentId, initialMindmap = null }) {
+function MindMapPanel({ documentId, initialMindmap = null, onGenerated }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [structure, setStructure] = useState(initialMindmap?.structure ?? null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -28,6 +28,13 @@ function MindMapPanel({ documentId, initialMindmap = null }) {
     try {
       const result = await generateMindMap(documentId);
       setStructure(result.structure);
+      // See SummaryPanel's onGenerated call for why this is needed:
+      // keeps HomePage's cachedContent (the single source of truth
+      // panels remount from on tab switch) in sync with what was just
+      // generated. Passed as the same { structure } shape
+      // getMindMap/generateMindMap both already return and
+      // initialMindmap already expects — no new shape introduced.
+      onGenerated?.(result);
       setStatus("idle");
     } catch (error) {
       setStatus("error");

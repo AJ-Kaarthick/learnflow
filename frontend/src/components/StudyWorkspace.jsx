@@ -80,7 +80,7 @@ const STUDY_TAB_IDS = STUDY_TABS.map((tab) => tab.id);
 // same space. What's left is just enough to orient the student
 // (title, status, and the same at-a-glance metadata the library
 // shows) before they get to the tools they're actually here for.
-function StudyWorkspace({ document, contentLoading, cachedContent }) {
+function StudyWorkspace({ document, contentLoading, cachedContent, onContentGenerated }) {
   // Which study tool is showing. This is a workspace-wide preference
   // (which tool the student was using), not something scoped to a
   // particular document, so it's read once here rather than threaded
@@ -182,6 +182,7 @@ function StudyWorkspace({ document, contentLoading, cachedContent }) {
                   key={`summary-${document.id}`}
                   documentId={document.id}
                   initialSummary={cachedContent.summary}
+                  onGenerated={(value) => onContentGenerated("summary", value)}
                 />
               )}
               {activeTab === "flashcards" && (
@@ -189,6 +190,7 @@ function StudyWorkspace({ document, contentLoading, cachedContent }) {
                   key={`flashcards-${document.id}`}
                   documentId={document.id}
                   initialFlashcards={cachedContent.flashcards}
+                  onGenerated={(value) => onContentGenerated("flashcards", value)}
                 />
               )}
               {activeTab === "quiz" && (
@@ -196,6 +198,7 @@ function StudyWorkspace({ document, contentLoading, cachedContent }) {
                   key={`quiz-${document.id}`}
                   documentId={document.id}
                   initialQuestions={cachedContent.quiz}
+                  onGenerated={(value) => onContentGenerated("quiz", value)}
                 />
               )}
               {activeTab === "mindmap" && (
@@ -203,6 +206,7 @@ function StudyWorkspace({ document, contentLoading, cachedContent }) {
                   key={`mindmap-${document.id}`}
                   documentId={document.id}
                   initialMindmap={cachedContent.mindmap}
+                  onGenerated={(value) => onContentGenerated("mindmap", value)}
                 />
               )}
             </div>

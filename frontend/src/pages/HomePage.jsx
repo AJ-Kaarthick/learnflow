@@ -5,6 +5,7 @@ import { getMindMap } from "../api/mindmap";
 import { getQuiz } from "../api/quiz";
 import { getSummary } from "../api/summary";
 import WorkspaceShell from "../components/WorkspaceShell";
+import { mergeGeneratedContent } from "../utils/cachedContent";
 import {
   loadActiveDocumentId,
   loadSelectedDocumentIds,
@@ -155,6 +156,23 @@ function HomePage() {
     saveSelectedDocumentIds(selectedDocuments.map((selected) => selected.id));
   }, [selectedDocuments]);
 
+  // Merges a freshly generated result back into cachedContent, the
+  // single place StudyWorkspace's panels read their starting data
+  // from (see StudyWorkspace.jsx). Without this, cachedContent stays
+  // whatever it was when the document was opened: each panel only
+  // ever kept its own generated content in local component state, and
+  // StudyWorkspace only renders the *active* tab's panel — switching
+  // away unmounts it, so switching back remounted it from that same
+  // stale cachedContent, and the just-generated content looked like
+  // it had vanished (even though the backend still had it, which is
+  // why a full refresh — which re-fetches cachedContent from
+  // scratch — always showed it correctly). This keeps cachedContent
+  // as the one source of truth panels are (re)initialized from,
+  // instead of adding a second, parallel cache.
+  function handleContentGenerated(kind, value) {
+    setCachedContent((previous) => mergeGeneratedContent(previous, kind, value));
+  }
+
   async function openDocument(doc) {
     setDocument(doc);
     setCachedContent(null);
@@ -245,6 +263,7 @@ function HomePage() {
       selectedDocuments={selectedDocuments}
       contentLoading={contentLoading}
       cachedContent={cachedContent}
+      onContentGenerated={handleContentGenerated}
       onOpen={openDocument}
       onRename={handleRename}
       onDelete={handleDelete}

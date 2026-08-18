@@ -1306,3 +1306,37 @@ Regression testing completed
 ## Result
 
 LearnFlow now performs significantly stronger multi-document retrieval through adaptive evidence selection, better ranking, and comparison-aware prompting while preserving the existing Retrieval-Augmented Generation architecture.
+
+
+## V2.3 — Milestone 1: OCR Support
+
+Added OCR support for image documents and scanned PDFs.
+
+The OCR pipeline integrates with the existing generic document extraction flow so OCR-extracted text can continue through chunking, embeddings, retrieval, summaries, flashcards, quizzes, mind maps, and chat without format-specific changes to those features.
+
+OCR processing requires system-level `tesseract` and Poppler dependencies. Because these dependencies cannot be installed through Python requirements alone, LearnFlow now checks for them during application startup and logs actionable warnings when they are unavailable.
+
+Document extraction failures are also logged with the underlying exception, document filename, and document id instead of silently transitioning the document to a failed state.
+
+Tests cover OCR dependency detection, extraction failure logging, and regression behavior for existing document formats.
+
+Verification:
+- Backend: 260 tests passed
+- Frontend production build succeeded
+
+
+
+## V2.3 — Milestone 1: Generated Content Persistence Fix
+
+Fixed an issue where generated summaries, flashcards, quizzes, or mind maps could disappear when switching between study tabs before refreshing the page.
+
+Study panels are unmounted when switching tabs, while their generated content was previously held only in local component state. Generated results are now propagated back to the shared workspace cache so remounted panels receive the latest generated content.
+
+This preserves the existing backend caching behavior and does not introduce a separate caching mechanism.
+
+Added dependency-free frontend regression tests using Node's built-in test runner.
+
+Verification:
+- Frontend tests: 6 passed
+- Backend tests: 260 passed
+- Frontend production build succeeded

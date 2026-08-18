@@ -55,6 +55,7 @@ function WorkspaceShell({
   selectedDocuments,
   contentLoading,
   cachedContent,
+  onContentGenerated,
   onOpen,
   onRename,
   onDelete,
@@ -134,6 +135,7 @@ function WorkspaceShell({
             document={document}
             contentLoading={contentLoading}
             cachedContent={cachedContent}
+            onContentGenerated={onContentGenerated}
           />
         </main>
 

@@ -2,7 +2,8 @@
 
 ## Goal
 
-LearnFlow converts uploaded PDFs, DOCX and PPTX documents into AI-powered learning material and enables grounded question answering using Retrieval-Augmented Generation (RAG).
+LearnFlow converts uploaded PDFs, DOCX, PPTX, and image documents into AI-powered learning material and enables grounded question answering using Retrieval-Augmented Generation (RAG).
+
 ---
 
 ## Tech Stack
@@ -51,6 +52,7 @@ Business Services
         ├── PDF Service
         └── DOCX Service
         └── PPTX Service
+        └── OCR Service        
 ├── Summary Service
 
 ├── Flashcard Service
@@ -189,6 +191,10 @@ backend/app/services/docx_service.py
 backend/app/services/pptx_service.py
 - PPTX text extraction
 
+backend/app/services/ocr/
+- OCR processing for image documents and scanned PDF pages
+- OCR dependency detection and diagnostics
+
 
 ---
 
@@ -214,6 +220,11 @@ backend/app/services/pptx_service.py
 - Retrieval is performed using the current user query
 - Prompt construction combines retrieved document context with recent conversation
 - Documents remain the single source of truth
+
+- Document extraction is format-agnostic and dispatches processing based on document type
+- OCR is used when document content is image-based or requires text recognition
+- OCR failures are logged with actionable diagnostics
+- System-level OCR dependencies are checked at application startup
 
 
 ### Hallucination Prevention
@@ -450,7 +461,6 @@ Relevant Chunks
 
 The RAG foundation powers every conversational feature in LearnFlow, including single-document and multi-document grounded chat. Retrieved chunks are passed to the existing AI provider, which generates grounded answers while preventing responses that cannot be supported by the indexed document.
 
-### Chat Pipeline
 
 ### Chat Pipeline
 
@@ -524,7 +534,7 @@ Workspace
 └──────────────┴──────────────────────┴───────────────┘
 
 
-## Multi-format Document Pipeline (V2.2)
+## Multi-format Document Pipeline (V2.3)
 
 Uploaded Document
 
@@ -534,7 +544,10 @@ Document Extraction Service
 
 ├── PDF
 ├── DOCX
-└── PPTX
+├── PPTX
+└── OCR
+    ├── Image Documents
+    └── Scanned PDF Pages
 
 ↓
 
@@ -561,3 +574,23 @@ AI Features
 • Quiz
 • Mind Map
 • Chat
+
+
+## V2.3 — OCR and Document Processing Improvements
+
+V2.3 extends LearnFlow's document pipeline beyond text-native documents by adding OCR support for image documents and scanned PDFs.
+
+OCR processing integrates with the existing document extraction pipeline, allowing OCR-extracted text to flow through the same chunking, embedding, retrieval, and AI-generation pipeline as normal document text.
+
+The application checks for required system-level OCR dependencies at startup and logs actionable warnings when they are unavailable.
+
+Document extraction failures are logged with the underlying exception and document context, making unsupported or incorrectly configured environments diagnosable without changing document status behavior.
+
+
+## Generated Content Persistence
+
+Generated summaries, flashcards, quizzes, and mind maps are synchronized with the workspace's cached content state after generation.
+
+This ensures generated content survives study-tab switches, where individual study panels may be unmounted and remounted.
+
+The existing backend persistence remains the source of truth across document reloads and refreshes.

@@ -303,7 +303,7 @@ def test_upload_rejects_unsupported_file_type():
     )
 
     assert response.status_code == 400
-    assert "PDF, DOCX, and PPTX" in response.json()["detail"]
+    assert "PDF, DOCX, PPTX, PNG, JPG, and JPEG" in response.json()["detail"]
 
 
 def test_get_docx_document_returns_it_after_upload():

@@ -10,7 +10,7 @@ function flashcardsToText(flashcards) {
   return flashcards.map((card) => `Q: ${card.question}\nA: ${card.answer}`).join("\n\n");
 }
 
-function FlashcardsPanel({ documentId, initialFlashcards = [] }) {
+function FlashcardsPanel({ documentId, initialFlashcards = [], onGenerated }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [flashcards, setFlashcards] = useState(initialFlashcards);
   const [errorMessage, setErrorMessage] = useState("");
@@ -24,6 +24,11 @@ function FlashcardsPanel({ documentId, initialFlashcards = [] }) {
     try {
       const cards = await generateFlashcards(documentId);
       setFlashcards(cards);
+      // See SummaryPanel's onGenerated call for why this is needed:
+      // keeps HomePage's cachedContent (the single source of truth
+      // panels remount from on tab switch) in sync with what was just
+      // generated.
+      onGenerated?.(cards);
       setStatus("idle");
     } catch (error) {
       setStatus("error");

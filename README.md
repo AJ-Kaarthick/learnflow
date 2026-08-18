@@ -1,7 +1,7 @@
 # LearnFlow
 
 
-LearnFlow is an AI-powered study workspace that transforms PDF, DOCX and PPTX documents into summaries, flashcards, quizzes, mind maps, and grounded AI conversations using Retrieval-Augmented Generation (RAG).
+LearnFlow is an AI-powered study workspace that transforms PDF, DOCX, PPTX, and image documents into summaries, flashcards, quizzes, mind maps, and grounded AI conversations using Retrieval-Augmented Generation (RAG).
 
 > AI-powered study workspace for PDFs, DOCX, and PPTX with Retrieval-Augmented Generation (RAG), multi-document chat, summaries, flashcards, quizzes, and mind maps.
 
@@ -27,6 +27,8 @@ LearnFlow is an AI-powered study workspace that transforms PDF, DOCX and PPTX do
 - Multiple accent color themes
 - Workspace personalization
 - Accessible UI with persistent appearance preferences
+- OCR support for image documents and scanned PDFs
+- Automatic text extraction from supported image-based documents
 
 ---
 
@@ -36,6 +38,7 @@ LearnFlow currently supports:
 
 - 📄 Upload PDF, DOCX, and PPTX documents
 - 📑 Extract text from PDF, DOCX, and PPTX documents
+- 🔎 OCR-based text extraction from image documents and scanned PDFs
 - 🤖 Generate AI-powered summaries
 - 🧠 Generate AI-powered flashcards
 - 📝 Generate AI-powered quizzes
@@ -54,6 +57,7 @@ LearnFlow currently supports:
 - 💾 Store generated learning content in SQLite
 - 🔄 Provider-swappable AI architecture
 - 🧩 Semantic document indexing (RAG foundation)
+- 🧩 Automatic OCR processing for image-based documents
 - 🔎 Semantic search over indexed documents
 - 💬 Grounded AI chat with PDF, DOCX, and PPTX documents
 - 🧠 Multi-turn conversational memory
@@ -253,6 +257,20 @@ LearnFlow currently supports:
 - Informative retrieval failures
 
 
+### ✅ V2.3
+
+#### Milestone 1 ✅
+
+- OCR support for image documents
+- OCR support for scanned PDFs
+- Generic OCR processing pipeline
+- OCR integration with document extraction
+- OCR-extracted text integrated with RAG and AI learning features
+- OCR dependency detection and diagnostics
+- Improved document extraction error logging
+- Generated learning content persistence across study-tab switches
+
+
 
 ### V3
 - Authentication
@@ -348,9 +366,10 @@ npm run dev
 - Workspace UX Polish
 - Workspace Session Persistence
 - Workspace Personalization
+- OCR document processing
+- Intelligent multi-document retrieval
 
 ### Planned
-- OCR support
 - Image understanding
 - Authentication
 - PostgreSQL

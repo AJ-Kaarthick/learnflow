@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     # gemini_embedding_provider.py for how this is used.
     gemini_embedding_model: str = "gemini-embedding-001"
 
+    # Which OCR engine to use for scanned PDFs and images. The factory
+    # in services/ocr/ocr_engine_factory.py reads this to decide which
+    # engine class to instantiate — same "typed setting picks a class
+    # out of a small registry" pattern as ai_provider above.
+    ocr_engine: str = "tesseract"
+
     # The frontend's origin, used to configure CORS below.
     frontend_origin: str = "http://localhost:5173"
 

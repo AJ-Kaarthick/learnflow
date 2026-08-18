@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,6 +14,9 @@ from app.api.v1 import (
 )
 from app.core.config import settings
 from app.db.database import Base, engine
+from app.services.ocr.dependency_check import check_ocr_dependencies
+
+logger = logging.getLogger(__name__)
 
 # Creates any tables that don't exist yet, based on the models we've
 # defined (see db/models.py). Fine for SQLite in V1. A real production
@@ -20,6 +25,14 @@ from app.db.database import Base, engine
 # Postgres, since "just recreate the table" stops being an option once
 # there's real user data in it.
 Base.metadata.create_all(bind=engine)
+
+# OCR (V2.3 Milestone 1) depends on two OS-level binaries pip can't
+# install — see dependency_check.py for why. Checked once here, at
+# startup, so a missing binary is one clear log line away instead of
+# a silent per-document "failed" status with no explanation the first
+# time someone uploads an image or scanned PDF.
+for warning in check_ocr_dependencies():
+    logger.warning(warning)
 
 app = FastAPI(title="LearnFlow API", version="0.1.0")
 

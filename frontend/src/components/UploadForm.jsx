@@ -5,16 +5,22 @@ import { uploadDocument } from "../api/documents";
 // ALLOWED_UPLOAD_TYPES / MAX_FILE_SIZE_BYTES in routes_documents.py).
 // This is a fast-feedback layer in front of that check, not a
 // replacement for it — the backend still validates every upload.
+// Includes images (scanned/photographed pages) alongside PDF/DOCX/
+// PPTX: the backend OCRs those (and any scanned PDF) automatically,
+// so from this form's point of view they're just another accepted
+// upload type, nothing else about this component changes for them.
 const ALLOWED_CONTENT_TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
   "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+  "image/png", // .png
+  "image/jpeg", // .jpg, .jpeg
 ];
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 function validateFile(file) {
   if (!ALLOWED_CONTENT_TYPES.includes(file.type)) {
-    return "Only PDF, DOCX, and PPTX files are accepted.";
+    return "Only PDF, DOCX, PPTX, PNG, JPG, and JPEG files are accepted.";
   }
   if (file.size === 0) {
     return "Uploaded file is empty.";
@@ -85,12 +91,12 @@ function UploadForm({ onUploadComplete }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <label htmlFor="document-upload" className="block text-sm font-medium text-slate-700">
-        Choose a PDF, DOCX, or PPTX
+        Choose a PDF, DOCX, PPTX, PNG, or JPG
       </label>
       <input
         id="document-upload"
         type="file"
-        accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,.pdf,.docx,.pptx"
+        accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/png,image/jpeg,.pdf,.docx,.pptx,.png,.jpg,.jpeg"
         onChange={handleFileChange}
         disabled={isUploading}
         ref={fileInputRef}

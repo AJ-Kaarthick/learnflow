@@ -18,7 +18,7 @@ function quizToText(questions) {
     .join("\n\n");
 }
 
-function QuizPanel({ documentId, initialQuestions = [] }) {
+function QuizPanel({ documentId, initialQuestions = [], onGenerated }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [questions, setQuestions] = useState(initialQuestions);
   const [errorMessage, setErrorMessage] = useState("");
@@ -35,6 +35,11 @@ function QuizPanel({ documentId, initialQuestions = [] }) {
     try {
       const result = await generateQuiz(documentId);
       setQuestions(result);
+      // See SummaryPanel's onGenerated call for why this is needed:
+      // keeps HomePage's cachedContent (the single source of truth
+      // panels remount from on tab switch) in sync with what was just
+      // generated.
+      onGenerated?.(result);
       setStatus("idle");
     } catch (error) {
       setStatus("error");

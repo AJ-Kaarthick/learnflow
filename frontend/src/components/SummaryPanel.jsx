@@ -6,7 +6,7 @@ import { summaryToMarkdown } from "../utils/markdownExport";
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
 
-function SummaryPanel({ documentId, initialSummary = null }) {
+function SummaryPanel({ documentId, initialSummary = null, onGenerated }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [summary, setSummary] = useState(initialSummary);
   const [errorMessage, setErrorMessage] = useState("");
@@ -19,6 +19,13 @@ function SummaryPanel({ documentId, initialSummary = null }) {
     try {
       const result = await generateSummary(documentId);
       setSummary(result);
+      // Propagates the freshly generated summary up to HomePage's
+      // cachedContent (see StudyWorkspace.jsx / HomePage.jsx) — this
+      // component's own state only survives while its tab is active
+      // (StudyWorkspace unmounts it when switching tabs), so without
+      // this the summary would look like it "disappeared" the moment
+      // the student switched to another study tool and back.
+      onGenerated?.(result);
       setStatus("idle");
     } catch (error) {
       setStatus("error");
