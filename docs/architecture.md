@@ -581,7 +581,7 @@ V2.4 adds document-content validation and improved handling of documents that do
 
 Before document-based AI generation, the system now verifies that readable document content is available.
 
-```text
+'''text
 Document
    ↓
 Document Readiness
@@ -590,3 +590,61 @@ Readable text available?
    ├── NO  → No-readable-text state
    │
    └── YES → AI generation / Chat
+'''
+   
+### Conversation Architecture
+
+LearnFlow uses persistent conversations for AI chat.
+
+A conversation consists of:
+
+Conversation
+├── Messages
+└── ConversationDocuments
+        └── Documents
+
+#### Conversation
+
+Stores conversation metadata such as:
+- id
+- title
+- title_is_custom
+- created_at
+- updated_at
+
+#### Message
+
+Stores:
+- id
+- conversation_id
+- role
+- content
+- position
+- sources_json
+- grounded
+- created_at
+
+#### ConversationDocument
+
+Associates conversations with documents through a many-to-many relationship.
+
+A document can belong to multiple conversations, and a conversation can contain multiple documents.
+
+The association uses a composite primary key:
+
+(conversation_id, document_id)
+
+
+### Conversation API
+
+POST   /conversations
+GET    /conversations
+GET    /conversations/{id}
+PATCH  /conversations/{id}
+DELETE /conversations/{id}
+PUT    /conversations/{id}/documents
+
+
+Conversation persistence is introduced incrementally.
+
+The backend foundation is implemented first. Message persistence, RAG integration, frontend conversation management, title generation, document-context management, and migration from the existing client-side conversation state are implemented in subsequent phases.

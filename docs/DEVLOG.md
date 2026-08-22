@@ -1391,3 +1391,47 @@ Improve the reliability and usability of document-based AI features, particularl
 ## Result
 
 LearnFlow now prevents document-based AI features from generating misleading content when no readable document text is available. Mixed readable/unreadable document selections are handled gracefully, and the Chat document library stays synchronized after uploads.
+
+
+## V2.4 — Milestone 2
+
+### Phase 1 — Backend Conversation Foundation
+
+Implemented the backend foundation for persistent conversations.
+
+#### Added
+
+- Conversation model
+- Message model
+- ConversationDocument association model
+- Conversation request/response schemas
+- Conversation CRUD API
+- Conversation document-association API
+- Explicit cleanup of conversation-document associations when a document is deleted
+
+#### API
+
+- `POST /conversations`
+- `GET /conversations`
+- `GET /conversations/{id}`
+- `PATCH /conversations/{id}`
+- `DELETE /conversations/{id}`
+- `PUT /conversations/{id}/documents`
+
+#### Design
+
+- Conversations and messages are now persisted in SQLite.
+- Documents are associated with conversations through a dedicated join table.
+- Existing `Document` model remains unchanged.
+- Conversation deletion explicitly removes its messages and document associations.
+- Document deletion explicitly removes its conversation associations.
+- Existing document-scoped chat endpoints remain unchanged.
+
+#### Verification
+
+- Backend tests: 306 passed
+- New conversation tests: 25
+- OpenAPI routes verified
+- No frontend changes in this phase
+
+This phase establishes the backend persistence layer required for the upcoming persistent conversation workflow.

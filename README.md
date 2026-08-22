@@ -291,6 +291,23 @@ LearnFlow currently supports:
 - Added regression tests for document readiness and Chat document selection
 
 
+#### Milestone 2 — Conversation Architecture
+
+**Phase 1 — Backend Conversation Foundation ✅**
+
+- Conversation data model
+- Persistent conversation records
+- Persistent conversation messages
+- Conversation-document associations
+- Conversation creation and listing
+- Conversation detail retrieval
+- Conversation renaming
+- Conversation deletion
+- Conversation document-set management
+- Explicit cleanup of conversation references when documents are deleted
+- Backend API foundation for persistent conversations
+- Backend test coverage for conversation lifecycle and document associations
+
 ### V3
 - Authentication
 - PostgreSQL
@@ -389,6 +406,7 @@ npm run dev
 - Intelligent multi-document retrieval
 - Chat UX and document-readiness improvements
 - Improved Chat document-library synchronization
+- Persistent conversation backend foundation
 
 ### Planned
 - Authentication

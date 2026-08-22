@@ -6,7 +6,15 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import Document, DocumentChunk, Flashcard, MindMap, QuizQuestion, Summary
+from app.db.models import (
+    ConversationDocument,
+    Document,
+    DocumentChunk,
+    Flashcard,
+    MindMap,
+    QuizQuestion,
+    Summary,
+)
 from app.schemas.document import DocumentRenameRequest, DocumentResponse, DocumentSortOption
 from app.services import document_extraction_service, storage_service
 from app.utils import filenames
@@ -258,6 +266,13 @@ def delete_document(document_id: str, db: Session = Depends(get_db)) -> None:
     db.query(QuizQuestion).filter(QuizQuestion.document_id == document_id).delete()
     db.query(MindMap).filter(MindMap.document_id == document_id).delete()
     db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+    # V2.4 Milestone 2: only removes the join row pointing at this
+    # document -- the conversation(s) it was associated with, and
+    # their messages, are untouched. A conversation's message history
+    # stays fully readable afterward because sources are snapshotted
+    # onto the Message row at answer time, not looked up live (see
+    # Message.sources_json's docstring in db/models.py).
+    db.query(ConversationDocument).filter(ConversationDocument.document_id == document_id).delete()
 
     storage_service.delete_file(document.stored_filename)
 

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import (
     routes_chat,
+    routes_conversations,
     routes_documents,
     routes_flashcards,
     routes_mindmap,
@@ -57,6 +58,7 @@ app.include_router(routes_quiz.router, prefix="/api/v1")
 app.include_router(routes_mindmap.router, prefix="/api/v1")
 app.include_router(routes_rag.router, prefix="/api/v1")
 app.include_router(routes_chat.router, prefix="/api/v1")
+app.include_router(routes_conversations.router, prefix="/api/v1")
 
 
 @app.get("/health")
