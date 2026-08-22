@@ -1435,3 +1435,36 @@ Implemented the backend foundation for persistent conversations.
 - No frontend changes in this phase
 
 This phase establishes the backend persistence layer required for the upcoming persistent conversation workflow.
+
+
+## V2.4 — Persistent Conversation Backend
+
+### Milestone 2 — Conversation System
+
+#### Phase 1 — Backend Conversation Foundation
+
+- Added persistent Conversation model
+- Added persistent Message model
+- Added ConversationDocument association table
+- Added conversation CRUD endpoints
+- Added document-association management
+- Added explicit cleanup when conversations or documents are deleted
+- Added backend regression tests
+
+#### Phase 2 — Persistent Message Handling
+
+- Added conversation-aware message endpoint
+- Persisted user and assistant messages
+- Connected persistent conversations to the existing RAG pipeline
+- Reused existing history-aware retrieval and multi-document retrieval
+- Persisted source references and grounding metadata
+- Added transaction-safe message persistence
+- Added conversation activity tracking
+- Added regression tests for conversation message handling
+
+### Verification
+
+- Backend test suite: 322 passed
+- Existing RAG/chat tests remain passing
+- Conversation message persistence verified through dedicated tests
+- No frontend changes were made during these phases

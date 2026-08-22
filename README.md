@@ -293,20 +293,23 @@ LearnFlow currently supports:
 
 #### Milestone 2 — Conversation Architecture
 
-**Phase 1 — Backend Conversation Foundation ✅**
+#### Milestone 2 — Persistent Conversations
 
-- Conversation data model
-- Persistent conversation records
-- Persistent conversation messages
+##### Phase 1 — Backend Conversation Foundation ✅
+
+- Persistent conversation data model
+- Conversation CRUD API
 - Conversation-document associations
-- Conversation creation and listing
-- Conversation detail retrieval
-- Conversation renaming
-- Conversation deletion
-- Conversation document-set management
-- Explicit cleanup of conversation references when documents are deleted
-- Backend API foundation for persistent conversations
-- Backend test coverage for conversation lifecycle and document associations
+- Conversation deletion and document-association cleanup
+
+##### Phase 2 — Persistent Message Handling ✅
+
+- Persistent conversation messages
+- Conversation-aware RAG chat endpoint
+- Database-backed conversation history
+- Persistent source and grounding metadata
+- Conversation activity tracking
+- Transaction-safe message persistence
 
 ### V3
 - Authentication
@@ -407,10 +410,17 @@ npm run dev
 - Chat UX and document-readiness improvements
 - Improved Chat document-library synchronization
 - Persistent conversation backend foundation
+- Persistent conversation backend
+- Persistent conversation messages
 
 ### Planned
 - Authentication
 - PostgreSQL
 - Docker
 - Deployment
-
+- ChatGPT-style conversation management
+- Automatic conversation titles
+- Conversation renaming
+- Conversation switching
+- Persistent conversation document context
+- Migration from local conversation state to server persistence

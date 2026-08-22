@@ -351,7 +351,7 @@ Implemented:
 - Improved loading indicators
 
 
-## Workspace Persistence (V2.1)
+## Workspace Persistence (V2.1 — Legacy Conversation Storage)
 
 Frontend workspace state is persisted locally to provide seamless continuity across page refreshes and browser restarts.
 
@@ -372,14 +372,14 @@ Conversation state is keyed by document IDs rather than filenames, ensuring conv
 
 Multi-document conversations are keyed using sorted document IDs so identical document sets always restore the same conversation regardless of selection order.
 
-
+> **V2.4 update:** Conversation persistence is being migrated from client-side localStorage to server-backed conversation records. The legacy localStorage conversation state remains relevant during the migration phase.
 
 ---
 
 ## Version
 
 Current Version:
-V2.2 Complete 
+V2.4 — In Progress
 
 Open Existing Document
         OR
@@ -596,6 +596,25 @@ Readable text available?
 
 LearnFlow uses persistent conversations for AI chat.
 
+V2.4 introduces server-backed persistent conversations. The conversation
+architecture is being implemented incrementally across multiple phases.
+
+**Implemented so far:**
+- Conversation and Message persistence
+- Conversation-document associations
+- Conversation CRUD APIs
+- Persistent message/RAG endpoint
+- Database-backed conversation history
+- Persistent source and grounding metadata
+
+**Planned next:**
+- Frontend conversation management
+- Automatic conversation title generation
+- User-controlled conversation renaming
+- Conversation switching and creation
+- Dynamic document association from the Chat UI
+- Migration from the previous localStorage conversation state
+
 A conversation consists of:
 
 Conversation
@@ -648,3 +667,33 @@ PUT    /conversations/{id}/documents
 Conversation persistence is introduced incrementally.
 
 The backend foundation is implemented first. Message persistence, RAG integration, frontend conversation management, title generation, document-context management, and migration from the existing client-side conversation state are implemented in subsequent phases.
+
+
+### Persistent Conversation Message Flow
+
+User Question
+      ↓
+Conversation
+      ↓
+Conversation Documents
+      ↓
+Persistent Conversation History
+      ↓
+History-aware Retrieval
+      ↓
+Semantic Retrieval
+      ↓
+Grounded Answer Generation
+      ↓
+Persist User + Assistant Messages
+      ↓
+Update Conversation Activity
+
+
+Message persistence occurs only after successful AI generation. This
+prevents failed AI requests from creating incomplete or misleading
+conversation history.
+
+Retrieved source references and grounding metadata are stored with the
+assistant message so previous responses remain interpretable even if
+document state changes later.

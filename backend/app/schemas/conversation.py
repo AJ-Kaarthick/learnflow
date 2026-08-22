@@ -13,6 +13,13 @@ MAX_CONVERSATION_DOCUMENT_IDS = 10
 
 MAX_TITLE_LENGTH = 200
 
+# Mirrors MAX_HISTORY_TURNS_ACCEPTED in schemas/chat.py, applied to a
+# single message's content instead of a history list -- a generous
+# sanity cap on request body size, not the "how much conversation
+# memory" decision (that's chat_service.MAX_HISTORY_TURNS, applied
+# server-side to the persisted history this endpoint loads).
+MAX_MESSAGE_CONTENT_LENGTH = 8000
+
 
 def _deduplicate_preserving_order(document_ids: list[str]) -> list[str]:
     """
@@ -172,6 +179,62 @@ class ConversationDocumentsRequest(BaseModel):
     @classmethod
     def deduplicate_preserving_order(cls, value: list[str]) -> list[str]:
         return _deduplicate_preserving_order(value)
+
+
+class ConversationMessageRequest(BaseModel):
+    """
+    Body for POST /conversations/{id}/messages (Milestone 2). Deliberately
+    thin compared to ChatRequest: no `history` field, since the whole
+    point of a persistent conversation is that history is loaded
+    server-side from the database (see routes_conversations.py) rather
+    than resent by the client on every turn -- and no `document_ids`
+    either, since the conversation's own ConversationDocument
+    associations are what determine document scope now, not a
+    per-request list.
+
+    `top_k` is kept, mirroring ChatRequest.top_k exactly -- an explicit
+    per-message override is still meaningful here (e.g. "give me more
+    sources for this one answer"), and `None` still means "let
+    retrieval decide" (see retrieval_service.compute_adaptive_top_k).
+    """
+
+    content: str = Field(max_length=MAX_MESSAGE_CONTENT_LENGTH)
+    top_k: int | None = None
+
+    @field_validator("content")
+    @classmethod
+    def not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("content cannot be empty.")
+        return stripped
+
+    @field_validator("top_k")
+    @classmethod
+    def positive(cls, value: int | None) -> int | None:
+        if value is not None and value < 1:
+            raise ValueError("top_k must be at least 1.")
+        return value
+
+
+class ConversationMessageResponse(BaseModel):
+    """
+    What POST /conversations/{id}/messages returns -- both messages
+    this call persisted, in the same MessageResponse shape
+    GET /conversations/{id} already uses for every other message, so a
+    frontend never needs a second shape to render a turn depending on
+    how it got there.
+
+    Both are included, not just the assistant's reply: the user's
+    message left the client with no id/position/created_at (those are
+    assigned server-side on persist -- see send_message), so returning
+    it here is what lets a frontend append the *actual persisted* turn
+    to its view instead of re-deriving one from what it optimistically
+    sent, or issuing a follow-up GET just to learn its id.
+    """
+
+    user_message: MessageResponse
+    assistant_message: MessageResponse
 
 
 class ConversationRenameRequest(BaseModel):
