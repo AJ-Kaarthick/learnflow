@@ -1,12 +1,17 @@
 import ChatPanel from "./ChatPanel";
 import { getConversationKey } from "../utils/persistence";
 
-// The right panel (≈26%) of the workspace: a persistent home for the
-// AI assistant. `min-h-0` on the flex column plus `h-full` here (its
-// parent <aside> in WorkspaceShell is a fixed-height, overflow-hidden
-// box) is what lets ChatPanel's own message list scroll independently
-// while its input stays pinned to the bottom — the "sticky chat"
-// behavior — instead of the whole column scrolling as one unit.
+// A persistent home for the AI assistant within whichever page mounts
+// it. `min-h-0` on the flex column plus `h-full` here (its parent
+// element is a fixed-height, overflow-hidden box — the right column
+// of the old three-panel workspace, now ChatPage's main column, see
+// ChatPage.jsx) is what lets ChatPanel's own message list scroll
+// independently while its input stays pinned to the bottom — the
+// "sticky chat" behavior — instead of the whole column scrolling as
+// one unit. This component doesn't hardcode a width, so V2.4
+// Milestone 1's move from a narrow sidebar (WorkspaceShell) to a full
+// page (ChatPage) needed no changes here — it fills whatever column
+// it's given either way.
 function AssistantPanel({ selectedDocuments, onToggleSelect }) {
   return (
     <div className="flex h-full min-w-0 min-h-0 flex-col gap-4">

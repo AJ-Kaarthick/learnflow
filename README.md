@@ -18,6 +18,9 @@ LearnFlow is an AI-powered study workspace that transforms PDF, DOCX, PPTX, and 
 - Chat with PDF, DOCX, and PPTX documents using RAG
 - Multi-turn conversational memory for natural conversations
 - Multi-document Chat
+- Robust mixed-document Chat handling
+- Clear handling of documents with no readable text
+- Improved Chat document-library synchronization
 - History-aware conversational retrieval for natural follow-up questions
 - Persistent AI learning workspace
 - Workspace session persistence     
@@ -28,7 +31,7 @@ LearnFlow is an AI-powered study workspace that transforms PDF, DOCX, PPTX, and 
 - Workspace personalization
 - Accessible UI with persistent appearance preferences
 - OCR support for image documents and scanned PDFs
-- Automatic text extraction from supported image-based documents
+- OCR-based text extraction from supported image documents
 
 ---
 
@@ -63,6 +66,9 @@ LearnFlow currently supports:
 - 🧠 Multi-turn conversational memory
 - 🧭 History-aware conversational retrieval
 - 📚 Multi-document Chat
+- 🛡️ Readability-aware multi-document Chat
+- ⚠️ Clear identification of documents with no readable text
+- 🔄 Automatic Chat document-library refresh after upload
 - 📖 Grounded responses with supporting source references
 - 💾 Workspace session persistence
 - 💬 Per-document conversation history
@@ -270,6 +276,19 @@ LearnFlow currently supports:
 - Improved document extraction error logging
 - Generated learning content persistence across study-tab switches
 
+### ✅ V2.4
+
+#### Milestone 1 — Chat UX Polish ✅
+
+- Improved multi-document Chat handling
+- Readability-aware document selection
+- Clear identification of unreadable documents
+- Prevented AI generation from documents with no readable text
+- Prevented unreadable documents from blocking readable documents
+- Improved Chat document-library synchronization after upload
+- Preserved existing single- and multi-document Chat behavior
+- Improved Chat error handling
+- Added regression tests for document readiness and Chat document selection
 
 
 ### V3
@@ -368,9 +387,10 @@ npm run dev
 - Workspace Personalization
 - OCR document processing
 - Intelligent multi-document retrieval
+- Chat UX and document-readiness improvements
+- Improved Chat document-library synchronization
 
 ### Planned
-- Image understanding
 - Authentication
 - PostgreSQL
 - Docker

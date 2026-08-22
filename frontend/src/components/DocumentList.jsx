@@ -103,6 +103,7 @@ function DocumentList({
   documents,
   activeDocumentId,
   selectedDocumentIds,
+  selectable = true,
   onOpen,
   onRename,
   onDelete,
@@ -181,7 +182,7 @@ function DocumentList({
               isActive ? "-mx-2 rounded-md bg-accent-50/50 px-2" : ""
             }`}
           >
-            {!isEditing && (
+            {!isEditing && selectable && (
               <input
                 type="checkbox"
                 checked={isSelected}

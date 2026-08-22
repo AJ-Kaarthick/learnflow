@@ -1,30 +1,30 @@
 import { useState } from "react";
+import AppNav from "./AppNav";
 import BackendStatus from "./BackendStatus";
 import SettingsPanel from "./SettingsPanel";
 
-// Persistent top bar for the workspace. Carries the title and
-// subtitle that previously lived in HomePage's <header>, plus
-// BackendStatus (previously shown further down the page, next to the
-// upload form) — both are app-wide, not specific to the library
-// section they used to sit in, so they've moved up to the one place
-// that's visible regardless of which panel the user is looking at.
+// Persistent top bar for the app. Carries the title that previously
+// lived in HomePage's <header>, plus BackendStatus (previously shown
+// further down the page, next to the upload form) — both are
+// app-wide, not specific to any one panel, so they live in the one
+// piece of chrome visible no matter which page is showing.
 //
-// V2.1 Milestone 3 adds the Settings entry point here too, for the
-// same reason: personalization is app-wide, so its trigger belongs
-// in the one chrome element visible no matter which document or
-// study tool is open.
-function TopBar({ onOpenShortcuts }) {
+// V2.1 Milestone 3 added the Settings entry point here for the same
+// reason: personalization is app-wide. V2.4 Milestone 1 adds the
+// top-level page nav (see AppNav) here too — LearnFlow's move from a
+// single workspace to Home/Study/Chat/... pages makes "where am I,
+// where can I go" an app-wide chrome concern the same way Settings
+// already was, not something that belongs inside any one page.
+function TopBar({ route, onOpenShortcuts }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-surface px-4 py-3 sm:px-6 lg:px-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <h1 className="shrink-0 text-2xl font-bold tracking-tight text-slate-900">
           Learn<span className="text-accent-600">Flow</span>
         </h1>
-        <p className="text-xs text-slate-500">
-          Pick up where you left off, or upload a new document.
-        </p>
+        <AppNav route={route} />
       </div>
       <div className="flex items-center gap-4">
         <BackendStatus />

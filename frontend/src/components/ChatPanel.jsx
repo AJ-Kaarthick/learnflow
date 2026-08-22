@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { indexDocument, sendChatMessage, sendMultiDocumentChatMessage } from "../api/chat";
 import { clearConversation, getConversationKey, loadConversation, saveConversation } from "../utils/persistence";
 import { NEW_CONVERSATION_EVENT } from "../utils/shortcutEvents";
+import { describeUnreadableDocuments, splitDocumentsByReadability } from "../utils/documentReadiness";
 import ExpandableText from "./ExpandableText";
 
 const SECONDARY_BUTTON_CLASSES =
@@ -24,6 +25,13 @@ const BOTTOM_THRESHOLD_PX = 56;
 
 // How long the "Copied!" confirmation stays up before reverting.
 const COPY_FEEDBACK_MS = 1500;
+
+// V2.4 Milestone 1: the composer's tallest allowed height (in pixels)
+// before it stops growing and scrolls internally instead — roughly
+// 8-9 lines of text-sm/leading-relaxed copy, generous enough for a
+// long pasted question while still leaving the message list above it
+// with real room on a full Chat page.
+const COMPOSER_MAX_HEIGHT_PX = 200;
 
 function formatTimestamp(epochMs) {
   if (!epochMs) return null;
@@ -49,7 +57,7 @@ function formatTimestamp(epochMs) {
 // mangle a stray "*" or "_" than to help.
 function ChatMarkdown({ content }) {
   return (
-    <div className="chat-markdown prose prose-sm max-w-none prose-p:my-2 prose-headings:my-2 first:prose-p:mt-0 last:prose-p:mb-0 first:prose-headings:mt-0">
+    <div className="chat-markdown prose prose-sm max-w-none break-words prose-p:my-2 prose-headings:my-2 first:prose-p:mt-0 last:prose-p:mb-0 first:prose-headings:mt-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -112,7 +120,22 @@ function ChatMessageBubble({ message, isLast, isSending, copiedMessageId, onCopy
           }
         >
           {isUser || message.isError ? (
-            <p className="whitespace-pre-wrap">{message.content}</p>
+            // V2.4 Milestone 1 UX polish (issue 4): plain-text messages
+            // (never markdown — see ChatMarkdown's note above) get a
+            // generous max-height with internal scrolling once
+            // exceeded, same "cap + scroll" pattern as the composer
+            // itself (see COMPOSER_MAX_HEIGHT_PX), so one very long
+            // pasted message can't blow up the bubble to fill the
+            // entire message list — the rest of the conversation stays
+            // reachable above/below it. 320px is deliberately generous
+            // (well over a dozen lines at this text size) so short and
+            // medium messages, including a normal multi-sentence
+            // question, never come close to it. break-words stops a
+            // long unbroken token (a URL, a hash) from overflowing the
+            // bubble horizontally instead of wrapping.
+            <p className="max-h-80 overflow-y-auto whitespace-pre-wrap break-words">
+              {message.content}
+            </p>
           ) : (
             <ChatMarkdown content={message.content} />
           )}
@@ -199,16 +222,48 @@ function ChatMessageBubble({ message, isLast, isSending, copiedMessageId, onCopy
 }
 
 function ChatPanel({ documents }) {
-  const documentIds = documents.map((document) => document.id);
+  // V2.4 Milestone 1 UX polish (issue 2): split the selection into
+  // documents Chat can actually use vs. ones with no readable text
+  // (splitDocumentsByReadability — same per-document signal Study
+  // generation already gates on, see documentReadiness.js). Only the
+  // readable group is ever indexed or sent to the chat endpoints
+  // below, so one unreadable document in a multi-document selection
+  // can never block the others (issue 3) — and unreadableDocuments is
+  // what lets this panel name exactly which file(s) it left out
+  // (issue 4), instead of the old backend copy that only ever said
+  // "this document" (or, for the single-document route, a raw
+  // document id).
+  const { readable: readableDocuments, unreadable: unreadableDocuments } =
+    splitDocumentsByReadability(documents);
+  const documentIds = readableDocuments.map((document) => document.id);
   const isMultiDocument = documentIds.length > 1;
+  const hasUsableDocuments = documentIds.length > 0;
 
-  // One conversation per unique set of documents, keyed by sorted
-  // document ids (never filenames — see getConversationKey). Stable
-  // across this component's whole lifetime: AssistantPanel remounts
-  // ChatPanel (via its `key`) whenever the document selection
-  // actually changes, so `documents` — and therefore this key — never
-  // changes out from under an already-mounted instance.
-  const conversationKey = getConversationKey(documentIds);
+  // One conversation per unique set of *usable* documents, keyed by
+  // sorted document ids (never filenames — see getConversationKey).
+  // Deliberately keyed off readableDocuments, not the raw `documents`
+  // prop: a document with no readable text never contributes
+  // anything to retrieval or the answer (see chat_service.py), so a
+  // selection of [Linux-Tutorial.pdf, Enso-Wallpaper.jpg] is, as far
+  // as the actual conversation is concerned, the same conversation as
+  // [Linux-Tutorial.pdf] alone — and should read/write the same
+  // history, including if the user later deselects the unreadable
+  // file. Stable across this component's whole lifetime either way:
+  // AssistantPanel remounts ChatPanel (via its `key`, based on the
+  // full raw selection) whenever the selection actually changes, so
+  // `documents` — and therefore this key — never changes out from
+  // under an already-mounted instance.
+  //
+  // Falls back to the full raw selection's ids when there are no
+  // usable documents at all (documentIds would otherwise collapse to
+  // the same empty key "" for every such selection) — this state
+  // never actually shows a conversation (see indexStatus === "error"
+  // below, which hides the whole message list/composer), so this
+  // only prevents unrelated all-unreadable selections from sharing
+  // one meaningless storage slot.
+  const conversationKey = getConversationKey(
+    hasUsableDocuments ? documentIds : documents.map((document) => document.id)
+  );
 
   const [indexStatus, setIndexStatus] = useState("indexing"); // indexing | ready | error
   const [indexError, setIndexError] = useState("");
@@ -221,6 +276,19 @@ function ChatPanel({ documents }) {
   const [sendStatus, setSendStatus] = useState("idle"); // idle | sending
   const [copiedMessageId, setCopiedMessageId] = useState(null);
 
+  // V2.4 Milestone 1 UX polish: whether *this mount* restored a
+  // non-empty conversation, snapshotted once at mount rather than
+  // recomputed from `messages` on every render — recomputing would
+  // make the "Existing conversation" badge below reflect "there are
+  // currently messages" (trivially true the instant the user sends
+  // their first message in a brand-new conversation, since it's
+  // already visible right there in the message list) instead of what
+  // it's actually meant to answer: "did I already talk to this exact
+  // combination before now?" A ref (not state) because it never
+  // changes the panel's own render output on its own — it's read
+  // during render, but nothing should re-render because of it.
+  const hadExistingConversationRef = useRef(messages.length > 0);
+
   // The in-flight request's AbortController (Milestone 4: "Stop
   // generation"). This endpoint isn't streamed — there's no partial
   // answer to interrupt mid-token — so "stop" means "stop waiting on
@@ -230,6 +298,13 @@ function ChatPanel({ documents }) {
   // input for a new question instead of forcing a wait.
   const abortControllerRef = useRef(null);
   const copiedTimeoutRef = useRef(null);
+
+  // The composer textarea — its height is measured and set directly
+  // (see the auto-grow effect below) rather than left to CSS alone,
+  // since "grow up to a max height, then scroll" needs the element's
+  // own scrollHeight to know when content has actually exceeded that
+  // cap.
+  const textareaRef = useRef(null);
 
   // The scrollable message list itself — scrolling is applied
   // directly to this element (el.scrollTo), never via
@@ -276,13 +351,34 @@ function ChatPanel({ documents }) {
   }
 
   async function prepareChat() {
+    if (!hasUsableDocuments) {
+      // Every selected document has no readable text — there is
+      // nothing to index or chat with, so skip the network round trip
+      // entirely rather than calling the index endpoint just to get
+      // back its own version of this same fact (see
+      // splitDocumentsByReadability above, and requirement 8: reuse
+      // the readiness signal the app already has instead of a new
+      // detection path). describeUnreadableDocuments produces the
+      // same "which file(s), why" wording used below for the partial
+      // case, with readableCount 0 so it skips the "others still
+      // work" reassurance, which wouldn't be true here.
+      setIndexStatus("error");
+      setIndexError(describeUnreadableDocuments(unreadableDocuments, 0));
+      return;
+    }
+
     setIndexStatus("indexing");
     setIndexError("");
     try {
-      // Every selected document needs to be indexed before it can be
-      // searched — each call is independent (a document indexed for
-      // one conversation stays indexed), so these run in parallel
-      // rather than one at a time.
+      // Every selected *readable* document needs to be indexed before
+      // it can be searched — each call is independent (a document
+      // indexed for one conversation stays indexed), so these run in
+      // parallel rather than one at a time. Documents with no
+      // readable text are deliberately excluded from `documentIds`
+      // (see above) — indexing them would just reproduce, via a 422
+      // round trip, a fact this panel already knows client-side, and
+      // would incorrectly fail the whole Promise.all for documents
+      // that have nothing wrong with them (issue 3).
       await Promise.all(documentIds.map((documentId) => indexDocument(documentId)));
       setIndexStatus("ready");
     } catch (error) {
@@ -498,10 +594,14 @@ function ChatPanel({ documents }) {
     setQuestion("");
     isAtBottomRef.current = true;
     setShowScrollToLatest(false);
+    // The conversation this badge described no longer exists — clear
+    // it too, or starting fresh would still be labeled "Existing
+    // conversation" for the rest of this mount.
+    hadExistingConversationRef.current = false;
   }
 
-  // Ctrl/Cmd+Shift+N (Milestone 4) is caught globally in WorkspaceShell
-  // (it isn't scoped to any particular input) and relayed here via a
+  // Ctrl/Cmd+Shift+N (Milestone 4) is caught globally in AppShell (it
+  // isn't scoped to any particular input) and relayed here via a
   // CustomEvent — see utils/shortcutEvents.js for why. Only the
   // currently-mounted ChatPanel, if any, is listening, so this is a
   // safe no-op whenever the assistant panel has no document open.
@@ -511,12 +611,42 @@ function ChatPanel({ documents }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, sendStatus, conversationKey]);
 
+  // V2.4 Milestone 1 UX polish: the composer grows with the prompt (up
+  // to COMPOSER_MAX_HEIGHT_PX, then scrolls internally instead — see
+  // the textarea's `style` below) rather than staying a fixed single
+  // line. Resetting to "auto" before reading scrollHeight is what
+  // lets the box shrink back down again too (e.g. after clearing a
+  // long question on send) — without it, scrollHeight would only
+  // ever reflect the tallest the box has already been.
+  //
+  // Issue 4 follow-up (manual-testing feedback): the growth itself
+  // worked, but with no `transition` on the textarea, each line the
+  // box grew by was an instant snap rather than a smooth resize —
+  // felt abrupt, especially on the first jump from one line to two.
+  // The `transition-[height]` class on the textarea below is what's
+  // actually responsible for the smoothing; this effect still just
+  // computes the target pixel height every keystroke, exactly as
+  // before — the browser animates the change on its own once a
+  // transition is declared, no extra JS needed.
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
+  }, [question]);
+
   function handleQuestionKeyDown(event) {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-      // Plain Enter already submits natively (single-line input inside
-      // a <form>) — this only matters for the Ctrl/Cmd+Enter combo
-      // itself, and preventDefault here stops that same keypress from
-      // also triggering the native submit a second time.
+      event.preventDefault();
+      submitCurrentQuestion();
+      return;
+    }
+    // Plain Enter submits, same as the old single-line input's native
+    // form-submit-on-Enter behavior; Shift+Enter inserts a newline
+    // instead, for the (now-possible, since this is a real textarea)
+    // case of a prompt the user wants to format across lines before
+    // sending.
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       submitCurrentQuestion();
     }
@@ -526,10 +656,54 @@ function ChatPanel({ documents }) {
   const inputDisabled = indexStatus !== "ready" || isSending;
   const documentsLabel = isMultiDocument ? "documents" : "document";
 
+  // V2.4 Milestone 1 UX polish (issue 2): distinguishes "every
+  // selected document has no readable text" (a permanent fact — see
+  // prepareChat's early return above, which sets indexError to
+  // describeUnreadableDocuments(unreadableDocuments, 0) without ever
+  // calling the backend — retrying can't fix it, so there's no point
+  // offering a retry) from every other indexing failure (network
+  // blip, AI provider down, etc. on one of the *readable* documents),
+  // which stays exactly as it was — still worth a retry, still framed
+  // as a chat-prep failure. Driven by hasUsableDocuments (the same
+  // readability split used everywhere else in this panel) rather than
+  // matching indexError's text, so it stays correct regardless of
+  // exactly how that message is worded.
+  const isBlockedByUnreadableText = indexStatus === "error" && !hasUsableDocuments;
+
+  // Partial case (issue 2/3/4): at least one selected document has no
+  // readable text, but at least one other is fine, so Chat proceeds
+  // using only the readable ones (see documentIds above). This is
+  // what tells the user which file(s) got left out and why — shown
+  // regardless of indexStatus (indexing or ready) since it's a fact
+  // about the *selection*, not a transient prep failure, and needs to
+  // stay visible for as long as those documents remain selected.
+  const unreadableDocumentsNotice =
+    unreadableDocuments.length > 0 && hasUsableDocuments
+      ? describeUnreadableDocuments(unreadableDocuments, documentIds.length)
+      : null;
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold tracking-tight text-slate-900">Chat</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold tracking-tight text-slate-900">Chat</h3>
+          {/* V2.4 Milestone 1 UX polish (issue 1): the only signal
+              this document combination had prior history used to be
+              noticing the restored bubbles further down — easy to
+              miss, and no signal at all until indexing finished. This
+              badge answers "have I chatted with this combination
+              before" immediately, without introducing any new
+              persistence — see hadExistingConversationRef above. */}
+          {hadExistingConversationRef.current && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2 py-0.5 text-[11px] font-medium text-accent-700"
+              title="You've chatted with this document combination before — your previous messages are shown below."
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-500" aria-hidden="true" />
+              Existing conversation
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           {indexStatus === "indexing" && (
             <span className="flex items-center gap-2 text-xs text-slate-500">
@@ -556,14 +730,39 @@ function ChatPanel({ documents }) {
           which also lets the user remove one) — not repeated here, so
           the same information isn't shown twice back-to-back. */}
 
+      {/* V2.4 Milestone 1 UX polish (issue 2): identifies the
+          unreadable document(s) by filename while the rest of the
+          selection stays fully usable below — see
+          unreadableDocumentsNotice above. Rendered outside the
+          indexStatus branches below (it applies whether prep is still
+          running or already finished) rather than folded into either
+          one, since it's about which *documents* are usable, not
+          about whether the request to prepare them succeeded. */}
+      {unreadableDocumentsNotice && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-sm text-amber-800">{unreadableDocumentsNotice}</p>
+        </div>
+      )}
+
       {indexStatus === "error" && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
-          <p className="text-sm text-red-700">
-            Couldn&apos;t prepare {documentsLabel} for chat. {indexError}
+        <div
+          className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
+            isBlockedByUnreadableText ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"
+          }`}
+        >
+          <p className={`text-sm ${isBlockedByUnreadableText ? "text-amber-800" : "text-red-700"}`}>
+            {isBlockedByUnreadableText ? indexError : `Couldn't prepare ${documentsLabel} for chat. ${indexError}`}
           </p>
-          <button onClick={prepareChat} className={SECONDARY_BUTTON_CLASSES}>
-            Try again
-          </button>
+          {/* No "Try again" when every selected document has no
+              readable text — it's a fact about the documents'
+              content, not a transient prep failure, so retrying calls
+              the same (skipped, client-side-only) check and gets the
+              same answer every time. */}
+          {!isBlockedByUnreadableText && (
+            <button onClick={prepareChat} className={SECONDARY_BUTTON_CLASSES}>
+              Try again
+            </button>
+          )}
         </div>
       )}
 
@@ -635,9 +834,10 @@ function ChatPanel({ documents }) {
             )}
           </div>
 
-          <form onSubmit={handleSubmit} className="flex shrink-0 items-center gap-2">
-            <input
-              type="text"
+          <form onSubmit={handleSubmit} className="flex shrink-0 items-end gap-2">
+            <textarea
+              ref={textareaRef}
+              rows={1}
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={handleQuestionKeyDown}
@@ -647,7 +847,21 @@ function ChatPanel({ documents }) {
                   ? `Preparing ${documentsLabel}...`
                   : `Ask about the selected ${documentsLabel}...`
               }
-              className="min-w-0 flex-1 rounded-full border border-slate-300 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-60"
+              // maxHeight is a hard CSS ceiling that backs up the
+              // scrollHeight-based sizing in the auto-grow effect
+              // above; overflow-y-auto only actually shows a
+              // scrollbar once content exceeds that ceiling, so a
+              // short prompt never gets one. This is also what
+              // guarantees a long pasted prompt stays fully
+              // reviewable — scrollable inside the box — instead of
+              // extending up past the visible composer. break-words
+              // (issue 4) stops a single very long unbroken token
+              // (a URL, a hash) from pushing the box wider instead of
+              // wrapping — textareas already soft-wrap normal text on
+              // their own, but not an unbroken run with no spaces to
+              // wrap at.
+              style={{ maxHeight: `${COMPOSER_MAX_HEIGHT_PX}px` }}
+              className="min-w-0 flex-1 resize-none overflow-y-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-[height] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-60"
             />
             {isSending ? (
               <button

@@ -2,7 +2,7 @@
 
 ## Goal
 
-LearnFlow converts uploaded PDFs, DOCX, PPTX, and image documents into AI-powered learning material and enables grounded question answering using Retrieval-Augmented Generation (RAG).
+LearnFlow converts uploaded PDFs, DOCX, PPTX, and supported image documents with extractable text into AI-powered learning material and enables grounded question answering using Retrieval-Augmented Generation (RAG).
 
 ---
 
@@ -225,6 +225,9 @@ backend/app/services/ocr/
 - OCR is used when document content is image-based or requires text recognition
 - OCR failures are logged with actionable diagnostics
 - System-level OCR dependencies are checked at application startup
+- Document readiness is validated before document-based AI generation
+- Unreadable documents do not block readable documents in multi-document Chat
+- Documents remain the single source of truth for document metadata and content
 
 
 ### Hallucination Prevention
@@ -369,31 +372,7 @@ Conversation state is keyed by document IDs rather than filenames, ensuring conv
 
 Multi-document conversations are keyed using sorted document IDs so identical document sets always restore the same conversation regardless of selection order.
 
-## Current Milestones
 
-### ✅ Milestone 0
-- Project setup
-- Workspace Session Persistence
-
-### ✅ Milestone 1
-- PDF upload
-- PDF storage
-- PDF text extraction
-
-### ✅ Milestone 2
-- AI summarization
-- Gemini integration
-- Provider abstraction
-- Summary caching
-
-### ✅ Milestone 3
-- AI flashcards
-
-### ✅ Milestone 4
-- AI quizzes
-
-### ✅ Milestone 5
-- AI mind maps
 
 ---
 
@@ -594,3 +573,20 @@ Generated summaries, flashcards, quizzes, and mind maps are synchronized with th
 This ensures generated content survives study-tab switches, where individual study panels may be unmounted and remounted.
 
 The existing backend persistence remains the source of truth across document reloads and refreshes.
+
+
+## V2.4 — Document Readiness and Chat UX
+
+V2.4 adds document-content validation and improved handling of documents that do not contain readable text.
+
+Before document-based AI generation, the system now verifies that readable document content is available.
+
+```text
+Document
+   ↓
+Document Readiness
+   ↓
+Readable text available?
+   ├── NO  → No-readable-text state
+   │
+   └── YES → AI generation / Chat

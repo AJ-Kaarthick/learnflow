@@ -29,7 +29,7 @@ function MindMapPanel({ documentId, initialMindmap = null, onGenerated }) {
       const result = await generateMindMap(documentId);
       setStructure(result.structure);
       // See SummaryPanel's onGenerated call for why this is needed:
-      // keeps HomePage's cachedContent (the single source of truth
+      // keeps StudyPage's cachedContent (the single source of truth
       // panels remount from on tab switch) in sync with what was just
       // generated. Passed as the same { structure } shape
       // getMindMap/generateMindMap both already return and

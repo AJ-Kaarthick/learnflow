@@ -3,6 +3,8 @@ import io
 from fastapi.testclient import TestClient
 from reportlab.pdfgen import canvas
 
+from app.db.database import SessionLocal
+from app.db.models import Document
 from app.main import app
 from app.services.ai.base_provider import AIProvider, AIProviderError
 from app.services.ai.embedding_provider import EmbeddingProvider
@@ -90,6 +92,31 @@ def _upload_cats_and_dogs(client: TestClient) -> tuple[str, str]:
     cats_id = _upload_and_index_document(client, "cats.pdf", CATS_TEXT)
     dogs_id = _upload_and_index_document(client, "dogs.pdf", DOGS_TEXT)
     return cats_id, dogs_id
+
+
+def _seed_ready_document_with_text(filename: str, extracted_text: str) -> str:
+    """
+    Same pattern as test_chat.py's and test_rag.py's helper of the
+    same name — a "ready" document whose extracted_text the upload
+    endpoint can't produce on demand (real extraction/OCR would need
+    an actual blank image on disk). Takes an explicit filename, unlike
+    those single-document versions, so a test can assert on which of
+    several seeded documents a multi-document response/error is about.
+    """
+    db = SessionLocal()
+    try:
+        document = Document(
+            original_filename=filename,
+            stored_filename=filename,
+            status="ready",
+            extracted_text=extracted_text,
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        return document.id
+    finally:
+        db.close()
 
 
 def test_multi_document_chat_represents_every_selected_document():
@@ -288,6 +315,42 @@ def test_multi_document_chat_400_for_unindexed_document():
     )
 
     assert response.status_code == 400
+
+    app.dependency_overrides.clear()
+
+
+def test_multi_document_chat_422_when_one_selected_document_has_no_readable_text():
+    """
+    V2.4 Milestone 1 UX polish (issue 2): the backend's per-document
+    guard (routes_chat.py's _get_indexed_document) is intentionally
+    unchanged by this milestone — the actual fix is client-side (see
+    frontend/src/utils/documentReadiness.splitDocumentsByReadability
+    and ChatPanel.jsx), which now filters an unreadable document out
+    of document_ids before ever calling this endpoint, rather than
+    discovering the problem from this 422 after the fact.
+
+    This test locks in the backend contract that filtering depends on
+    staying true: if a document with no readable text *is* included in
+    document_ids anyway (a direct API caller, or a future regression
+    that stops filtering client-side), the whole request still fails
+    clearly and identifies that specific document — never silently
+    drops it, and never answers from fewer documents than requested.
+    """
+    app.dependency_overrides[get_ai_provider] = lambda: FakeAIProvider()
+    app.dependency_overrides[get_embedding_provider] = lambda: KeywordEmbeddingProvider()
+    client = TestClient(app)
+    cats_id = _upload_and_index_document(client, "cats.pdf", CATS_TEXT)
+    blank_id = _seed_ready_document_with_text("Enso Wallpaper.jpg", "")
+
+    response = client.post(
+        "/api/v1/documents/chat",
+        json={"document_ids": [cats_id, blank_id], "question": "Tell me about cats"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert blank_id in detail
+    assert "no readable text" in detail.lower()
 
     app.dependency_overrides.clear()
 

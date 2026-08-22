@@ -12,7 +12,7 @@ import { mergeGeneratedContent } from "./cachedContent.js";
 // tab's panel, so switching tabs unmounts it — and switching back
 // remounts it from the *original* cachedContent, which was never
 // updated after generation. mergeGeneratedContent is the fix: it's
-// what each panel's onGenerated callback now calls (via HomePage's
+// what each panel's onGenerated callback now calls (via StudyPage's
 // handleContentGenerated) so cachedContent — the value panels are
 // re-initialized from on every remount — actually reflects what was
 // just generated. None of this is document-type-specific, so the

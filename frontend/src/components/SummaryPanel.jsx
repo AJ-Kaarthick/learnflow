@@ -19,8 +19,8 @@ function SummaryPanel({ documentId, initialSummary = null, onGenerated }) {
     try {
       const result = await generateSummary(documentId);
       setSummary(result);
-      // Propagates the freshly generated summary up to HomePage's
-      // cachedContent (see StudyWorkspace.jsx / HomePage.jsx) — this
+      // Propagates the freshly generated summary up to StudyPage's
+      // cachedContent (see StudyWorkspace.jsx / StudyPage.jsx) — this
       // component's own state only survives while its tab is active
       // (StudyWorkspace unmounts it when switching tabs), so without
       // this the summary would look like it "disappeared" the moment

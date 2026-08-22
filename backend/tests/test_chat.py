@@ -257,6 +257,59 @@ def test_chat_400_before_indexing():
     app.dependency_overrides.clear()
 
 
+def _seed_ready_document_with_text(extracted_text: str) -> str:
+    """
+    Same pattern as test_rag.py's helper of the same name — a "ready"
+    document whose extracted_text the upload endpoint can't produce on
+    demand. See that module for why this bypasses the real
+    extraction/OCR pipeline rather than uploading a genuinely blank
+    image.
+    """
+    db = SessionLocal()
+    try:
+        document = Document(
+            original_filename="blank.png",
+            stored_filename="blank.png",
+            status="ready",
+            extracted_text=extracted_text,
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        return document.id
+    finally:
+        db.close()
+
+
+def test_chat_422_for_document_with_no_readable_text():
+    """
+    V2.4 Milestone 1 UX polish (issue 2): a document that reached
+    "ready" with no readable text (e.g. OCR found nothing in an image)
+    used to fall through to the generic, misleading "has not been
+    indexed yet — call POST /documents/{id}/index first" 400 — wrong
+    advice, since indexing it again is a no-op that will never produce
+    chunks. It should say clearly that there's no readable text
+    instead, and never reach the AI provider to do it (see
+    FakeAIProvider — its call count would rise if this exercised
+    the normal answer_question path).
+    """
+    fake_ai_provider = FakeAIProvider()
+    app.dependency_overrides[get_ai_provider] = lambda: fake_ai_provider
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    client = TestClient(app)
+    document_id = _seed_ready_document_with_text("")
+
+    response = client.post(
+        f"/api/v1/documents/{document_id}/chat", json={"question": "What is this about?"}
+    )
+
+    assert response.status_code == 422
+    assert "no readable text" in response.json()["detail"].lower()
+    assert fake_ai_provider.last_prompt is None
+
+    app.dependency_overrides.clear()
+
+
 def test_chat_422_for_blank_question():
     app.dependency_overrides[get_ai_provider] = lambda: FakeAIProvider()
     app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()

@@ -36,7 +36,7 @@ function QuizPanel({ documentId, initialQuestions = [], onGenerated }) {
       const result = await generateQuiz(documentId);
       setQuestions(result);
       // See SummaryPanel's onGenerated call for why this is needed:
-      // keeps HomePage's cachedContent (the single source of truth
+      // keeps StudyPage's cachedContent (the single source of truth
       // panels remount from on tab switch) in sync with what was just
       // generated.
       onGenerated?.(result);

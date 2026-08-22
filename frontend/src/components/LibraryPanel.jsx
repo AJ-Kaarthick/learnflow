@@ -34,14 +34,25 @@ function resultCountLabel(count, search) {
 
 // The Document Library panel: owns search/sort state and fetches its
 // own data (search and sort are both server-side, see
-// api/documents.js), independently of whatever document HomePage
-// currently has open. `refreshSignal` is bumped by the parent
-// whenever something outside this component's control changes the
-// underlying data (upload, rename, delete, open) so the list re-fetches.
+// api/documents.js), independently of whatever document the current
+// page has open. `refreshSignal` is bumped by the parent whenever
+// something outside this component's control changes the underlying
+// data (upload, rename, delete, open) so the list re-fetches.
+//
+// V2.4 Milestone 1: this panel is now reused on two different pages
+// with two different selection models — Study just opens a document
+// (no chat-style multi-select), Chat selects one or more documents to
+// converse with. `selectable` switches between them: `false` hides
+// the per-row checkbox column and the "check its box..." helper line
+// entirely, so Study's library doesn't show chat affordances for a
+// page that no longer has a chat panel. Defaults to `true` (the
+// original, chat-selection behavior) so existing callers don't need
+// to change.
 function LibraryPanel({
   refreshSignal,
   activeDocumentId,
-  selectedDocumentIds,
+  selectedDocumentIds = [],
+  selectable = true,
   onOpen,
   onRename,
   onDelete,
@@ -67,8 +78,8 @@ function LibraryPanel({
   const hasRestoredScrollRef = useRef(false);
   const scrollSaveTimeoutRef = useRef(null);
 
-  // Target of the Ctrl/Cmd+K shortcut (Milestone 4) — see
-  // WorkspaceShell for where that's caught and dispatched.
+  // Target of the Ctrl/Cmd+K shortcut (Milestone 4) — see AppShell
+  // for where that's caught and dispatched.
   const searchInputRef = useRef(null);
 
   useEffect(() => {
@@ -175,8 +186,9 @@ function LibraryPanel({
         </div>
 
         <p className="shrink-0 text-xs text-slate-400">
-          Click a document to open it. Check its box to include it in the chat — check more than
-          one to chat across several documents at once.
+          {selectable
+            ? "Click a document to open it. Check its box to include it in the chat — check more than one to chat across several documents at once."
+            : "Click a document to open it in your study workspace."}
         </p>
 
         {/* Stacked unconditionally, not `sm:flex-row` — `sm:` reacts
@@ -248,6 +260,7 @@ function LibraryPanel({
                 documents={documents}
                 activeDocumentId={activeDocumentId}
                 selectedDocumentIds={selectedDocumentIds}
+                selectable={selectable}
                 onOpen={onOpen}
                 onRename={onRename}
                 onDelete={onDelete}

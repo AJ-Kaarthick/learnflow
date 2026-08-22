@@ -19,6 +19,19 @@ def _get_ready_document(document_id: str, db: Session) -> Document:
     check routes_summary.py and friends already do before generating
     anything for a document. Indexing and searching both need text
     that's actually been extracted, so both require status == "ready".
+
+    V2.4 Milestone 1 UX polish (issue 2): "ready" only means
+    extraction finished without raising — it doesn't guarantee
+    extraction found anything. A pure image with no readable
+    characters (OCR returning "", or whitespace) reaches "ready" just
+    like any other successfully-processed document, but has nothing
+    for indexing or search to work with. Checked here, in the one
+    place both routes already share, rather than downstream in
+    indexing/retrieval — extracted_text is the actual signal the
+    pipeline already has for this (see document_extraction_service.py
+    / chunking.chunk_text, which already documents "empty/
+    whitespace-only text -> zero chunks"); nothing here guesses at
+    *why* the text is missing, only whether it is.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
     if document is None:
@@ -27,6 +40,14 @@ def _get_ready_document(document_id: str, db: Session) -> Document:
         raise HTTPException(
             status_code=400,
             detail=f"Document is not ready for indexing (status: {document.status}).",
+        )
+    if not (document.extracted_text or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "No readable text was detected in this document. LearnFlow "
+                "needs extractable text to answer questions about it."
+            ),
         )
     return document
 

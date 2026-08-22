@@ -143,8 +143,22 @@
   --color-red-600: #f87171;
   --color-red-700: #fca5a5;
   --color-amber-50: color-mix(in oklch, var(--color-amber-500) 18%, transparent);
+  --color-amber-200: color-mix(in oklch, var(--color-amber-500) 35%, transparent);
   --color-amber-600: #fbbf24;
   --color-amber-700: #fcd34d;
+  /* V2.4 Milestone 1 UX polish: amber-800 is the "no readable text"
+     warning banner's text color (ChatPanel, and now every Study
+     panel's blocked state — see NoReadableTextState.jsx). Without an
+     override here it fell through to the un-re-themed light-mode
+     Tailwind default (a dark brownish-orange, #92400e), which reads
+     fine on the light-mode amber-50 background but is very low
+     contrast against dark mode's translucent amber-50 sitting on a
+     dark slate panel — the actual bug behind "difficult to read
+     against the dark UI". Every other status color already had its
+     darker text shade re-themed (red-700, emerald-700); amber-800 was
+     the one gap, not anything specific to how the banner itself was
+     built. */
+  --color-amber-800: #fde68a;
 }
 
 .dark[data-accent="blue"] {

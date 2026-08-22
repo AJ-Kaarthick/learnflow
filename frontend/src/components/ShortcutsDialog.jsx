@@ -22,8 +22,8 @@ function KeyCap({ children }) {
   );
 }
 
-// Opens via Ctrl/Cmd+/ (see WorkspaceShell's global shortcut listener)
-// or the "View keyboard shortcuts" link in Settings. Listing every
+// Opens via Ctrl/Cmd+/ (see AppShell's global shortcut listener) or
+// the "View keyboard shortcuts" link in Settings. Listing every
 // shortcut is the whole job here — no search, per the brief, since
 // five entries doesn't need one.
 function ShortcutsDialog({ onClose }) {

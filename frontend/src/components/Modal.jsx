@@ -20,7 +20,7 @@ function Modal({ title, onClose, children, maxWidthClassName = "max-w-lg" }) {
     function handleKeyDown(event) {
       // Swallow every keydown while this modal is open, after handling
       // the ones it cares about — otherwise a key it doesn't act on
-      // (e.g. Ctrl/Cmd+/) would keep bubbling up to WorkspaceShell's
+      // (e.g. Ctrl/Cmd+/) would keep bubbling up to AppShell's
       // window-level shortcut listener and could, for instance, open
       // the Shortcuts dialog stacked on top of this one. A focused
       // modal should own keyboard handling until it's closed.
@@ -49,9 +49,9 @@ function Modal({ title, onClose, children, maxWidthClassName = "max-w-lg" }) {
     }
 
     document.addEventListener("keydown", handleKeyDown);
-    // Prevents the workspace behind the dialog from scrolling while
-    // it's open, same reasoning as WorkspaceShell locking the page to
-    // one scroll container at a time.
+    // Prevents the page behind the dialog from scrolling while it's
+    // open, same reasoning as AppShell/each page locking to one
+    // scroll container at a time.
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {

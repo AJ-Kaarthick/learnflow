@@ -1340,3 +1340,54 @@ Verification:
 - Frontend tests: 6 passed
 - Backend tests: 260 passed
 - Frontend production build succeeded
+
+# V2.4 — Milestone 1: Chat UX Polish
+
+## Goal
+
+Improve the reliability and usability of document-based AI features, particularly when documents contain little or no readable text, while improving the multi-document Chat experience.
+
+## Features Completed
+
+- Document readability validation before AI generation
+- Prevented Summary, Flashcards, Quiz, and Mind Map generation for documents with no readable text
+- Shared no-readable-text UI state
+- Improved warning/error readability and dark-mode contrast
+- Readability-aware multi-document Chat
+- Unreadable document identification by filename
+- Prevented unreadable documents from blocking readable documents in mixed selections
+- Preserved single- and multi-document Chat behavior
+- Automatic Chat document-library refresh after upload
+- Frontend regression tests for document readiness and Chat document handling
+
+## Problems Faced
+
+- AI generation was being attempted even when extracted document text was empty.
+- Empty prompts could produce plausible but unrelated AI-generated content.
+- An unreadable document could previously cause a mixed-document Chat request to fail for all selected documents.
+- Chat's document selection state did not initially preserve the document metadata required for readability detection.
+- The Chat document library could remain stale after uploading a new document from Chat.
+
+## Solutions
+
+- Added document-readiness guards before AI generation.
+- Added a shared frontend no-readable-text state.
+- Filtered unreadable documents before multi-document Chat requests while explicitly identifying them to the user.
+- Preserved document readiness metadata through Chat document-selection state.
+- Reused the existing document-library refresh mechanism so Chat refreshes its library after upload.
+- Added regression tests covering the affected data flows.
+
+## Verification
+
+- Backend tests: 281 passed
+- Frontend tests: 42 passed
+- Frontend production build successful
+- Manual testing completed
+- Readable document + unreadable document combination verified
+- Unreadable document identification verified
+- Chat document-library refresh after upload verified
+- Existing single- and multi-document Chat behavior verified
+
+## Result
+
+LearnFlow now prevents document-based AI features from generating misleading content when no readable document text is available. Mixed readable/unreadable document selections are handled gracefully, and the Chat document library stays synchronized after uploads.

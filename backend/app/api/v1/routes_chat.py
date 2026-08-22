@@ -90,6 +90,18 @@ def _get_indexed_document(document_id: str, db: Session) -> Document:
     routes_summary.py, routes_quiz.py, routes_flashcards.py,
     routes_mindmap.py, routes_rag.py — every one of them repeats this
     same check rather than importing a shared one).
+
+    V2.4 Milestone 1 UX polish (issue 2): checks extracted_text is
+    non-blank before the generic is_indexed check below, for the same
+    reason routes_rag.py's _get_ready_document does — see that
+    function's docstring. Ordered first because it changes what the
+    *is_indexed* failure would otherwise mean: a document with no
+    extractable text always has zero chunks (chunking.chunk_text
+    returns [] for empty/whitespace-only text), so without this check
+    it would fall into the generic "has not been indexed yet — call
+    POST /documents/{id}/index first" error below, which is actively
+    wrong advice here — indexing has nothing to index, so calling it
+    again is a no-op that will never produce chunks.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
     if document is None:
@@ -98,6 +110,14 @@ def _get_indexed_document(document_id: str, db: Session) -> Document:
         raise HTTPException(
             status_code=400,
             detail=f"Document {document_id} is not ready for chat (status: {document.status}).",
+        )
+    if not (document.extracted_text or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Document {document_id} has no readable text. LearnFlow needs "
+                "extractable text to answer questions about it."
+            ),
         )
 
     is_indexed = (

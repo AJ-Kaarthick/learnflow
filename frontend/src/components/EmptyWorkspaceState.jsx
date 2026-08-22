@@ -7,10 +7,10 @@ function EmptyWorkspaceState() {
   function focusUpload() {
     // The library's upload input (see UploadForm) has a stable id —
     // reusing it here rather than lifting upload state up through
-    // WorkspaceShell just to open the native file picker from a
-    // second place. Opens the same picker a click on that input
-    // would, so "Upload a document" here is a real shortcut, not just
-    // copy pointing at it.
+    // StudyPage just to open the native file picker from a second
+    // place. Opens the same picker a click on that input would, so
+    // "Upload a document" here is a real shortcut, not just copy
+    // pointing at it.
     document.getElementById("document-upload")?.click();
   }
 

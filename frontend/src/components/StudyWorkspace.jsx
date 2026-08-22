@@ -2,13 +2,17 @@ import { useEffect, useState } from "react";
 import EmptyWorkspaceState from "./EmptyWorkspaceState";
 import FlashcardsPanel from "./FlashcardsPanel";
 import MindMapPanel from "./MindMapPanel";
+import NoReadableTextState from "./NoReadableTextState";
 import QuizPanel from "./QuizPanel";
 import SummaryPanel from "./SummaryPanel";
+import { hasNoReadableText } from "../utils/documentReadiness";
 import { loadActiveStudyTab, saveActiveStudyTab } from "../utils/persistence";
 
 // Maps the raw backend status value to copy a student should actually
 // read, rather than the internal state name ("ready", "failed").
-// Moved from HomePage — used only by this panel's document-info block.
+// Moved from the old combined HomePage (now StudyPage, since this milestone's
+// Home is a different, lightweight dashboard page) — used only by this panel's
+// document-info block.
 function statusLabel(status) {
   if (status === "ready") return "Ready";
   if (status === "failed") return "Couldn't process this file";
@@ -101,8 +105,15 @@ function StudyWorkspace({ document, contentLoading, cachedContent, onContentGene
     return <EmptyWorkspaceState />;
   }
 
+  const noReadableText = hasNoReadableText(document);
+  // The pre-existing "very little text" advisory line remains for the
+  // 1-49 character range (still enough for the AI to at least attempt
+  // something from real, if sparse, content) — it no longer covers
+  // character_count === 0, which is the stronger, generation-blocking
+  // case now called out on its own, in the same amber tone, right
+  // below it.
   const extractedVeryLittleText =
-    document.status === "ready" && document.character_count < 50;
+    document.status === "ready" && !noReadableText && document.character_count < 50;
   const pageOrType = formatPageCountOrFileType(document);
   const fileSize = formatFileSize(document.file_size_bytes);
 
@@ -141,6 +152,14 @@ function StudyWorkspace({ document, contentLoading, cachedContent, onContentGene
           </p>
         )}
 
+        {noReadableText && (
+          <p className="text-xs text-amber-700">
+            No readable text was detected in this document, so Summary, Flashcards, Quiz, and
+            Mind Map are unavailable for it. This usually means it&apos;s a scanned or
+            image-only file.
+          </p>
+        )}
+
         {document.status === "failed" && (
           <p className="text-sm text-red-600">
             We couldn&apos;t read this file — it may be corrupted, password-protected, or in an
@@ -175,6 +194,12 @@ function StudyWorkspace({ document, contentLoading, cachedContent, onContentGene
 
           {contentLoading || !cachedContent ? (
             <p className="text-center text-sm text-slate-500">Loading saved content...</p>
+          ) : noReadableText ? (
+            // No panel is mounted here at all — not just visually
+            // hidden — so there's no "Generate" button to click and
+            // no way this state can trigger an API call, let alone an
+            // AI request. See NoReadableTextState.jsx.
+            <NoReadableTextState tool={activeTab} />
           ) : (
             <div>
               {activeTab === "summary" && (
