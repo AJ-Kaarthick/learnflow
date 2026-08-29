@@ -6,8 +6,8 @@
 // deliberately lightweight way to bridge that gap: no new context,
 // no prop drilling through components that don't otherwise need to
 // know about keyboard shortcuts at all, and a safe no-op if nothing
-// is currently mounted to receive it (e.g. "new conversation" when no
-// document is open).
+// is currently mounted to receive it (e.g. "new conversation" fired
+// while the Chat page itself isn't mounted — Study or Home).
 export const FOCUS_SEARCH_EVENT = "learnflow:focus-search";
 export const NEW_CONVERSATION_EVENT = "learnflow:new-conversation";
 

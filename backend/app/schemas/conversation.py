@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -19,6 +19,41 @@ MAX_TITLE_LENGTH = 200
 # memory" decision (that's chat_service.MAX_HISTORY_TURNS, applied
 # server-side to the persisted history this endpoint loads).
 MAX_MESSAGE_CONTENT_LENGTH = 8000
+
+
+def _assume_utc(value: object) -> object:
+    """
+    Restores the UTC-ness SQLite silently drops from every timestamp
+    this backend writes -- see the "New conversation timestamp is
+    wrong" fix (V2.4 Milestone 2 Phase 3 QA, issue 2).
+
+    Every Conversation/Message timestamp is written server-side as
+    `datetime.now(timezone.utc)` (see db/models.py), but SQLAlchemy's
+    plain `DateTime` column (no `timezone=True` -- SQLite has no native
+    timezone-aware type to back one) stores only the naive wall-clock
+    digits, dropping `tzinfo` on write. Reading the row back therefore
+    yields a *naive* `datetime` whose digits are UTC but whose
+    `tzinfo` is None, and a naive `datetime` serializes with no offset
+    suffix at all (e.g. "2026-08-27T14:33:00.123456" -- no "Z", no
+    "+00:00").
+
+    A browser doing `new Date(isoString)` on that offset-less string
+    parses it as *local* time (the ECMAScript spec's rule for a
+    date-time string with no zone), not UTC -- so a conversation
+    created seconds ago showed as e.g. "5h ago" instead of "Just now"
+    for anyone not in UTC+0: the same UTC digits got reinterpreted as
+    the browser's own local time, then compared against the real
+    current instant, off by exactly that timezone's UTC offset.
+
+    Applied as a `mode="before"` field validator so it runs on the raw
+    value straight out of the ORM object, before Pydantic's own
+    datetime parsing/serialization -- an already-aware value (e.g.
+    passed directly in a test, or once this project moves off SQLite)
+    is left untouched.
+    """
+    if isinstance(value, datetime) and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
 
 
 def _deduplicate_preserving_order(document_ids: list[str]) -> list[str]:
@@ -91,6 +126,11 @@ class MessageResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _created_at_is_utc(cls, value: object) -> object:
+        return _assume_utc(value)
+
     @staticmethod
     def from_message(message) -> "MessageResponse":
         sources = None
@@ -123,6 +163,11 @@ class ConversationSummaryResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def _timestamps_are_utc(cls, value: object) -> object:
+        return _assume_utc(value)
 
 
 class ConversationDetailResponse(ConversationSummaryResponse):

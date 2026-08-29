@@ -18,8 +18,21 @@ const NAMESPACE = "learnflow";
 const SCHEMA_VERSION = 1;
 
 const WORKSPACE_KEY = `${NAMESPACE}:workspace:v${SCHEMA_VERSION}`;
-const CONVERSATIONS_KEY = `${NAMESPACE}:conversations:v${SCHEMA_VERSION}`;
 const SETTINGS_KEY = `${NAMESPACE}:settings:v${SCHEMA_VERSION}`;
+
+// V2.4 Milestone 2 (frontend): `learnflow:conversations:v1` — the old
+// per-document-combination full message history this module used to
+// read and write (see the removed loadConversation/saveConversation/
+// clearConversation/getConversationKey below in git history) — is
+// deliberately NOT referenced anywhere in this file anymore. Chat
+// conversations are now backend-persisted entities (see
+// api/conversations.js), so the client only ever needs to remember
+// *which* conversation was active (see activeConversationId below),
+// never its messages. Any pre-Milestone-2 data still sitting under
+// that old key in a returning user's browser is simply left alone —
+// unread, unwritten, and harmless — rather than actively cleared,
+// per this milestone's "don't silently discard existing localStorage
+// data" requirement.
 
 // Only meaningful, restorable state lives here — no loading flags,
 // in-flight requests, or transient UI (typing indicators, temporary
@@ -27,7 +40,17 @@ const SETTINGS_KEY = `${NAMESPACE}:settings:v${SCHEMA_VERSION}`;
 const DEFAULT_WORKSPACE_STATE = {
   activeDocumentId: null,
   activeStudyTab: "summary",
-  selectedDocumentIds: [],
+  // V2.4 Milestone 2 (frontend): replaces the old `selectedDocumentIds`
+  // field. Chat's document selection is now a property of the active
+  // *conversation* (persisted server-side as ConversationDocument
+  // rows — see api/conversations.js), not free-floating client state,
+  // so the only thing Chat still needs restored across a refresh is
+  // which conversation was active — see loadActiveConversationId/
+  // saveActiveConversationId below. A workspace blob saved before this
+  // milestone may still have a `selectedDocumentIds` array in it; the
+  // merge in loadWorkspaceState just leaves it as an ignored, unread
+  // extra property rather than an error.
+  activeConversationId: null,
   librarySearch: "",
   librarySort: "uploaded_newest",
   libraryScrollTop: 0,
@@ -64,9 +87,8 @@ function safeParseObject(raw, fallback) {
 }
 
 // ---------------------------------------------------------------------
-// Workspace state: active document, active study tab, selected
-// documents, and the library's search/sort/scroll — everything except
-// conversations, which get their own key below (see "Conversations").
+// Workspace state: active document, active study tab, the active
+// conversation's id, and the library's search/sort/scroll.
 // ---------------------------------------------------------------------
 
 function loadWorkspaceState() {
@@ -95,12 +117,21 @@ export function saveActiveStudyTab(tab) {
   patchWorkspaceState({ activeStudyTab: tab });
 }
 
-export function loadSelectedDocumentIds() {
-  return loadWorkspaceState().selectedDocumentIds;
+// The identity of the active conversation only — never its messages
+// or documents, both of which the backend already persists in full
+// (see api/conversations.js's getConversation). This is what fulfills
+// requirement 3 of V2.4 Milestone 2 (frontend): "the client should
+// only persist the identity of the active conversation ... not
+// duplicate full conversation state in localStorage." Restoring after
+// a refresh is then just: read this id, GET /conversations/{id}, and
+// if that 404s (the conversation was deleted elsewhere) fall back to
+// picking a different one — see ChatPage.jsx.
+export function loadActiveConversationId() {
+  return loadWorkspaceState().activeConversationId;
 }
 
-export function saveSelectedDocumentIds(documentIds) {
-  patchWorkspaceState({ selectedDocumentIds: documentIds });
+export function saveActiveConversationId(conversationId) {
+  patchWorkspaceState({ activeConversationId: conversationId ?? null });
 }
 
 export function loadLibraryFilters() {
@@ -118,40 +149,6 @@ export function loadLibraryScrollTop() {
 
 export function saveLibraryScrollTop(scrollTop) {
   patchWorkspaceState({ libraryScrollTop: scrollTop });
-}
-
-// ---------------------------------------------------------------------
-// Conversations: one chat history per unique document combination.
-//
-// Keyed by *document ids*, never filenames — a rename (see
-// DocumentList) must not orphan a conversation. Multi-document
-// conversations use *sorted* ids so selecting [Linux, OS] and
-// [OS, Linux] read and write the exact same conversation, matching
-// how AssistantPanel already keys/remounts ChatPanel.
-// ---------------------------------------------------------------------
-
-export function getConversationKey(documentIds) {
-  return documentIds.slice().sort().join(",");
-}
-
-function loadConversationsMap() {
-  return safeParseObject(readRaw(CONVERSATIONS_KEY), {});
-}
-
-export function loadConversation(conversationKey) {
-  return loadConversationsMap()[conversationKey] ?? [];
-}
-
-export function saveConversation(conversationKey, messages) {
-  const all = loadConversationsMap();
-  all[conversationKey] = messages;
-  writeRaw(CONVERSATIONS_KEY, JSON.stringify(all));
-}
-
-export function clearConversation(conversationKey) {
-  const all = loadConversationsMap();
-  delete all[conversationKey];
-  writeRaw(CONVERSATIONS_KEY, JSON.stringify(all));
 }
 
 // ---------------------------------------------------------------------

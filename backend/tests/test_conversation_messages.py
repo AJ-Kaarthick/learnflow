@@ -550,3 +550,44 @@ def test_conversation_updated_at_bumps_on_message_send():
     assert updated["updated_at"] >= created["updated_at"]
 
     app.dependency_overrides.clear()
+
+
+# --- timestamp timezone (V2.4 Milestone 2 Phase 3 QA, issue 2) --------
+#
+# See test_conversations.py's own timestamp-timezone tests for the
+# full root-cause explanation (SQLite drops tzinfo on write, so a
+# naive datetime read back needs to be re-labeled UTC before Pydantic
+# serializes it -- see schemas/conversation.py's `_assume_utc`). This
+# extends that same coverage to a persisted Message's `created_at`,
+# which goes through MessageResponse rather than
+# ConversationSummaryResponse.
+
+
+def test_message_created_at_carries_explicit_utc_offset():
+    app.dependency_overrides[get_ai_provider] = lambda: FakeAIProvider()
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    client = TestClient(app)
+    document_id = _upload_and_index_document(client)
+    conversation_id = _create_conversation(client, [document_id])
+
+    response = client.post(
+        f"/api/v1/conversations/{conversation_id}/messages",
+        json={"content": "What does photosynthesis convert?"},
+    )
+    assert response.status_code == 201
+    body = response.json()
+    for message in (body["user_message"], body["assistant_message"]):
+        value = message["created_at"]
+        assert value.endswith("Z") or "+" in value.split("T", 1)[1], (
+            f"created_at={value!r} has no explicit UTC offset -- a client's "
+            "new Date(...) would parse it as local time, not UTC."
+        )
+
+    # GET /conversations/{id} returns the same persisted messages --
+    # confirm the fix applies there too, not just the just-sent response.
+    fetched = client.get(f"/api/v1/conversations/{conversation_id}").json()
+    for message in fetched["messages"]:
+        value = message["created_at"]
+        assert value.endswith("Z") or "+" in value.split("T", 1)[1]
+
+    app.dependency_overrides.clear()

@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { indexDocument, sendChatMessage, sendMultiDocumentChatMessage } from "../api/chat";
-import { clearConversation, getConversationKey, loadConversation, saveConversation } from "../utils/persistence";
-import { NEW_CONVERSATION_EVENT } from "../utils/shortcutEvents";
+import { indexDocument } from "../api/chat";
+import { sendConversationMessage } from "../api/conversations";
+import { appendPersistedTurn, toInternalMessages } from "../utils/conversationMessages";
 import { describeUnreadableDocuments, splitDocumentsByReadability } from "../utils/documentReadiness";
 import ExpandableText from "./ExpandableText";
 
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
 
-// Small icon-only buttons under an assistant message (Copy/Regenerate)
+// Small icon-only buttons under an assistant message (just Copy, as of
+// V2.4 Milestone 2 — see the removed Regenerate button's note below)
 // share this — smaller and quieter than SECONDARY_BUTTON_CLASSES,
 // which is sized for a labeled action, not an icon sitting quietly
 // under a bubble until it's needed.
@@ -101,11 +102,24 @@ function MatchScoreBadge({ score }) {
 // than a separate component file, same as every other panel's small
 // per-item renderers (e.g. flashcard cards in FlashcardsPanel) —
 // reusable within the panel without needing its own file.
-function ChatMessageBubble({ message, isLast, isSending, copiedMessageId, onCopy, onRegenerate }) {
+//
+// V2.4 Milestone 2 (frontend): this used to also take `isLast` and
+// `onRegenerate`, to offer a "Regenerate" action on the most recent
+// assistant answer. That's deliberately not carried forward into the
+// persistent-conversation model: regenerating means replacing an
+// already-*persisted* turn, and the backend has no endpoint yet to
+// delete or amend a saved message (send_message in
+// routes_conversations.py only ever appends a new turn) — building
+// that is real backend surface area this phase's brief scopes out
+// ("Implement the frontend Conversation Management foundation" —
+// amending history isn't part of that foundation). Re-asking the same
+// question is still always possible by typing it again; what's
+// removed is only the illusion that doing so replaces, rather than
+// adds to, the persisted history.
+function ChatMessageBubble({ message, copiedMessageId, onCopy }) {
   const isUser = message.role === "user";
   const isCopied = copiedMessageId === message.id;
   const timestamp = formatTimestamp(message.createdAt);
-  const canRegenerate = isLast && !isUser && !message.isError && !isSending;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -141,28 +155,20 @@ function ChatMessageBubble({ message, isLast, isSending, copiedMessageId, onCopy
           )}
         </div>
 
-        {/* Timestamp + actions row. Timestamp is optional per the
-            brief ("if they integrate naturally") — it only renders for
-            messages that have one, so conversations restored from
-            before this milestone (no `createdAt` in storage) just
-            show the actions without a blank gap. */}
+        {/* Timestamp + actions row. Timestamp is optional — it only
+            renders for messages that have one, so an assistant error
+            bubble (which never got a persisted created_at) just shows
+            the actions without a blank gap. */}
         <div className={`flex items-center gap-2 px-1 ${isUser ? "justify-end" : "justify-start"}`}>
           {timestamp && <span className="text-[11px] text-slate-400">{timestamp}</span>}
           {!isUser && !message.isError && (
-            <>
-              <button
-                type="button"
-                onClick={() => onCopy(message)}
-                className={MESSAGE_ACTION_BUTTON_CLASSES}
-              >
-                {isCopied ? "Copied!" : "Copy"}
-              </button>
-              {canRegenerate && (
-                <button type="button" onClick={onRegenerate} className={MESSAGE_ACTION_BUTTON_CLASSES}>
-                  Regenerate
-                </button>
-              )}
-            </>
+            <button
+              type="button"
+              onClick={() => onCopy(message)}
+              className={MESSAGE_ACTION_BUTTON_CLASSES}
+            >
+              {isCopied ? "Copied!" : "Copy"}
+            </button>
           )}
         </div>
 
@@ -200,10 +206,11 @@ function ChatMessageBubble({ message, isLast, isSending, copiedMessageId, onCopy
                       <span className="shrink-0 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
                         {index + 1}
                       </span>
-                      {/* Only present for multi-document chat (see
-                          MultiDocumentSourceItem in schemas/chat.py) —
-                          single-document sources omit it since there's
-                          only one document to begin with. */}
+                      {/* Only present for multi-document conversations
+                          (see MessageSourceItem in
+                          schemas/conversation.py) — single-document
+                          sources omit it since there's only one
+                          document to begin with. */}
                       {source.document_name && (
                         <p className="truncate font-medium text-slate-600">{source.document_name}</p>
                       )}
@@ -221,73 +228,47 @@ function ChatMessageBubble({ message, isLast, isSending, copiedMessageId, onCopy
   );
 }
 
-function ChatPanel({ documents }) {
+// V2.4 Milestone 2 (frontend): `conversationId` and `initialMessages`
+// are new — this panel is now a view onto one specific, backend-
+// persisted Conversation (see api/conversations.js), not a view keyed
+// off whatever documents happen to be selected. `documents` is
+// unchanged in shape and purpose (still the readable/unreadable split
+// below, still what gets indexed and what the composer's placeholder
+// names) — it's just sourced from the active conversation's own
+// associated documents now (see ChatPage.jsx), instead of free-
+// floating page state.
+function ChatPanel({ conversationId, initialMessages, documents, onMessageSent }) {
   // V2.4 Milestone 1 UX polish (issue 2): split the selection into
   // documents Chat can actually use vs. ones with no readable text
   // (splitDocumentsByReadability — same per-document signal Study
   // generation already gates on, see documentReadiness.js). Only the
-  // readable group is ever indexed or sent to the chat endpoints
+  // readable group is ever indexed or sent to the chat endpoint
   // below, so one unreadable document in a multi-document selection
   // can never block the others (issue 3) — and unreadableDocuments is
   // what lets this panel name exactly which file(s) it left out
-  // (issue 4), instead of the old backend copy that only ever said
-  // "this document" (or, for the single-document route, a raw
-  // document id).
+  // (issue 4), instead of a generic error.
   const { readable: readableDocuments, unreadable: unreadableDocuments } =
     splitDocumentsByReadability(documents);
   const documentIds = readableDocuments.map((document) => document.id);
   const isMultiDocument = documentIds.length > 1;
   const hasUsableDocuments = documentIds.length > 0;
 
-  // One conversation per unique set of *usable* documents, keyed by
-  // sorted document ids (never filenames — see getConversationKey).
-  // Deliberately keyed off readableDocuments, not the raw `documents`
-  // prop: a document with no readable text never contributes
-  // anything to retrieval or the answer (see chat_service.py), so a
-  // selection of [Linux-Tutorial.pdf, Enso-Wallpaper.jpg] is, as far
-  // as the actual conversation is concerned, the same conversation as
-  // [Linux-Tutorial.pdf] alone — and should read/write the same
-  // history, including if the user later deselects the unreadable
-  // file. Stable across this component's whole lifetime either way:
-  // AssistantPanel remounts ChatPanel (via its `key`, based on the
-  // full raw selection) whenever the selection actually changes, so
-  // `documents` — and therefore this key — never changes out from
-  // under an already-mounted instance.
-  //
-  // Falls back to the full raw selection's ids when there are no
-  // usable documents at all (documentIds would otherwise collapse to
-  // the same empty key "" for every such selection) — this state
-  // never actually shows a conversation (see indexStatus === "error"
-  // below, which hides the whole message list/composer), so this
-  // only prevents unrelated all-unreadable selections from sharing
-  // one meaningless storage slot.
-  const conversationKey = getConversationKey(
-    hasUsableDocuments ? documentIds : documents.map((document) => document.id)
-  );
-
   const [indexStatus, setIndexStatus] = useState("indexing"); // indexing | ready | error
   const [indexError, setIndexError] = useState("");
 
-  // Restored lazily from storage on mount rather than always starting
-  // at [] — this is what makes returning to a document (or document
-  // combination) bring its previous conversation back automatically.
-  const [messages, setMessages] = useState(() => loadConversation(conversationKey));
+  // Initialized once, from this conversation's own persisted history
+  // (see api/conversations.js's getConversation /
+  // ConversationDetailResponse.messages) — never localStorage anymore.
+  // AssistantPanel keys this component by `conversationId` (see
+  // AssistantPanel.jsx), so a genuinely different conversation always
+  // gets a fresh mount and therefore a fresh call to this initializer
+  // — the same guarantee against one conversation's messages leaking
+  // into another's view that toInternalMessages' own tests exercise
+  // at the pure-function level (see conversationMessages.test.js).
+  const [messages, setMessages] = useState(() => toInternalMessages(initialMessages));
   const [question, setQuestion] = useState("");
   const [sendStatus, setSendStatus] = useState("idle"); // idle | sending
   const [copiedMessageId, setCopiedMessageId] = useState(null);
-
-  // V2.4 Milestone 1 UX polish: whether *this mount* restored a
-  // non-empty conversation, snapshotted once at mount rather than
-  // recomputed from `messages` on every render — recomputing would
-  // make the "Existing conversation" badge below reflect "there are
-  // currently messages" (trivially true the instant the user sends
-  // their first message in a brand-new conversation, since it's
-  // already visible right there in the message list) instead of what
-  // it's actually meant to answer: "did I already talk to this exact
-  // combination before now?" A ref (not state) because it never
-  // changes the panel's own render output on its own — it's read
-  // during render, but nothing should re-render because of it.
-  const hadExistingConversationRef = useRef(messages.length > 0);
 
   // The in-flight request's AbortController (Milestone 4: "Stop
   // generation"). This endpoint isn't streamed — there's no partial
@@ -295,7 +276,12 @@ function ChatPanel({ documents }) {
   // and discard whatever comes back", not "cut off the model
   // mid-sentence". That's still a meaningful, honest version of the
   // feature for a non-streaming architecture: it immediately frees the
-  // input for a new question instead of forcing a wait.
+  // input for a new question instead of forcing a wait. As of
+  // Milestone 2, the backend request behind this call also persists
+  // its own turn once it completes (see send_message's docstring in
+  // routes_conversations.py) — stopping only ever stops the client
+  // from waiting on/using that eventual response, same caveat
+  // api/conversations.js's sendConversationMessage already documents.
   const abortControllerRef = useRef(null);
   const copiedTimeoutRef = useRef(null);
 
@@ -325,13 +311,12 @@ function ChatPanel({ documents }) {
 
   // Tracks whether the scroll-to-latest-message effect below is
   // running for this panel's first render. AssistantPanel remounts
-  // ChatPanel (via its `key`) every time the document selection
-  // changes — opening a document from the library, or checking/
-  // unchecking one — which made the effect fire on that very first
-  // render too and jump straight to an empty, just-mounted chat panel
-  // the user hadn't asked to see. Skipping the first run keeps the
-  // intended behavior (scroll to the newest message as the
-  // conversation grows) without moving anything on mount.
+  // ChatPanel (via its `key`) every time the active conversation
+  // changes, which made the effect fire on that very first render too
+  // and jump straight to an empty, just-mounted chat panel the user
+  // hadn't asked to see. Skipping the first run keeps the intended
+  // behavior (scroll to the newest message as the conversation grows)
+  // without moving anything on mount.
   const isFirstRender = useRef(true);
 
   function scrollMessagesToBottom(behavior = "smooth") {
@@ -387,24 +372,16 @@ function ChatPanel({ documents }) {
     }
   }
 
-  // Runs once when this panel mounts. AssistantPanel keys ChatPanel by
-  // the current document selection, so selecting a different set of
-  // documents (or uploading a new one) remounts a fresh instance —
-  // that's also what starts a *different* conversation (see
-  // conversationKey / loadConversation above), with no extra reset
-  // logic needed here.
+  // Runs on mount, and again whenever the active conversation's
+  // associated *readable* document ids actually change — e.g. the
+  // user adds or removes a document from this same conversation via
+  // the library (see ChatPage.jsx's replaceConversationDocuments call)
+  // without switching conversations, which no longer remounts this
+  // component (see AssistantPanel.jsx's docstring on why).
   useEffect(() => {
     prepareChat();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentIds.join(",")]);
-
-  // Keeps this conversation's saved copy in sync as it grows (or is
-  // cleared — see handleNewConversation) so switching away and back,
-  // or refreshing the page, picks it back up from here.
-  useEffect(() => {
-    saveConversation(conversationKey, messages);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationKey, messages]);
 
   // If this mount restored a non-empty conversation (see the
   // `messages` initializer above), jump straight to its most recent
@@ -433,7 +410,7 @@ function ChatPanel({ documents }) {
 
   // Cleans up the abort controller and the "Copied!" timeout if the
   // panel unmounts mid-request/mid-feedback — e.g. the user switches
-  // documents while a question is still in flight.
+  // conversations while a question is still in flight.
   useEffect(() => {
     return () => {
       abortControllerRef.current?.abort();
@@ -441,13 +418,16 @@ function ChatPanel({ documents }) {
     };
   }, []);
 
-  // Shared by both a normal send and a regenerate — the only
-  // difference between them is what `question`/`history` they pass in
-  // and what they've already done to `messages` before calling this
-  // (see handleSubmit and handleRegenerate below), so the actual
-  // network call, abort wiring, and success/error handling live here
-  // once rather than twice.
-  async function askQuestion(trimmedQuestion, history) {
+  // The actual network call, abort wiring, and success/error handling
+  // for sending one message. Unlike the old client-managed-history
+  // version of this function, there's no `history` to build and pass
+  // — the backend loads a conversation's persisted messages itself
+  // (see ConversationMessageRequest's docstring in
+  // schemas/conversation.py) — so this only ever needs the question
+  // text and which optimistic message to reconcile once the real,
+  // persisted turn comes back (see appendPersistedTurn,
+  // utils/conversationMessages.js).
+  async function askQuestion(trimmedQuestion, optimisticUserId) {
     setSendStatus("sending");
     isAtBottomRef.current = true;
     setShowScrollToLatest(false);
@@ -456,31 +436,28 @@ function ChatPanel({ documents }) {
     abortControllerRef.current = controller;
 
     try {
-      // Single document keeps using the original, unchanged endpoint
-      // (POST /documents/{id}/chat) — same call as before multi-
-      // document chat existed. Multiple documents use the new
-      // POST /documents/chat, which also returns which document each
-      // source came from (see ChatMessageBubble).
-      const result = isMultiDocument
-        ? await sendMultiDocumentChatMessage(documentIds, trimmedQuestion, {
-            history,
-            signal: controller.signal,
-          })
-        : await sendChatMessage(documentIds[0], trimmedQuestion, {
-            history,
-            signal: controller.signal,
-          });
-
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: `${Date.now()}-assistant`,
-          role: "assistant",
-          content: result.answer,
-          sources: result.sources,
-          createdAt: Date.now(),
-        },
-      ]);
+      const response = await sendConversationMessage(conversationId, trimmedQuestion, {
+        signal: controller.signal,
+      });
+      setMessages((previous) => appendPersistedTurn(previous, response, optimisticUserId));
+      // Lets ChatPage bump this conversation to the top of the
+      // sidebar list, mirroring the backend's own "sending a message
+      // bumps updated_at" behavior (see send_message's docstring)
+      // without a full GET /conversations round trip just to re-sort
+      // a list the client already has (see
+      // utils/conversationSelection.js's touchConversation) — and
+      // also lets it fold `response`'s two persisted (backend-shape)
+      // messages into its own cached `activeConversation.messages`.
+      // That cache only otherwise gets set once, when the
+      // conversation is first loaded (see ChatPage.jsx's
+      // loadConversationDetail) — without this, it would go stale the
+      // instant a message is sent, and AssistantPanel's own layout
+      // unmounts/remounts this component whenever the document chip
+      // row goes from 0 to 1+ chips for the *same* conversation (see
+      // AssistantPanel.jsx), which would silently re-initialize
+      // `messages` from that stale cache and appear to erase whatever
+      // was just sent.
+      onMessageSent?.(conversationId, response);
     } catch (error) {
       if (error.name === "AbortError") {
         // User pressed Stop — an intentional cancellation, not a
@@ -515,49 +492,23 @@ function ChatPanel({ documents }) {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion || sendStatus === "sending" || indexStatus !== "ready") return;
 
-    // Turns already in this conversation, sent along so the backend
-    // can resolve follow-ups like "explain that more simply" without
-    // the user repeating the original topic. Error bubbles aren't
-    // real assistant content, so they're excluded. How much of this
-    // actually gets used is the backend's call (see MAX_HISTORY_TURNS
-    // in chat_service.py) — this just relays what's currently here.
-    const history = messages
-      .filter((message) => !message.isError)
-      .map((message) => ({ role: message.role, content: message.content }));
-
+    // Shown immediately so the composer feels responsive; replaced
+    // in-place by the real, persisted user message once the backend
+    // responds (see askQuestion -> appendPersistedTurn above). Its id
+    // only ever needs to be unique among messages currently on
+    // screen — sendStatus already prevents a second send from
+    // starting while this one is still in flight, so there's never
+    // more than one optimistic message at a time to collide with.
+    const optimisticId = `temp-${Date.now()}`;
     const userMessage = {
-      id: `${Date.now()}-user`,
+      id: optimisticId,
       role: "user",
       content: trimmedQuestion,
       createdAt: Date.now(),
     };
     setMessages((previous) => [...previous, userMessage]);
     setQuestion("");
-    askQuestion(trimmedQuestion, history);
-  }
-
-  // Regenerate (Milestone 4): re-asks the same last question, in place
-  // of the last assistant answer. Only ever enabled for the most
-  // recent turn (see ChatMessageBubble's `canRegenerate`), same as
-  // ChatGPT/Claude — regenerating an answer from the middle of a
-  // conversation would leave the turns after it referring to an
-  // answer that no longer exists.
-  function handleRegenerate() {
-    if (sendStatus === "sending" || messages.length < 2) return;
-    const lastMessage = messages[messages.length - 1];
-    const lastUserMessage = messages[messages.length - 2];
-    if (lastMessage.role !== "assistant" || lastMessage.isError) return;
-    if (lastUserMessage.role !== "user") return;
-
-    const history = messages
-      .slice(0, messages.length - 2)
-      .filter((message) => !message.isError)
-      .map((message) => ({ role: message.role, content: message.content }));
-
-    // Drop the answer being replaced first, so the "Thinking..."
-    // indicator appears in its place while the new one is generated.
-    setMessages((previous) => previous.slice(0, previous.length - 1));
-    askQuestion(lastUserMessage.content, history);
+    askQuestion(trimmedQuestion, optimisticId);
   }
 
   function handleStop() {
@@ -579,38 +530,6 @@ function ChatPanel({ documents }) {
       });
   }
 
-  // Starts a fresh conversation for the *current* chat context only.
-  // Deliberately narrow: it clears `messages` and this conversation's
-  // entry in storage, and nothing else — not other conversations
-  // (they're stored under their own keys), not this document's
-  // summary/flashcards/quiz/mind map (entirely separate state, owned
-  // by StudyWorkspace's panels, never touched here). Guarded
-  // internally (not just via the button's `disabled`) so the Ctrl/Cmd+
-  // Shift+N shortcut below can call it unconditionally and safely.
-  function handleNewConversation() {
-    if (messages.length === 0 || sendStatus === "sending") return;
-    setMessages([]);
-    clearConversation(conversationKey);
-    setQuestion("");
-    isAtBottomRef.current = true;
-    setShowScrollToLatest(false);
-    // The conversation this badge described no longer exists — clear
-    // it too, or starting fresh would still be labeled "Existing
-    // conversation" for the rest of this mount.
-    hadExistingConversationRef.current = false;
-  }
-
-  // Ctrl/Cmd+Shift+N (Milestone 4) is caught globally in AppShell (it
-  // isn't scoped to any particular input) and relayed here via a
-  // CustomEvent — see utils/shortcutEvents.js for why. Only the
-  // currently-mounted ChatPanel, if any, is listening, so this is a
-  // safe no-op whenever the assistant panel has no document open.
-  useEffect(() => {
-    window.addEventListener(NEW_CONVERSATION_EVENT, handleNewConversation);
-    return () => window.removeEventListener(NEW_CONVERSATION_EVENT, handleNewConversation);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, sendStatus, conversationKey]);
-
   // V2.4 Milestone 1 UX polish: the composer grows with the prompt (up
   // to COMPOSER_MAX_HEIGHT_PX, then scrolls internally instead — see
   // the textarea's `style` below) rather than staying a fixed single
@@ -618,16 +537,6 @@ function ChatPanel({ documents }) {
   // lets the box shrink back down again too (e.g. after clearing a
   // long question on send) — without it, scrollHeight would only
   // ever reflect the tallest the box has already been.
-  //
-  // Issue 4 follow-up (manual-testing feedback): the growth itself
-  // worked, but with no `transition` on the textarea, each line the
-  // box grew by was an instant snap rather than a smooth resize —
-  // felt abrupt, especially on the first jump from one line to two.
-  // The `transition-[height]` class on the textarea below is what's
-  // actually responsible for the smoothing; this effect still just
-  // computes the target pixel height every keystroke, exactly as
-  // before — the browser animates the change on its own once a
-  // transition is declared, no extra JS needed.
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -685,44 +594,16 @@ function ChatPanel({ documents }) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold tracking-tight text-slate-900">Chat</h3>
-          {/* V2.4 Milestone 1 UX polish (issue 1): the only signal
-              this document combination had prior history used to be
-              noticing the restored bubbles further down — easy to
-              miss, and no signal at all until indexing finished. This
-              badge answers "have I chatted with this combination
-              before" immediately, without introducing any new
-              persistence — see hadExistingConversationRef above. */}
-          {hadExistingConversationRef.current && (
+        <h3 className="text-sm font-semibold tracking-tight text-slate-900">Chat</h3>
+        {indexStatus === "indexing" && (
+          <span className="flex items-center gap-2 text-xs text-slate-500">
             <span
-              className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2 py-0.5 text-[11px] font-medium text-accent-700"
-              title="You've chatted with this document combination before — your previous messages are shown below."
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-accent-500" aria-hidden="true" />
-              Existing conversation
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {indexStatus === "indexing" && (
-            <span className="flex items-center gap-2 text-xs text-slate-500">
-              <span
-                className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-accent-600"
-                aria-hidden="true"
-              />
-              Preparing {documentsLabel}...
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handleNewConversation}
-            disabled={messages.length === 0 || isSending}
-            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            New conversation
-          </button>
-        </div>
+              className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-accent-600"
+              aria-hidden="true"
+            />
+            Preparing {documentsLabel}...
+          </span>
+        )}
       </div>
 
       {/* Which documents this conversation is grounded in is shown by
@@ -744,6 +625,23 @@ function ChatPanel({ documents }) {
         </div>
       )}
 
+      {/* V2.4 Milestone 2 Phase 3 QA fix (issue 3): this used to be
+          `{indexStatus !== "error" && (<>...messages + composer...</>)}`
+          — an index/prep failure (most commonly: every selected
+          document has no readable text) replaced the *entire* message
+          area with just this banner, hiding a conversation's already-
+          persisted history rather than showing it alongside the
+          banner, exactly like the partial (some readable, some not)
+          case already does via unreadableDocumentsNotice above.
+          Persisted messages were never actually lost — `messages` was
+          always correctly initialized from `initialMessages` (see the
+          useState above) — they were just not rendered while blocked.
+          The fix: this banner and the message list are no longer
+          mutually exclusive: the banner explains what's blocked, the
+          composer is disabled the exact same way it already was
+          (`inputDisabled` below still gates on `indexStatus !==
+          "ready"`), and the conversation's history stays visible
+          underneath either way. */}
       {indexStatus === "error" && (
         <div
           className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
@@ -766,124 +664,117 @@ function ChatPanel({ documents }) {
         </div>
       )}
 
-      {indexStatus !== "error" && (
-        <>
-          <div className="relative min-h-0 flex-1">
-            <div
-              ref={messagesContainerRef}
-              onScroll={handleMessagesScroll}
-              className="h-full max-h-[28rem] space-y-4 overflow-y-auto rounded-lg bg-slate-50/60 p-4 lg:max-h-none"
-            >
-              {messages.length === 0 && indexStatus === "ready" && (
-                <p className="text-sm text-slate-500">
-                  Ask a question about the selected {documentsLabel} to get started.
-                </p>
-              )}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleMessagesScroll}
+          className="h-full max-h-[28rem] space-y-4 overflow-y-auto rounded-lg bg-slate-50/60 p-4 lg:max-h-none"
+        >
+          {messages.length === 0 && indexStatus === "ready" && (
+            <p className="text-sm text-slate-500">
+              Ask a question about the selected {documentsLabel} to get started.
+            </p>
+          )}
 
-              {messages.map((message, index) => (
-                <ChatMessageBubble
-                  key={message.id}
-                  message={message}
-                  isLast={index === messages.length - 1}
-                  isSending={isSending}
-                  copiedMessageId={copiedMessageId}
-                  onCopy={handleCopyMessage}
-                  onRegenerate={handleRegenerate}
-                />
-              ))}
-
-              {isSending && (
-                <div className="flex justify-start">
-                  <div
-                    className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-slate-200 bg-surface px-4 py-3"
-                    role="status"
-                  >
-                    <span className="sr-only">Thinking…</span>
-                    <span
-                      className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.3s]"
-                      aria-hidden="true"
-                    />
-                    <span
-                      className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.15s]"
-                      aria-hidden="true"
-                    />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300" aria-hidden="true" />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {showScrollToLatest && (
-              <button
-                type="button"
-                onClick={() => {
-                  scrollMessagesToBottom();
-                  setShowScrollToLatest(false);
-                }}
-                className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-slate-900/90 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur transition-colors hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
-              >
-                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
-                  <path
-                    fillRule="evenodd"
-                    d="M10 3a.75.75 0 0 1 .75.75v9.69l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 1 1 1.06-1.06l2.72 2.72V3.75A.75.75 0 0 1 10 3Z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                Scroll to latest
-              </button>
-            )}
-          </div>
-
-          <form onSubmit={handleSubmit} className="flex shrink-0 items-end gap-2">
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              onKeyDown={handleQuestionKeyDown}
-              disabled={inputDisabled}
-              placeholder={
-                indexStatus === "indexing"
-                  ? `Preparing ${documentsLabel}...`
-                  : `Ask about the selected ${documentsLabel}...`
-              }
-              // maxHeight is a hard CSS ceiling that backs up the
-              // scrollHeight-based sizing in the auto-grow effect
-              // above; overflow-y-auto only actually shows a
-              // scrollbar once content exceeds that ceiling, so a
-              // short prompt never gets one. This is also what
-              // guarantees a long pasted prompt stays fully
-              // reviewable — scrollable inside the box — instead of
-              // extending up past the visible composer. break-words
-              // (issue 4) stops a single very long unbroken token
-              // (a URL, a hash) from pushing the box wider instead of
-              // wrapping — textareas already soft-wrap normal text on
-              // their own, but not an unbroken run with no spaces to
-              // wrap at.
-              style={{ maxHeight: `${COMPOSER_MAX_HEIGHT_PX}px` }}
-              className="min-w-0 flex-1 resize-none overflow-y-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-[height] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-60"
+          {messages.map((message) => (
+            <ChatMessageBubble
+              key={message.id}
+              message={message}
+              copiedMessageId={copiedMessageId}
+              onCopy={handleCopyMessage}
             />
-            {isSending ? (
-              <button
-                type="button"
-                onClick={handleStop}
-                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-300 bg-surface px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
+          ))}
+
+          {isSending && (
+            <div className="flex justify-start">
+              <div
+                className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-slate-200 bg-surface px-4 py-3"
+                role="status"
               >
-                <span className="h-2 w-2 rounded-sm bg-slate-500" aria-hidden="true" />
-                Stop
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={inputDisabled || !question.trim()}
-                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-accent-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
-              >
-                Send
-              </button>
-            )}
-          </form>
-        </>
-      )}
+                <span className="sr-only">Thinking…</span>
+                <span
+                  className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.3s]"
+                  aria-hidden="true"
+                />
+                <span
+                  className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.15s]"
+                  aria-hidden="true"
+                />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300" aria-hidden="true" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {showScrollToLatest && (
+          <button
+            type="button"
+            onClick={() => {
+              scrollMessagesToBottom();
+              setShowScrollToLatest(false);
+            }}
+            className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-slate-900/90 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur transition-colors hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
+              <path
+                fillRule="evenodd"
+                d="M10 3a.75.75 0 0 1 .75.75v9.69l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 1 1 1.06-1.06l2.72 2.72V3.75A.75.75 0 0 1 10 3Z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Scroll to latest
+          </button>
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="flex shrink-0 items-end gap-2">
+        <textarea
+          ref={textareaRef}
+          rows={1}
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          onKeyDown={handleQuestionKeyDown}
+          disabled={inputDisabled}
+          placeholder={
+            indexStatus === "indexing"
+              ? `Preparing ${documentsLabel}...`
+              : `Ask about the selected ${documentsLabel}...`
+          }
+          // maxHeight is a hard CSS ceiling that backs up the
+          // scrollHeight-based sizing in the auto-grow effect
+          // above; overflow-y-auto only actually shows a
+          // scrollbar once content exceeds that ceiling, so a
+          // short prompt never gets one. This is also what
+          // guarantees a long pasted prompt stays fully
+          // reviewable — scrollable inside the box — instead of
+          // extending up past the visible composer. break-words
+          // (issue 4) stops a single very long unbroken token
+          // (a URL, a hash) from pushing the box wider instead of
+          // wrapping — textareas already soft-wrap normal text on
+          // their own, but not an unbroken run with no spaces to
+          // wrap at.
+          style={{ maxHeight: `${COMPOSER_MAX_HEIGHT_PX}px` }}
+          className="min-w-0 flex-1 resize-none overflow-y-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-[height] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-60"
+        />
+        {isSending ? (
+          <button
+            type="button"
+            onClick={handleStop}
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-300 bg-surface px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
+          >
+            <span className="h-2 w-2 rounded-sm bg-slate-500" aria-hidden="true" />
+            Stop
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={inputDisabled || !question.trim()}
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-accent-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:opacity-40"
+          >
+            Send
+          </button>
+        )}
+      </form>
     </div>
   );
 }

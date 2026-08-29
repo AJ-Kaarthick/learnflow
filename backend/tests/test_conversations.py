@@ -365,3 +365,60 @@ def test_mixed_valid_and_missing_documents_in_a_conversation():
     response = client.get(f"/api/v1/conversations/{created['id']}")
     assert response.status_code == 200
     assert [doc["id"] for doc in response.json()["documents"]] == [keep_document]
+
+
+# --- timestamp timezone (V2.4 Milestone 2 Phase 3 QA, issue 2) --------
+#
+# SQLite drops tzinfo from every DateTime column on write (see
+# db/models.py's `datetime.now(timezone.utc)` default -- the column
+# itself has no `timezone=True`, since SQLite has no native
+# timezone-aware type to back one). Reading a row back therefore
+# yields a *naive* datetime whose digits are UTC but whose `tzinfo` is
+# None. Serializing that naively (no explicit offset) is what caused
+# the actual manual-QA bug: a browser's `new Date(isoString)` treats
+# an offset-less ISO-8601 string as *local* time, not UTC, so a
+# conversation created moments ago showed as several hours old for
+# anyone not in UTC+0. These tests assert the API response always
+# carries an explicit UTC marker so that ambiguity can never reach the
+# frontend -- see schemas/conversation.py's `_assume_utc`.
+
+
+def test_new_conversation_timestamps_carry_explicit_utc_offset():
+    created = client.post("/api/v1/conversations", json={}).json()
+
+    for field in ("created_at", "updated_at"):
+        value = created[field]
+        assert value.endswith("Z") or "+" in value.split("T", 1)[1], (
+            f"{field}={value!r} has no explicit UTC offset -- a client's "
+            "new Date(...) would parse it as local time, not UTC."
+        )
+
+
+def test_get_conversation_timestamps_carry_explicit_utc_offset():
+    created = client.post("/api/v1/conversations", json={}).json()
+
+    fetched = client.get(f"/api/v1/conversations/{created['id']}").json()
+    for field in ("created_at", "updated_at"):
+        value = fetched[field]
+        assert value.endswith("Z") or "+" in value.split("T", 1)[1]
+
+
+def test_new_conversation_created_at_is_actually_recent():
+    """
+    The real symptom reported in manual QA: not just "no offset", but
+    a freshly created conversation's timestamp parsing as if it were
+    hours in the past. Parses the response the same way a spec-
+    compliant client would (fromisoformat handles both "Z" and
+    "+00:00" once normalized) and asserts it lands within a few
+    seconds of "now" -- proving there's no hidden multi-hour skew, not
+    just that a suffix is present.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    before = datetime.now(timezone.utc)
+    created = client.post("/api/v1/conversations", json={}).json()
+    after = datetime.now(timezone.utc)
+
+    parsed = datetime.fromisoformat(created["created_at"].replace("Z", "+00:00"))
+    assert parsed.tzinfo is not None
+    assert before - timedelta(seconds=2) <= parsed <= after + timedelta(seconds=2)

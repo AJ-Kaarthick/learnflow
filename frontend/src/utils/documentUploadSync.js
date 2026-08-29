@@ -29,24 +29,34 @@ import { toDocumentChip } from "./documentChip.js";
  * documentChip.js gives for extracting toDocumentChip — instead of
  * something only reachable, and only breakable, through full
  * component rendering.
+ *
+ * BUG THIS FIXES (V2.4 Milestone 2 Phase 3 QA, issue 4): uploading a
+ * new document from Chat's "Add documents" picker while a conversation
+ * already had exactly one document selected (e.g. Linux-Tutorial.pdf)
+ * silently *replaced* that selection with just the new upload, instead
+ * of adding the new document alongside it. Root cause: this function
+ * used to borrow ChatPage's `handleOpenForChat` rule ("click = single,
+ * checkbox = add another", i.e. 0-or-1-selected replaces, 2+ appends)
+ * for uploads too. That rule is correct for *opening* an existing
+ * document from the library — clicking a document is "make this my
+ * one thing to chat with" — but an *upload* is a different action with
+ * a different intent: the user was already mid-conversation and
+ * explicitly asked to add a new document to it, never to replace what
+ * was already selected. A brand-new upload is therefore always merged
+ * into the existing selection, regardless of how many documents were
+ * already selected — the only thing that changes the *count* of
+ * previously selected documents here is if the same document was
+ * somehow already selected (a re-upload), which is deduplicated rather
+ * than added twice, exactly as it already was in multi-document mode.
  */
 export function resolveChatUploadSync(previousSelectedDocuments, newDocument) {
   const alreadySelected = previousSelectedDocuments.some(
     (selected) => selected.id === newDocument.id
   );
 
-  // Same "click = single, checkbox = add another" reasoning as
-  // ChatPage's handleOpenForChat: in single/automatic mode (0 or 1
-  // selected) a new upload replaces the selection; in multi-document
-  // mode it's appended rather than derailing an in-progress
-  // conversation, unless it's already selected (re-uploading the same
-  // document shouldn't duplicate its chip).
-  const selectedDocuments =
-    previousSelectedDocuments.length <= 1
-      ? [toDocumentChip(newDocument)]
-      : alreadySelected
-        ? previousSelectedDocuments
-        : [...previousSelectedDocuments, toDocumentChip(newDocument)];
+  const selectedDocuments = alreadySelected
+    ? previousSelectedDocuments
+    : [...previousSelectedDocuments, toDocumentChip(newDocument)];
 
   return { selectedDocuments, shouldRefreshLibrary: true };
 }

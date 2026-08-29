@@ -32,11 +32,13 @@ async function loadCachedContent(documentId) {
 // old openDocument's automatic-chat-selection comment, now gone) —
 // moves to its own page (ChatPage.jsx). Study and Chat now restore
 // and persist their own halves of workspace state independently
-// (`activeDocumentId` here, `selectedDocumentIds` in ChatPage) rather
-// than one page owning both and syncing them, which persistence.js
-// already stored as two separate fields even before this milestone —
-// so nothing about the storage schema needed to change, only which
-// component reads/writes each piece.
+// (`activeDocumentId` here; ChatPage's half was `selectedDocumentIds`
+// through V2.4 Milestone 1, and is `activeConversationId` as of
+// Milestone 2's server-backed conversations — see persistence.js)
+// rather than one page owning both and syncing them, which
+// persistence.js already stored as separate fields even before this
+// milestone — so nothing about *this* page's own storage needed to
+// change, only Chat's half.
 function StudyPage() {
   // Bumped whenever an action outside LibraryPanel's own search/sort
   // controls changes the underlying document data (open, rename,

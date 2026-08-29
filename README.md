@@ -291,8 +291,6 @@ LearnFlow currently supports:
 - Added regression tests for document readiness and Chat document selection
 
 
-#### Milestone 2 — Conversation Architecture
-
 #### Milestone 2 — Persistent Conversations
 
 ##### Phase 1 — Backend Conversation Foundation ✅
@@ -310,6 +308,25 @@ LearnFlow currently supports:
 - Persistent source and grounding metadata
 - Conversation activity tracking
 - Transaction-safe message persistence
+- Fixed timezone-aware conversation timestamps
+- Preserved existing Chat history when selected documents are unreadable
+- Fixed Chat uploads replacing existing document selection
+- Improved conversation deletion state handling
+
+##### Phase 3 — Frontend Conversation Management ✅
+
+- Conversation list in Chat sidebar
+- Conversation switching
+- New Conversation workflow
+- Conversation deletion from the UI
+- Active-conversation fallback after deletion
+- Conversation rename support
+- Persistent message history restoration
+- Persistent conversation document selection
+- Conversation timestamp handling
+- Chat history preserved when selected documents are unreadable
+- Chat document selection preserved when uploading additional documents
+- Frontend regression tests for conversation and document-selection behavior
 
 ### V3
 - Authentication
@@ -414,13 +431,12 @@ npm run dev
 - Persistent conversation messages
 
 ### Planned
+
+- Automatic conversation titles
+- Advanced conversation management improvements
+- Persistent conversation document-context improvements
+- Migration from localStorage conversation state to server-backed conversations
 - Authentication
 - PostgreSQL
 - Docker
 - Deployment
-- ChatGPT-style conversation management
-- Automatic conversation titles
-- Conversation renaming
-- Conversation switching
-- Persistent conversation document context
-- Migration from local conversation state to server persistence

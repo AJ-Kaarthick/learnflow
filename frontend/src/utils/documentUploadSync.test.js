@@ -82,11 +82,11 @@ test("no prior selection: uploaded document becomes the sole selection", () => {
   assert.deepEqual(selectedDocuments.map((doc) => doc.id), ["new-1"]);
 });
 
-test("single-document mode: uploading replaces the existing selection", () => {
-  const existing = fullDocument({ id: "existing", original_filename: "Old.pdf" });
+test("single-document mode: uploading adds to the existing selection rather than replacing it (V2.4 M2 Phase 3 QA fix)", () => {
+  const existing = fullDocument({ id: "existing", original_filename: "Linux-Tutorial.pdf" });
   const uploaded = fullDocument({ id: "new-1", original_filename: "Notes.pdf" });
   const { selectedDocuments } = resolveChatUploadSync([existing], uploaded);
-  assert.deepEqual(selectedDocuments.map((doc) => doc.id), ["new-1"]);
+  assert.deepEqual(selectedDocuments.map((doc) => doc.id), ["existing", "new-1"]);
 });
 
 test("multi-document mode: uploading appends without derailing the existing selection", () => {
@@ -133,18 +133,27 @@ test("readable + unreadable mix (manual test case 5): uploading a readable doc a
     character_count: 4200,
   });
 
-  // Single unreadable document selected, then a readable one is
-  // uploaded: single/automatic mode (<=1 selected) replaces, matching
-  // handleOpenForChat's click-to-replace behavior for uploads too.
+  // A single (unreadable) document is already selected; uploading a
+  // readable one adds it alongside — never replaces — the existing
+  // selection (V2.4 Milestone 2 Phase 3 QA fix, issue 4).
   const { selectedDocuments } = resolveChatUploadSync([unreadableExisting], uploadedReadable);
-  assert.deepEqual(selectedDocuments.map((doc) => doc.id), ["t1"]);
+  assert.deepEqual(selectedDocuments.map((doc) => doc.id), ["y1", "t1"]);
 
-  // Now simulate the mixed multi-document case directly: both
-  // selected together (e.g. the unreadable doc checked back on after
-  // the upload) still splits correctly.
-  const { readable, unreadable } = splitDocumentsByReadability([unreadableExisting, uploadedReadable].map(
-    (doc) => resolveChatUploadSync([], doc).selectedDocuments[0]
-  ));
+  const { readable, unreadable } = splitDocumentsByReadability(selectedDocuments);
   assert.deepEqual(readable.map((doc) => doc.id), ["t1"]);
   assert.deepEqual(unreadable.map((doc) => doc.id), ["y1"]);
+});
+
+test("uploading a new document never drops a previously selected one, however many were already selected (0, 1, or 2+)", () => {
+  const a = fullDocument({ id: "a", original_filename: "A.pdf" });
+  const uploaded = fullDocument({ id: "new-1", original_filename: "Notes.pdf" });
+
+  assert.deepEqual(
+    resolveChatUploadSync([], uploaded).selectedDocuments.map((doc) => doc.id),
+    ["new-1"]
+  );
+  assert.deepEqual(
+    resolveChatUploadSync([a], uploaded).selectedDocuments.map((doc) => doc.id),
+    ["a", "new-1"]
+  );
 });

@@ -213,8 +213,8 @@ backend/app/services/ocr/
 - Retrieval is performed before generation
 - Answers are grounded in retrieved document context
 - Chat does not implicitly trigger indexing
-- Stateless chat requests
-- Conversation history is client-managed
+- Server-backed persistent chat conversations
+- Conversation history is persisted server-side
 - Recent conversation provides conversational context only
 - Conversation history is never used as factual evidence
 - Retrieval is performed using the current user query
@@ -287,7 +287,7 @@ Implemented:
 - Consistent download workflow across all learning artifacts
 
 
-## UX Principles (V2)
+## UX Principles (V2 — Legacy Chat Architecture)
 
 V2 introduces conversational interaction while preserving the existing application architecture.
 
@@ -600,20 +600,27 @@ V2.4 introduces server-backed persistent conversations. The conversation
 architecture is being implemented incrementally across multiple phases.
 
 **Implemented so far:**
+
 - Conversation and Message persistence
 - Conversation-document associations
 - Conversation CRUD APIs
 - Persistent message/RAG endpoint
 - Database-backed conversation history
 - Persistent source and grounding metadata
+- Frontend conversation management
+- Conversation creation and switching
+- Conversation deletion
+- Conversation rename support
+- Persistent conversation history restoration
+- Chat document-selection synchronization
+- Conversation timestamp handling
+- Regression coverage for conversation lifecycle and persistence behavior
 
 **Planned next:**
-- Frontend conversation management
+
 - Automatic conversation title generation
-- User-controlled conversation renaming
-- Conversation switching and creation
-- Dynamic document association from the Chat UI
-- Migration from the previous localStorage conversation state
+- Further migration from localStorage conversation state to server persistence
+- Further improvements to persistent conversation document context
 
 A conversation consists of:
 
@@ -621,6 +628,62 @@ Conversation
 ├── Messages
 └── ConversationDocuments
         └── Documents
+
+
+### V2.4 Conversation Persistence
+
+The original V2 chat architecture used client-managed conversation history and
+stateless chat requests.
+
+V2.4 introduces server-backed persistent conversations and messages. The
+conversation records and message history are now persisted in SQLite, while the
+underlying RAG retrieval architecture remains unchanged.
+
+This migration is being performed incrementally, with legacy localStorage
+conversation state retained where required during the transition.  
+
+### Chat Document Selection
+
+Chat document selection is maintained independently from ordinary document
+opening behavior.
+
+Adding a document through the Chat upload workflow merges the newly uploaded
+document into the current Chat selection rather than replacing the existing
+selection.
+
+Duplicate document selections are prevented.
+
+Unreadable documents are identified and do not prevent readable documents from
+being used for Chat.
+
+### Frontend Conversation Management
+
+The Chat workspace provides a persistent conversation interface backed by
+server-side conversation records.
+
+User
+ ↓
+Chat Sidebar
+ ↓
+Conversation Selection
+ ↓
+Conversation API
+ ↓
+Persistent Conversation
+ ↓
+Persistent Messages
+ ↓
+Chat Workspace
+
+The frontend supports:
+
+- Creating conversations
+- Listing conversations
+- Switching conversations
+- Renaming conversations
+- Deleting conversations
+- Restoring conversation history
+- Maintaining the selected document context
 
 #### Conversation
 

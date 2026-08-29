@@ -1468,3 +1468,83 @@ This phase establishes the backend persistence layer required for the upcoming p
 - Existing RAG/chat tests remain passing
 - Conversation message persistence verified through dedicated tests
 - No frontend changes were made during these phases
+
+---
+
+## V2.4 — Milestone 2
+### Phase 3 — Frontend Conversation Management and Reliability Fixes
+
+
+## Goal
+
+Complete the frontend layer for persistent conversations and resolve
+reliability issues discovered during integration testing.
+
+## Features Completed
+
+- Added frontend conversation API integration
+- Added conversation list and switching
+- Added New Conversation workflow
+- Added conversation deletion
+- Added active-conversation fallback after deletion
+- Added conversation rename support
+- Restored persistent conversation messages from the backend
+- Preserved conversation history across page refreshes
+- Added conversation timestamp handling
+- Preserved Chat history when selected documents are unreadable
+- Fixed Chat uploads replacing existing document selections
+- Preserved multi-document selection when adding new documents
+- Added frontend regression tests for conversation lifecycle and document selection
+
+## Problems Faced
+
+- SQLite datetime values could lose timezone information during serialization,
+  causing newly created conversations to appear several hours old in the UI.
+- When all selected documents were unreadable, the Chat error state replaced
+  the entire message history instead of displaying the history alongside the
+  warning.
+- Uploading a document from Chat could replace the existing document selection
+  instead of merging the new document into it.
+- The frontend had no conversation deletion workflow even though the backend
+  API was already implemented.
+
+## Solutions
+
+- Added timezone-aware datetime normalization before API serialization.
+- Updated Chat rendering so unreadable-document warnings do not hide existing
+  conversation history.
+- Changed Chat upload synchronization to merge newly uploaded documents with
+  the existing selection.
+- Added frontend conversation deletion and state-management logic.
+- Reused the existing conversation creation workflow when the final active
+  conversation is deleted.
+- Added regression tests for the affected behaviors.
+
+## Verification
+
+- Backend tests: **326 passed**
+- Frontend tests: **84 passed**
+- Frontend production build successful
+- Conversation deletion manually verified
+- New Conversation workflow manually verified
+- Conversation switching manually verified
+- Conversation history restoration manually verified
+- Conversation timestamps verified
+- Unreadable-document Chat history behavior verified
+- Chat document upload/selection synchronization verified
+- Existing single-document Chat behavior preserved
+- Existing multi-document Chat behavior preserved
+- Existing feature regression testing completed
+
+## Result
+
+LearnFlow now provides a complete frontend workflow for persistent
+conversations while preserving the existing grounded Chat architecture.
+
+Users can create, switch, rename, and delete conversations, restore their
+conversation history, and continue working with selected documents across
+sessions. Reliability issues involving timestamps, unreadable documents, and
+Chat document uploads were also resolved.
+
+Automatic conversation title generation remains intentionally deferred to a
+future phase.
