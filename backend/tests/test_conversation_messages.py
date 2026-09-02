@@ -101,6 +101,30 @@ class FakeAIProvider(AIProvider):
     def call_count(self) -> int:
         return len(self.prompts)
 
+    @property
+    def chat_prompt(self) -> str | None:
+        """
+        The prompt actually used to answer the question -- as opposed
+        to any *other* call this same shared provider instance may
+        have received during the same request. V2.4 Milestone 2 Phase 4
+        (automatic conversation naming, conversation_titling.py) also
+        calls generate_text on this exact ai_provider, for the first
+        message of a conversation, to generate a title -- reusing the
+        existing AI provider abstraction rather than introducing a
+        second one, per that phase's brief. `last_prompt` above is
+        therefore no longer reliably "the chat prompt" on such a
+        message; tests that care specifically about what the *chat*
+        prompt was grounded in (e.g. which document excerpts it
+        contains) should use this instead. Distinguishes a title
+        prompt by conversation_titling's own distinctive wording
+        ("descriptive title") -- the same "recognize a call site by
+        distinctive prompt text" technique
+        test_conversational_retrieval.py's ScriptedAIProvider already
+        uses for condense-vs-generate.
+        """
+        chat_prompts = [prompt for prompt in self.prompts if "descriptive title" not in prompt]
+        return chat_prompts[-1] if chat_prompts else None
+
 
 class FailingAIProvider(AIProvider):
     """Simulates the AI service being down."""
@@ -363,7 +387,7 @@ def test_conversation_documents_determine_rag_document_scope():
         json={"content": "What does photosynthesis convert?"},
     )
 
-    assert "Photosynthesis converts light energy into chemical energy." in fake_ai_provider.last_prompt
+    assert "Photosynthesis converts light energy into chemical energy." in fake_ai_provider.chat_prompt
 
     app.dependency_overrides.clear()
 
@@ -390,7 +414,7 @@ def test_multi_document_conversation_uses_existing_multi_document_retrieval():
     )
 
     assert response.status_code == 201
-    prompt = fake_ai_provider.last_prompt
+    prompt = fake_ai_provider.chat_prompt
     assert "cats.pdf" in prompt
     assert "dogs.pdf" in prompt
 

@@ -92,6 +92,42 @@ export function touchConversation(conversations, conversationId, updatedAtIso) {
 }
 
 /**
+ * After a message send also generated (and persisted) a new title for
+ * the conversation it was sent in -- V2.4 Milestone 2 Phase 4,
+ * automatic conversation naming; see
+ * ConversationMessageResponse.generated_title in
+ * schemas/conversation.py, and ChatPage.jsx's handleMessageSent, which
+ * is this function's only caller -- updates that conversation's title
+ * in the sidebar's local list, the same "update this one field on
+ * this one entry, leave everything else untouched" shape as
+ * renameConversationInList above.
+ *
+ * Deliberately does *not* reorder the list, matching
+ * renameConversationInList's own reasoning: reordering "most recently
+ * active first" is touchConversation's job (already called separately
+ * for the same message-send -- see handleMessageSent), not this
+ * function's. Keeping the two concerns (re-sort for activity, update
+ * title text) as separate pure functions -- rather than growing
+ * touchConversation a `title` parameter -- means a caller that only
+ * wants one of the two (e.g. a future manual-rename-only or
+ * activity-only path) never has to pass `undefined` for the other.
+ *
+ * `generatedTitle` is expected to already be a non-empty string --
+ * ChatPage.jsx only calls this when
+ * response.generated_title is truthy (see handleMessageSent), so
+ * there's no "was a title actually generated" branch to make here;
+ * this function's only job is applying one once the caller has
+ * already decided there is one. A conversationId that isn't in the
+ * list is a no-op, same reasoning as every other function in this
+ * module.
+ */
+export function applyGeneratedTitle(conversations, conversationId, generatedTitle) {
+  return conversations.map((conversation) =>
+    conversation.id === conversationId ? { ...conversation, title: generatedTitle } : conversation
+  );
+}
+
+/**
  * Removes a deleted conversation (DELETE /conversations/{id} already
  * succeeded server-side — see api/conversations.js's
  * deleteConversation and ChatPage.jsx's handleDeleteConversation,

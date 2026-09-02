@@ -1548,3 +1548,69 @@ Chat document uploads were also resolved.
 
 Automatic conversation title generation remains intentionally deferred to a
 future phase.
+
+
+---
+
+## V2.4 — Milestone 2
+
+### Phase 4 — AI Conversation Titles
+
+## Goal
+
+Add automatic, semantic conversation titles while preserving manual conversation
+renaming and the existing persistent Chat workflow.
+
+## Features Completed
+
+- Added AI-generated conversation titles
+- Generated titles from the first meaningful user message
+- Added selected document filenames as contextual information for title generation
+- Added semantic title generation instead of raw filename concatenation
+- Added multi-document comparison-aware title generation
+- Preserved manually renamed conversation titles
+- Limited automatic generation to the initial conversation title
+- Returned the generated title with the message response for immediate frontend
+  sidebar updates
+- Added graceful title-generation failure handling
+- Added backend regression tests for title generation and naming behavior
+
+## Problems Faced
+
+- Initial automatic titles could be overly generic when generated only from the
+  user's first prompt.
+- Document filenames were available during Chat processing but were not initially
+  provided to the title-generation service.
+- Multi-document conversations required document context without forcing every
+  selected document into the generated title.
+
+## Solutions
+
+- Made the user prompt the primary signal for semantic title generation.
+- Passed selected document filenames to the title-generation service as contextual
+  information.
+- Added explicit title-generation rules so document names provide context rather
+  than being mechanically concatenated.
+- Added protection against automatic titles overwriting manually renamed
+  conversations.
+- Kept title generation best-effort so failures do not break Chat.
+
+## Verification
+
+- Backend naming tests: **34 passed**
+- Full backend test suite: **366 passed**
+- Frontend tests: **90 passed**
+- Frontend production build successful
+- Semantic title generation manually verified
+- Document-context title generation manually verified
+- Multi-document comparison title generation manually verified
+- Manual rename protection verified
+- Conversation title persistence across refresh verified
+- Initial-title-only behavior verified
+
+## Result
+
+LearnFlow now generates concise, semantic conversation titles that reflect the
+user's conversation intent while using selected document context when helpful.
+Multi-document comparisons receive meaningful comparison-oriented titles, while
+manual conversation renames remain protected from automatic replacement.

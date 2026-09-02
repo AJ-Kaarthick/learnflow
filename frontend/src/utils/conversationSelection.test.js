@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  applyGeneratedTitle,
   removeConversationFromList,
   resolveActiveConversationId,
   renameConversationInList,
@@ -150,6 +151,72 @@ test("renameConversationInList is a no-op when the conversation id isn't in the 
   const conversations = [summary({ id: "a" })];
   const result = renameConversationInList(conversations, "not-in-list", "New title");
   assert.deepEqual(result, conversations);
+});
+
+// --- applyGeneratedTitle: automatic conversation naming (V2.4
+// Milestone 2 Phase 4) ---------------------------------------------
+
+test("applyGeneratedTitle updates only the given conversation's title", () => {
+  const conversations = [
+    summary({ id: "a", title: "New Conversation" }),
+    summary({ id: "b", title: "New Conversation" }),
+  ];
+
+  const result = applyGeneratedTitle(conversations, "b", "Photosynthesis Basics");
+
+  assert.equal(result.find((c) => c.id === "a").title, "New Conversation");
+  assert.equal(result.find((c) => c.id === "b").title, "Photosynthesis Basics");
+});
+
+test("applyGeneratedTitle does not reorder the list (reordering is touchConversation's job)", () => {
+  const conversations = [summary({ id: "a" }), summary({ id: "b" }), summary({ id: "c" })];
+
+  const result = applyGeneratedTitle(conversations, "c", "Photosynthesis Basics");
+
+  assert.deepEqual(result.map((c) => c.id), ["a", "b", "c"]);
+});
+
+test("applyGeneratedTitle leaves title_is_custom, updated_at, and every other field untouched", () => {
+  const conversations = [
+    summary({ id: "a", updated_at: "2026-01-01T00:00:00Z", title_is_custom: false }),
+  ];
+
+  const result = applyGeneratedTitle(conversations, "a", "Photosynthesis Basics");
+
+  assert.equal(result[0].updated_at, "2026-01-01T00:00:00Z");
+  assert.equal(result[0].title_is_custom, false);
+  assert.equal(result[0].title, "Photosynthesis Basics");
+});
+
+test("applyGeneratedTitle is a no-op when the conversation id isn't in the list", () => {
+  const conversations = [summary({ id: "a" })];
+  const result = applyGeneratedTitle(conversations, "not-in-list", "Photosynthesis Basics");
+  assert.deepEqual(result, conversations);
+});
+
+test("applyGeneratedTitle does not mutate the array it was given", () => {
+  const existing = [summary({ id: "a", title: "New Conversation" })];
+  const existingCopy = [...existing];
+
+  applyGeneratedTitle(existing, "a", "Photosynthesis Basics");
+
+  assert.deepEqual(existing, existingCopy);
+});
+
+test("applyGeneratedTitle leaves an unrelated conversation's own custom title alone", () => {
+  // Simulates two independent conversations, one auto-titled and one
+  // manually renamed -- generating a title for one must never leak
+  // into the other's.
+  const conversations = [
+    summary({ id: "a", title: "New Conversation", title_is_custom: false }),
+    summary({ id: "b", title: "My custom title", title_is_custom: true }),
+  ];
+
+  const result = applyGeneratedTitle(conversations, "a", "Photosynthesis Basics");
+
+  const untouched = result.find((c) => c.id === "b");
+  assert.equal(untouched.title, "My custom title");
+  assert.equal(untouched.title_is_custom, true);
 });
 
 // --- removeConversationFromList: conversation deletion (V2.4 Milestone

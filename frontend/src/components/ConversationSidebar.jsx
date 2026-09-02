@@ -41,10 +41,19 @@ function DeleteIcon({ busy = false }) {
 // LibraryPanel's own rename-in-place flow for a document row.
 //
 // V2.4 Milestone 2 Phase 3: manual renaming (PATCH
-// /conversations/{id}, via ChatPage's onRename) — AI-generated titles
-// are still out of scope for this phase; the title shown for an
-// unrenamed conversation is still exactly the backend's own default
-// ("New Conversation" — see ConversationSummaryResponse.title in
+// /conversations/{id}, via ChatPage's onRename).
+//
+// V2.4 Milestone 2 Phase 4: automatic conversation naming landed too
+// (see conversation_titling.py / send_message's docstring in
+// routes_conversations.py) -- this component still doesn't know or
+// care whether a given `conversation.title` came from that or from a
+// manual rename; it just renders whatever string ChatPage's
+// `conversations` list currently holds for each row (updated via
+// ChatPage.jsx's handleRenameConversation for the former,
+// handleMessageSent + applyGeneratedTitle for the latter). The only
+// thing this component itself still owns exactly as before is the
+// default shown for a conversation neither has touched yet ("New
+// Conversation" -- see ConversationSummaryResponse.title in
 // schemas/conversation.py).
 function formatConversationTimestamp(isoString) {
   if (!isoString) return "";

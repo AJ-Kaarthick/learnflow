@@ -615,10 +615,12 @@ architecture is being implemented incrementally across multiple phases.
 - Chat document-selection synchronization
 - Conversation timestamp handling
 - Regression coverage for conversation lifecycle and persistence behavior
+- AI-generated conversation title generation
+- Semantic title generation using conversation intent and document context
+- Protection of manually renamed conversations from automatic title replacement
 
 **Planned next:**
 
-- Automatic conversation title generation
 - Further migration from localStorage conversation state to server persistence
 - Further improvements to persistent conversation document context
 
@@ -685,6 +687,30 @@ The frontend supports:
 - Restoring conversation history
 - Maintaining the selected document context
 
+### AI Conversation Titles
+
+LearnFlow generates an initial conversation title after the first meaningful user
+message.
+
+Title generation uses the conversation's user prompt as the primary signal and may
+use the selected document filenames as contextual information when needed.
+
+Titles are generated semantically rather than by mechanically concatenating
+document filenames or copying the full user prompt.
+
+For multi-document conversations, document context can be used to identify the
+subjects being compared when the user asks a comparison-oriented question.
+
+Automatic title generation is performed only for conversations that still have the
+default title. A manually renamed conversation is marked as custom and is never
+overwritten by automatic title generation.
+
+Title generation is best-effort. A title-generation failure does not prevent the
+underlying Chat request from succeeding.
+
+Titles are generated only for the initial conversation title and are not
+regenerated after subsequent messages.
+
 #### Conversation
 
 Stores conversation metadata such as:
@@ -729,7 +755,10 @@ PUT    /conversations/{id}/documents
 
 Conversation persistence is introduced incrementally.
 
-The backend foundation is implemented first. Message persistence, RAG integration, frontend conversation management, title generation, document-context management, and migration from the existing client-side conversation state are implemented in subsequent phases.
+The backend foundation was implemented first, followed by message persistence and
+RAG integration, frontend conversation management, and AI conversation title
+generation. Further phases will address persistent document-context improvements
+and migration from the remaining client-side conversation state.
 
 
 ### Persistent Conversation Message Flow

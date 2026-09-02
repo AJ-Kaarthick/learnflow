@@ -22,6 +22,7 @@ from app.services.ai.embedding_provider import EmbeddingProvider
 from app.services.ai.embedding_provider_factory import get_embedding_provider
 from app.services.ai.provider_factory import get_ai_provider
 from app.services.chat_service import answer_question
+from app.services.conversation_titling import generate_conversation_title
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -276,6 +277,55 @@ def _serialize_sources(chat_answer, documents_by_id: dict[str, Document]) -> lis
     ]
 
 
+def _apply_generated_title_if_still_default(
+    conversation_id: str, generated_title: str, db: Session
+) -> bool:
+    """
+    Writes `generated_title` for this conversation IF AND ONLY IF
+    title_is_custom is still False in the database at the moment this
+    UPDATE executes -- the race-condition protection this phase's
+    brief calls out explicitly: "A user could rename a conversation
+    while automatic title generation is in progress... Before writing
+    an automatically generated title, re-check the current database
+    state and make sure title_is_custom is still false."
+
+    A single `UPDATE ... WHERE title_is_custom = false` is enough to
+    satisfy that: the re-check and the write are the same atomic
+    statement, so there's no window between "check" and "write" for a
+    concurrent PATCH /conversations/{id} (rename_conversation, which
+    unconditionally sets title_is_custom=True) to land in -- no
+    separate locking primitive needed for that, matching the brief's
+    "do not introduce heavyweight locking machinery unless inspection
+    proves it is necessary." Whichever of the two writes (this one, or
+    a racing rename) actually reaches the database first, and whichever
+    order they commit in, a rename can never be clobbered by a title
+    this call generated from what's now stale context -- exactly the
+    "a rename racing an in-flight title generation always wins
+    regardless of which one started first" guarantee named in
+    Conversation's own docstring (db/models.py).
+
+    Deliberately takes no `conversation` ORM object and touches none.
+    `synchronize_session=False` means this UPDATE does not update the
+    in-memory `conversation` object's `.title` either -- harmless here,
+    since send_message never reads `conversation.title` back out after
+    calling this; it only reports whether the write happened (this
+    function's return value) and separately sets `conversation.updated_at`
+    on the same ORM object afterward, which is flushed as its own
+    single-column UPDATE and never collides with this one.
+
+    Returns whether the write actually happened, purely so the caller
+    can decide whether to report a generated title back to the frontend
+    (see ConversationMessageResponse.generated_title) -- never raises,
+    and never affects anything else about the request either way.
+    """
+    updated_rows = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id, Conversation.title_is_custom.is_(False))
+        .update({"title": generated_title}, synchronize_session=False)
+    )
+    return updated_rows > 0
+
+
 def _set_conversation_documents(conversation_id: str, documents: list[Document], db: Session) -> None:
     """
     Replaces a conversation's entire associated document set: delete
@@ -428,12 +478,58 @@ async def send_message(
     response (see this file's module docstring intent and the
     Data Integrity requirement it was written against). A caller that
     wants to retry after a 502 just posts the same message again.
+
+    Milestone 2 Phase 4 -- automatic conversation naming: immediately
+    after a successful answer (never before -- see "avoid unnecessary
+    AI calls" below), and only when this is genuinely the conversation's
+    first message (`history` -- loaded further down, before
+    answer_question is called -- is empty) and its title is still the
+    plain default (`not conversation.title_is_custom`), this also
+    attempts to generate a short title from `payload.content` via
+    conversation_titling.generate_conversation_title(), using the exact
+    same `ai_provider` this request already has -- reusing the existing
+    AI provider abstraction rather than introducing a second one, per
+    this phase's brief.
+
+    Naming follow-up (still Phase 4): also passes this conversation's
+    document filenames (`documents`, already loaded above for
+    answer_question -- no new query) as `document_filenames`, so the
+    title can be grounded in what documents are selected, not just the
+    raw first message. This was the fix for generic titles like
+    "Inquiry regarding co..." on a message like "how many credits is
+    this for" -- the message alone doesn't say what "this" is, but the
+    conversation's document does. generate_conversation_title still
+    treats these strictly as disambiguating context (never mechanically
+    concatenated, never all forced into the title) -- see that
+    function's own docstring and _TITLE_INSTRUCTIONS in
+    conversation_titling.py for the exact usage rules.
+
+    That attempt is best-effort in the fullest sense: generate_conversation_title
+    already swallows a provider failure or an unusable (blank) result
+    and returns None for either, so this never raises for a title
+    problem, and a title is only ever written to the database together
+    with the same commit that persists the user/assistant turn -- there
+    is no separate commit, and therefore no window where a title
+    generation problem could leave the turn itself half-persisted.
+    Checking `is_first_message` up front is also what satisfies "do not
+    regenerate the title on every subsequent message" and "avoid
+    unnecessary AI calls": every message after the first in a given
+    conversation skips the attempt (and its AI call) entirely, whether
+    or not the first attempt actually produced a title.
+
+    The actual write is gated a second time, atomically, by
+    _apply_generated_title_if_still_default -- see that function's own
+    docstring for why this (not the `conversation.title_is_custom` read
+    used for the up-front gate above, which can be stale by the time
+    the AI call returns) is what actually protects a manual rename that
+    happens *during* title generation.
     """
     conversation = _get_conversation_or_404(conversation_id, db)
     documents = _get_conversation_documents_for_chat(conversation_id, db)
     documents_by_id = {document.id: document for document in documents}
 
     history = _load_history_turns(conversation_id, db)
+    is_first_message = not history
 
     try:
         result = await answer_question(
@@ -447,6 +543,18 @@ async def send_message(
         )
     except AIProviderError as error:
         raise HTTPException(status_code=502, detail=str(error))
+
+    generated_title: str | None = None
+    if is_first_message and not conversation.title_is_custom:
+        candidate_title = await generate_conversation_title(
+            payload.content,
+            ai_provider,
+            document_filenames=[document.original_filename for document in documents],
+        )
+        if candidate_title and _apply_generated_title_if_still_default(
+            conversation_id, candidate_title, db
+        ):
+            generated_title = candidate_title
 
     position = _next_message_position(conversation_id, db)
     sources_json = _serialize_sources(result, documents_by_id)
@@ -471,6 +579,8 @@ async def send_message(
     # Bumps "most recently active" ordering for GET /conversations --
     # see Conversation.updated_at's docstring in db/models.py, which
     # names this exact call as the thing that would start updating it.
+    # Unaffected by whether a title was also generated above -- same
+    # single assignment, same single commit, regardless.
     conversation.updated_at = datetime.now(timezone.utc)
 
     db.commit()
@@ -480,4 +590,5 @@ async def send_message(
     return ConversationMessageResponse(
         user_message=MessageResponse.from_message(user_message),
         assistant_message=MessageResponse.from_message(assistant_message),
+        generated_title=generated_title,
     )

@@ -5,6 +5,7 @@ import AssistantPanel from "../components/AssistantPanel";
 import ConversationSidebar from "../components/ConversationSidebar";
 import { orderHydratedDocuments } from "../utils/conversationDocuments";
 import {
+  applyGeneratedTitle,
   removeConversationFromList,
   renameConversationInList,
   resolveActiveConversationId,
@@ -466,14 +467,37 @@ function ChatPage() {
   // conversation (see AssistantPanel.jsx's three-way branch): a
   // remount re-initializes `messages` from exactly this cache, so an
   // out-of-date one would make a just-sent turn appear to vanish.
+  //
+  // V2.4 Milestone 2 Phase 4 (automatic conversation naming): when
+  // this send also generated a new title (see
+  // ConversationMessageResponse.generated_title in
+  // schemas/conversation.py — non-null only on the exact request
+  // where the backend both generated *and* persisted one), applies it
+  // to the sidebar's local list the same way handleRenameConversation
+  // already does for a manual rename, and to `activeConversation`
+  // itself so a title shown anywhere else in the Chat workspace stays
+  // in sync too — all without a page refresh or a follow-up GET,
+  // satisfying this phase's "update the sidebar immediately" and
+  // "manual renaming must continue to work independently" requirements
+  // in one pass. A null `generated_title` (the overwhelmingly common
+  // case — every message after a conversation's first, and every
+  // first message where generation didn't happen or lost the
+  // race-protection check server-side) is a no-op here, same as
+  // applyGeneratedTitle's own no-op-on-no-match reasoning.
   function handleMessageSent(sentConversationId, response) {
     setConversations((previous) => touchConversation(previous, sentConversationId, new Date().toISOString()));
+    if (response?.generated_title) {
+      setConversations((previous) => applyGeneratedTitle(previous, sentConversationId, response.generated_title));
+    }
     setActiveConversation((previous) => {
       if (!previous || previous.id !== sentConversationId || !response) return previous;
-      return {
+      const withNewMessages = {
         ...previous,
         messages: [...previous.messages, response.user_message, response.assistant_message],
       };
+      return response.generated_title
+        ? { ...withNewMessages, title: response.generated_title }
+        : withNewMessages;
     });
   }
 

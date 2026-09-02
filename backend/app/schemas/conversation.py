@@ -276,10 +276,24 @@ class ConversationMessageResponse(BaseModel):
     it here is what lets a frontend append the *actual persisted* turn
     to its view instead of re-deriving one from what it optimistically
     sent, or issuing a follow-up GET just to learn its id.
+
+    `generated_title` (Milestone 2 Phase 4 -- automatic conversation
+    naming) is non-null only on the exact request where this send
+    actually generated *and persisted* a new title for this
+    conversation -- never a placeholder, and never repeated on a later
+    message. It's null on every other send: a second message in the
+    same conversation (auto-titling never regenerates), any message in
+    a conversation with a custom title, and a send where title
+    generation was attempted but lost the race-protection check (see
+    send_message) or failed/produced nothing usable. This is what lets
+    a frontend update the sidebar immediately when a title was in fact
+    generated (see ConversationSidebar.jsx) without needing a second
+    round trip or reasoning about *why* it might be null.
     """
 
     user_message: MessageResponse
     assistant_message: MessageResponse
+    generated_title: str | None = None
 
 
 class ConversationRenameRequest(BaseModel):

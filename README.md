@@ -23,6 +23,7 @@ LearnFlow is an AI-powered study workspace that transforms PDF, DOCX, PPTX, and 
 - Improved Chat document-library synchronization
 - History-aware conversational retrieval for natural follow-up questions
 - Persistent AI learning workspace
+- AI-generated semantic conversation titles
 - Workspace session persistence     
 - Per-document conversation history
 - Automatic workspace restoration after refresh
@@ -65,6 +66,7 @@ LearnFlow currently supports:
 - 💬 Grounded AI chat with PDF, DOCX, and PPTX documents
 - 🧠 Multi-turn conversational memory
 - 🧭 History-aware conversational retrieval
+- 🏷️ AI-generated conversation titles
 - 📚 Multi-document Chat
 - 🛡️ Readability-aware multi-document Chat
 - ⚠️ Clear identification of documents with no readable text
@@ -328,6 +330,17 @@ LearnFlow currently supports:
 - Chat document selection preserved when uploading additional documents
 - Frontend regression tests for conversation and document-selection behavior
 
+##### Phase 4 — AI Conversation Titles ✅
+
+- AI-generated conversation titles
+- Semantic title generation based on conversation intent
+- Document context used when helpful for title generation
+- Multi-document comparison-aware titles
+- Manual conversation rename protection
+- Initial-title-only generation
+- Title generation failure does not block Chat
+- Backend and frontend regression coverage
+
 ### V3
 - Authentication
 - PostgreSQL
@@ -429,10 +442,10 @@ npm run dev
 - Persistent conversation backend foundation
 - Persistent conversation backend
 - Persistent conversation messages
+- AI-generated semantic conversation titles
 
 ### Planned
 
-- Automatic conversation titles
 - Advanced conversation management improvements
 - Persistent conversation document-context improvements
 - Migration from localStorage conversation state to server-backed conversations
