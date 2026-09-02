@@ -1668,3 +1668,61 @@ without losing the conversation's persisted message history.
 LearnFlow now supports dynamic document context within persistent conversations.
 Users can add or remove documents from an existing conversation while preserving
 the conversation history and without creating a new conversation.
+
+---
+
+## V2.4 — Milestone 2
+
+### Phase 6 — localStorage Migration
+
+## Goal
+
+Complete the migration from legacy conversation-specific localStorage state to
+the server-backed conversation system while preserving unrelated workspace
+persistence.
+
+## Features Completed
+
+- Verified that conversation messages are no longer stored in localStorage
+- Verified that per-conversation document state is no longer stored in localStorage
+- Verified that multi-document conversation state is no longer stored in localStorage
+- Retained only the active conversation ID as a minimal UI restoration pointer
+- Preserved unrelated workspace localStorage persistence
+- Added regression tests preventing reintroduction of legacy conversation caches
+
+## Problems Faced
+
+- The original V2 architecture stored conversation state locally in the browser.
+- After server-backed conversations were introduced, the remaining localStorage
+  usage needed to be distinguished from obsolete conversation caching.
+- Removing legitimate workspace persistence could have caused unrelated
+  functionality to regress.
+
+## Solutions
+
+- Audited frontend localStorage and sessionStorage usage.
+- Confirmed that conversation messages, document context, and multi-document
+  conversation state are sourced from the server-backed conversation system.
+- Retained only the active conversation ID as a minimal client-side UI pointer.
+- Preserved unrelated workspace persistence such as document, study, library,
+  and appearance state.
+- Added regression tests to prevent legacy conversation caches from returning.
+
+## Verification
+
+- Backend tests: 366 passed
+- Frontend tests: 93 passed
+- Frontend production build successful
+- Conversation history restoration verified
+- Conversation switching verified
+- Conversation document context verified
+- Dynamic document add/remove behavior preserved
+- Legacy conversation localStorage caches confirmed absent
+- Unrelated localStorage persistence preserved
+
+## Result
+
+LearnFlow now uses the server-backed conversation system as the source of truth
+for persistent conversation state. Legacy conversation message and document
+caches have been removed, while the minimal active conversation ID remains as a
+client-side UI restoration pointer.

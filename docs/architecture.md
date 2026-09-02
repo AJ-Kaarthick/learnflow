@@ -351,11 +351,12 @@ Implemented:
 - Improved loading indicators
 
 
-## Workspace Persistence (V2.1 — Legacy Conversation Storage)
+## Workspace Persistence
 
-Frontend workspace state is persisted locally to provide seamless continuity across page refreshes and browser restarts.
+Frontend workspace state is persisted locally where browser-level persistence
+is appropriate, such as across page refreshes and browser restarts.
 
-Persisted state includes:
+Persisted workspace state includes:
 
 - Active document
 - Active study tab
@@ -363,16 +364,19 @@ Persisted state includes:
 - Search query
 - Sort preference
 - Library scroll position
-- Per-document conversations
-- Multi-document conversations
+- Appearance and workspace preferences
+- Active conversation ID for Chat restoration
 
-Persistence is implemented through a centralized frontend persistence utility using browser localStorage.
+Conversation messages, conversation metadata, conversation titles, and
+conversation-document associations are not stored in localStorage. They are
+persisted through the server-backed conversation system.
 
-Conversation state is keyed by document IDs rather than filenames, ensuring conversations survive document renames.
+The active conversation ID is retained as a minimal UI selection pointer only.
+It does not contain conversation messages, document context, or other
+conversation content.
 
-Multi-document conversations are keyed using sorted document IDs so identical document sets always restore the same conversation regardless of selection order.
-
-> **V2.4 update:** Conversation persistence is being migrated from client-side localStorage to server-backed conversation records. The legacy localStorage conversation state remains relevant during the migration phase.
+The server/database remains the source of truth for persistent conversation
+state.
 
 ---
 
@@ -619,9 +623,9 @@ architecture is being implemented incrementally across multiple phases.
 - Semantic title generation using conversation intent and document context
 - Protection of manually renamed conversations from automatic title replacement
 
-**Planned next:**
-
-- Further migration from localStorage conversation state to server persistence
+The conversation persistence migration is now complete. Conversation messages,
+metadata, titles, and document associations are server-backed. Only the minimal
+active conversation ID is retained locally as a UI restoration pointer.
 
 A conversation consists of:
 
@@ -637,11 +641,13 @@ The original V2 chat architecture used client-managed conversation history and
 stateless chat requests.
 
 V2.4 introduces server-backed persistent conversations and messages. The
-conversation records and message history are now persisted in SQLite, while the
-underlying RAG retrieval architecture remains unchanged.
+conversation records, message history, titles, and conversation-document
+associations are persisted through the backend and SQLite.
 
-This migration is being performed incrementally, with legacy localStorage
-conversation state retained where required during the transition.  
+The migration from legacy conversation-specific localStorage state is complete.
+The frontend retains only the active conversation ID as a minimal UI selection
+pointer; conversation content and persistent document context remain
+server-backed. 
 
 ### Chat Document Selection
 
@@ -761,12 +767,15 @@ DELETE /conversations/{id}
 PUT    /conversations/{id}/documents
 
 
-Conversation persistence is introduced incrementally.
+Conversation persistence was introduced incrementally.
 
-The backend foundation was implemented first, followed by message persistence and
-RAG integration, frontend conversation management, AI conversation title
-generation, and dynamic conversation document context. The remaining migration
-work will address the remaining client-side conversation state.
+The backend foundation was followed by message persistence and RAG integration,
+frontend conversation management, AI conversation title generation, dynamic
+conversation document context, and migration away from legacy
+conversation-specific localStorage state.
+
+The server/database is now the source of truth for persistent conversation
+state.
 
 
 ### Persistent Conversation Message Flow
