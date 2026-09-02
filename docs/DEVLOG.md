@@ -1546,9 +1546,6 @@ conversation history, and continue working with selected documents across
 sessions. Reliability issues involving timestamps, unreadable documents, and
 Chat document uploads were also resolved.
 
-Automatic conversation title generation remains intentionally deferred to a
-future phase.
-
 
 ---
 
@@ -1614,3 +1611,60 @@ LearnFlow now generates concise, semantic conversation titles that reflect the
 user's conversation intent while using selected document context when helpful.
 Multi-document comparisons receive meaningful comparison-oriented titles, while
 manual conversation renames remain protected from automatic replacement.
+
+
+---
+
+## V2.4 — Milestone 2
+
+### Phase 5 — Dynamic Document Context
+
+## Goal
+
+Allow document context to be added or removed from an existing conversation
+without losing the conversation's persisted message history.
+
+## Features Completed
+
+- Added dynamic document context management for conversations
+- Added support for adding documents to an existing conversation
+- Added support for removing documents from an existing conversation
+- Persisted conversation-document associations
+- Preserved conversation history while changing document context
+- Preserved existing document selection when uploading additional documents
+- Prevented duplicate document selections
+- Preserved unreadable-document handling
+- Added regression coverage for dynamic document context behavior
+
+## Problems Faced
+
+- Document selection needed to change without resetting the active conversation.
+- Adding a newly uploaded document could previously replace the existing Chat
+  selection.
+- Changing document context needed to preserve the existing conversation history.
+
+## Solutions
+
+- Used the existing conversation-document association to persist document context.
+- Updated document selection without creating or replacing the conversation.
+- Merged newly uploaded documents into the current Chat selection.
+- Preserved the existing conversation messages when document context changes.
+- Added regression tests for document-selection and persistence behavior.
+
+## Verification
+
+- Backend regression tests passed
+- Frontend regression tests passed
+- Frontend production build successful
+- Documents could be added to an existing conversation
+- Documents could be removed from an existing conversation
+- Conversation history remained intact after document-context changes
+- Additional Chat uploads merged with the existing selection
+- Duplicate document selection was prevented
+- Unreadable-document handling remained intact
+
+## Result
+
+LearnFlow now supports dynamic document context within persistent conversations.
+Users can add or remove documents from an existing conversation while preserving
+the conversation history and without creating a new conversation.

@@ -622,7 +622,6 @@ architecture is being implemented incrementally across multiple phases.
 **Planned next:**
 
 - Further migration from localStorage conversation state to server persistence
-- Further improvements to persistent conversation document context
 
 A conversation consists of:
 
@@ -652,6 +651,15 @@ opening behavior.
 Adding a document through the Chat upload workflow merges the newly uploaded
 document into the current Chat selection rather than replacing the existing
 selection.
+
+Documents can be added to or removed from the current conversation without
+creating a new conversation.
+
+Changes to the selected document context are persisted to the conversation
+through the conversation-document association.
+
+Updating document context does not clear or replace the existing conversation
+message history.
 
 Duplicate document selections are prevented.
 
@@ -756,9 +764,9 @@ PUT    /conversations/{id}/documents
 Conversation persistence is introduced incrementally.
 
 The backend foundation was implemented first, followed by message persistence and
-RAG integration, frontend conversation management, and AI conversation title
-generation. Further phases will address persistent document-context improvements
-and migration from the remaining client-side conversation state.
+RAG integration, frontend conversation management, AI conversation title
+generation, and dynamic conversation document context. The remaining migration
+work will address the remaining client-side conversation state.
 
 
 ### Persistent Conversation Message Flow

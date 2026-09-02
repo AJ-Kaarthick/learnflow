@@ -341,6 +341,15 @@ LearnFlow currently supports:
 - Title generation failure does not block Chat
 - Backend and frontend regression coverage
 
+##### Phase 5 — Dynamic Document Context ✅
+
+- Dynamic document add/remove during conversations
+- Persistent conversation document context
+- Document context updates without creating a new conversation
+- Preserved conversation history while changing document context
+- Chat upload synchronization with the current conversation
+- Document-selection regression coverage
+
 ### V3
 - Authentication
 - PostgreSQL
@@ -443,11 +452,11 @@ npm run dev
 - Persistent conversation backend
 - Persistent conversation messages
 - AI-generated semantic conversation titles
+- Dynamic conversation document context
 
 ### Planned
 
 - Advanced conversation management improvements
-- Persistent conversation document-context improvements
 - Migration from localStorage conversation state to server-backed conversations
 - Authentication
 - PostgreSQL
