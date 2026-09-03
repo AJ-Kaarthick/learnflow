@@ -1726,3 +1726,57 @@ LearnFlow now uses the server-backed conversation system as the source of truth
 for persistent conversation state. Legacy conversation message and document
 caches have been removed, while the minimal active conversation ID remains as a
 client-side UI restoration pointer.
+
+---
+
+## V2.4 — Milestone 2
+
+### Phase 7 — Polish / Regression
+
+## Goal
+
+Perform a final regression and polish pass across the V2.4 persistent
+conversation system and verify that the completed phases work together
+correctly.
+
+## Features Completed
+
+- Final regression review of the V2.4 conversation workflow
+- Verified conversation creation, switching, deletion, and rename behavior
+- Verified AI-generated title behavior and manual rename protection
+- Verified dynamic document add/remove behavior
+- Verified Chat document upload synchronization
+- Verified server-backed conversation persistence
+- Added regression coverage for removed-document RAG context
+- Confirmed legacy conversation localStorage caching remains absent
+
+## Problems Faced
+
+- No production regression was identified during the final review.
+- One remaining test-coverage gap was found around document removal during
+  an existing conversation.
+
+## Solutions
+
+- Added a focused regression test covering document removal from a
+  conversation.
+- The test verifies that a removed document is excluded from subsequent
+  RAG context while previously persisted conversation history remains intact.
+- No production code changes were required.
+
+## Verification
+
+- Backend tests: **367 passed**
+- Frontend tests: **93 passed**
+- Frontend production build successful
+- Final conversation lifecycle regression review completed
+- Dynamic document-context behavior verified
+- Removed-document RAG behavior verified
+- Legacy conversation localStorage caches confirmed absent
+
+## Result
+
+V2.4 Milestone 2 is now complete. LearnFlow uses the server-backed
+conversation system as the source of truth for persistent conversation
+state, supports dynamic document context and semantic AI conversation
+titles, and has completed the final regression pass.

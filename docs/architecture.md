@@ -600,8 +600,8 @@ Readable text available?
 
 LearnFlow uses persistent conversations for AI chat.
 
-V2.4 introduces server-backed persistent conversations. The conversation
-architecture is being implemented incrementally across multiple phases.
+V2.4 introduced server-backed persistent conversations. The conversation
+architecture was implemented incrementally across multiple phases.
 
 **Implemented so far:**
 

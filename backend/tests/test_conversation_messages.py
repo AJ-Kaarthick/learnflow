@@ -425,6 +425,85 @@ def test_multi_document_conversation_uses_existing_multi_document_retrieval():
     app.dependency_overrides.clear()
 
 
+def test_removing_a_document_stops_it_grounding_later_turns_but_keeps_prior_history():
+    """
+    Phase 7 regression coverage: PUT /conversations/{id}/documents
+    (replace_conversation_documents) changes which documents the
+    *next* send_message call retrieves against -- see
+    _get_conversation_documents_for_chat, which re-reads
+    ConversationDocument fresh on every call rather than caching
+    anything -- without touching a single already-persisted Message
+    row. This was already true by construction (nothing in
+    send_message's document-scope resolution or history-loading paths
+    depends on what a *previous* turn's document set was), but had no
+    end-to-end test naming it directly, and it's one of this phase's
+    explicitly called-out regression scenarios ("ensuring removed
+    documents no longer provide current-turn RAG context" /
+    "preserving previous conversation history after document
+    removal").
+    """
+    fake_ai_provider = FakeAIProvider(answer="Answer.")
+    app.dependency_overrides[get_ai_provider] = lambda: fake_ai_provider
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    client = TestClient(app)
+
+    nebula_document_id = _upload_and_index_document(
+        client, "nebula.pdf", "Gravitational collapse of gas clouds forms new stars. " * 40
+    )
+    coral_document_id = _upload_and_index_document(
+        client, "coral.pdf", "Coral reefs support incredibly diverse marine ecosystems. " * 40
+    )
+    conversation_id = _create_conversation(client, [nebula_document_id])
+
+    first_response = client.post(
+        f"/api/v1/conversations/{conversation_id}/messages",
+        json={"content": "How do nebulae form?"},
+    )
+    assert first_response.status_code == 201
+    assert "gravitational collapse" in fake_ai_provider.chat_prompt.lower()
+
+    # Swap the associated document set entirely: remove the nebula
+    # document, add the coral one -- same "here is the full desired
+    # set" replace call the frontend's syncSelectedDocuments issues
+    # (see ChatPage.jsx).
+    replace_response = client.put(
+        f"/api/v1/conversations/{conversation_id}/documents",
+        json={"document_ids": [coral_document_id]},
+    )
+    assert replace_response.status_code == 200
+
+    second_response = client.post(
+        f"/api/v1/conversations/{conversation_id}/messages",
+        json={"content": "What do coral reefs support?"},
+    )
+    assert second_response.status_code == 201
+
+    # The removed document's content must not leak into the current
+    # turn's retrieved context -- only the newly associated document's
+    # excerpts should be present.
+    second_prompt = fake_ai_provider.chat_prompt
+    assert "gravitational collapse" not in second_prompt.lower()
+    assert "gas clouds" not in second_prompt.lower()
+    assert "coral reefs" in second_prompt.lower()
+
+    second_sources = second_response.json()["assistant_message"]["sources"]
+    assert second_sources
+    assert {source["document_id"] for source in second_sources} == {coral_document_id}
+
+    # The first turn's Q&A -- persisted while the nebula document was
+    # still associated -- must still be there afterward, both in the
+    # just-sent response's implied ordering and in a full GET.
+    detail = client.get(f"/api/v1/conversations/{conversation_id}").json()
+    assert [message["content"] for message in detail["messages"]] == [
+        "How do nebulae form?",
+        "Answer.",
+        "What do coral reefs support?",
+        "Answer.",
+    ]
+
+    app.dependency_overrides.clear()
+
+
 # --- error handling ---------------------------------------------------
 
 

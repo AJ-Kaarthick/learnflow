@@ -278,7 +278,7 @@ LearnFlow currently supports:
 - Improved document extraction error logging
 - Generated learning content persistence across study-tab switches
 
-### V2.4 — In Progress
+### ✅ V2.4
 
 #### Milestone 1 — Chat UX Polish ✅
 
@@ -358,6 +358,19 @@ LearnFlow currently supports:
 - Kept only the minimal active-conversation pointer for Chat UI restoration
 - Preserved unrelated workspace localStorage persistence
 - Added regression coverage preventing reintroduction of legacy conversation caches
+
+##### Phase 7 — Polish / Regression ✅
+
+- Final V2.4 conversation regression review
+- Verified conversation creation, switching, deletion, and rename behavior
+- Verified AI title generation and manual rename protection
+- Verified dynamic document add/remove behavior
+- Verified document upload and conversation synchronization
+- Verified server-backed conversation persistence
+- Added regression coverage for removed-document RAG context
+- Backend: 367 tests passing
+- Frontend: 93 tests passing
+- Frontend production build successful
 
 ### V3
 - Authentication
