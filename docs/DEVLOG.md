@@ -1780,3 +1780,81 @@ V2.4 Milestone 2 is now complete. LearnFlow uses the server-backed
 conversation system as the source of truth for persistent conversation
 state, supports dynamic document context and semantic AI conversation
 titles, and has completed the final regression pass.
+
+---
+
+# V3 — Milestone 1: Authentication & Guest Access
+
+## Phase 1 — Guest Identity & Session Foundation
+
+### Goal
+
+Introduce the identity foundation required for V3 guest access and
+authenticated user support while preserving the existing V2.4 application
+behavior.
+
+### Features Completed
+
+- Added guest identity support
+- Added temporary guest session management
+- Added guest session cookie
+- Added credentialed frontend API requests
+- Added backend identity resolution
+- Added `/api/v1/identity/me` endpoint
+- Preserved guest identity across page refreshes
+- Isolated guest identities between separate browser sessions
+- Added guest session expiration handling
+- Preserved existing document and conversation API behavior
+
+### Architecture
+
+V3 introduces an identity layer that distinguishes temporary guest sessions
+from future persistent user accounts.
+
+Guest sessions provide a temporary identity without requiring authentication.
+The identity is established through the guest session and resolved by the
+backend for API requests.
+
+The identity layer will become the foundation for authenticated accounts,
+user ownership, data isolation, and guest-to-account migration in later
+phases.
+
+### Problems Faced
+
+- Introducing credentialed API requests without breaking existing API usage
+- Establishing a stable guest identity across page refreshes
+- Ensuring separate browser sessions receive separate guest identities
+- Defining a real expiration boundary for temporary guest sessions
+
+### Solutions
+
+- Centralized API requests through the existing frontend API layer
+- Added guest-session credentials to API requests
+- Added backend identity resolution
+- Used a browser cookie to maintain the active guest session
+- Added expiration handling for guest sessions
+- Verified identity isolation using separate browser sessions
+
+### Verification
+
+- Backend tests: **383 passed**
+- Frontend tests: **93 passed**
+- Frontend production build successful
+- Guest session cookie verified in browser storage
+- Guest session persistence across refresh verified
+- Guest identity resolution verified through `/api/v1/identity/me`
+- Separate guest identities verified using Firefox and Brave
+- Existing `/documents` API request returned `200 OK`
+- Backend `/health` endpoint verified
+- No document/RAG regression testing was required because the document/RAG
+  implementation was not modified in this phase
+
+### Result
+
+LearnFlow now has the initial V3 identity foundation required for guest-first
+access. Users can receive a temporary guest identity without signing in,
+while the existing V2.4 document, Chat, and RAG functionality remains
+available through the centralized API layer.
+
+This phase establishes the identity boundary required for subsequent
+authentication, account ownership, and guest-to-account migration work.

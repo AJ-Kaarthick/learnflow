@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, apiFetch } from "./config";
 
 /**
  * The frontend counterpart to `app/api/v1/routes_conversations.py`
@@ -36,7 +36,7 @@ async function parseErrorDetail(response, fallback) {
  * docstring); this function doesn't re-sort.
  */
 export async function listConversations() {
-  const response = await fetch(`${API_BASE_URL}/api/v1/conversations`);
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/conversations`);
 
   if (!response.ok) {
     throw new Error(`Could not load conversations (status ${response.status})`);
@@ -52,7 +52,7 @@ export async function listConversations() {
  * refresh (see utils/persistence.js's loadActiveConversationId).
  */
 export async function getConversation(conversationId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}`);
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}`);
 
   if (!response.ok) {
     throw new Error(`Could not load this conversation (status ${response.status})`);
@@ -69,7 +69,7 @@ export async function getConversation(conversationId) {
  * see ChatPage.jsx's handleCreateConversation.
  */
 export async function createConversation(documentIds = []) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/conversations`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/conversations`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ document_ids: documentIds }),
@@ -91,7 +91,7 @@ export async function createConversation(documentIds = []) {
  * LibraryPanel's selection state already works.
  */
 export async function replaceConversationDocuments(conversationId, documentIds) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}/documents`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}/documents`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ document_ids: documentIds }),
@@ -116,7 +116,7 @@ export async function replaceConversationDocuments(conversationId, documentIds) 
  * later; nothing about that is this function's concern.
  */
 export async function renameConversation(conversationId, title) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -141,7 +141,7 @@ export async function renameConversation(conversationId, title) {
  * another conversation or starting a fresh one).
  */
 export async function deleteConversation(conversationId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}`, {
     method: "DELETE",
   });
 
@@ -171,7 +171,7 @@ export async function deleteConversation(conversationId) {
  * that.
  */
 export async function sendConversationMessage(conversationId, content, { topK, signal } = {}) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}/messages`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/conversations/${conversationId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

@@ -1,7 +1,7 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, apiFetch } from "./config";
 
 export async function generateMindMap(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/mindmap`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/mindmap`, {
     method: "POST",
   });
 
@@ -25,7 +25,7 @@ export async function generateMindMap(documentId) {
  * none exists yet.
  */
 export async function getMindMap(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/mindmap`);
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/mindmap`);
 
   if (response.status === 404) {
     return null;

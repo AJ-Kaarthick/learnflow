@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, apiFetch } from "./config";
 
 /**
  * Chunks and embeds a document so it can be chatted with. Safe to
@@ -8,7 +8,7 @@ import { API_BASE_URL } from "./config";
  * first message to be sent.
  */
 export async function indexDocument(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/index`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/index`, {
     method: "POST",
   });
 
@@ -41,7 +41,7 @@ export async function indexDocument(documentId) {
  * still complete server-side; nothing here cancels that.
  */
 export async function sendChatMessage(documentId, question, { topK, history, signal } = {}) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/chat`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -73,7 +73,7 @@ export async function sendChatMessage(documentId, question, { topK, history, sig
  * to begin with.
  */
 export async function sendMultiDocumentChatMessage(documentIds, question, { topK, history, signal } = {}) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/chat`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

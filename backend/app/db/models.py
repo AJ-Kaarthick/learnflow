@@ -293,6 +293,67 @@ class Message(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class GuestSession(Base):
+    """
+    A temporary guest identity (V3 Milestone 1 Phase 1). This is the
+    server-side half of the "who is making this request?" question —
+    see app/schemas/identity.py for the request-facing Identity value
+    built from a row here, and app/api/deps.py:get_current_identity
+    for how a request gets resolved to one.
+
+    `id` is NOT a generate_uuid() resource id like every other table's
+    primary key in this file — it's a high-entropy bearer token (see
+    guest_session_service.generate_session_token), because this value
+    doubles as the session credential itself: whoever holds it (via
+    the httponly cookie it's issued in) *is* this guest, the same way
+    holding a login session's cookie value makes you that logged-in
+    user. Deliberately not put in a separate "token" column with a
+    generate_uuid() `id` alongside it — there is no second use for a
+    non-secret identifier here yet (nothing joins against GuestSession
+    the way document_id joins against Document), and adding one now
+    would be exactly the kind of speculative structure this phase's
+    brief says to avoid. If Milestone 2's ownership model ends up
+    needing a stable identifier that's safe to reference elsewhere
+    without exposing the credential (e.g. as a foreign key on future
+    guest-owned rows), that's a natural, additive change to make then.
+
+    No relationship to Document/Conversation/etc. yet — this phase
+    establishes identity only ("who is making this request?"), not
+    ownership ("what data does this identity own?"). That's explicitly
+    Milestone 2 Phase 4's job (see this phase's brief); wiring a
+    guest_session_id foreign key onto existing tables now would be
+    scope creep this phase was told not to do.
+
+    Expiration is computed, not stored: a session is valid as long as
+    `last_seen_at` is more recent than
+    `settings.guest_session_inactivity_minutes` ago (see
+    guest_session_service.get_valid_guest_session). There's
+    deliberately no separate `expires_at` column that would need to be
+    kept in sync with that setting and with every `last_seen_at`
+    update — one column, one source of truth.
+
+    `revoked_at` supports explicit invalidation (e.g. a future
+    guest-to-account migration in Phase 2 retiring the guest session
+    it migrated data out of) without deleting the row outright while
+    that data might still be worth auditing. Nothing sets it yet in
+    this phase.
+    """
+
+    __tablename__ = "guest_sessions"
+
+    id = Column(String, primary_key=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Bumped on every request that resolves to this session (see
+    # guest_session_service.touch_guest_session) -- this sliding
+    # window, not created_at, is what expiration is measured against,
+    # so an actively-used guest session never expires mid-study-session
+    # purely because it's been open a long time.
+    last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    revoked_at = Column(DateTime, nullable=True)
+
+
 class ConversationDocument(Base):
     """
     Join table linking a Conversation to the Documents it references —

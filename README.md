@@ -372,11 +372,102 @@ LearnFlow currently supports:
 - Frontend: 93 tests passing
 - Frontend production build successful
 
-### V3
-- Authentication
+### 🚧 V3 — In Progress
+
+#### Milestone 1 — Authentication & Guest Access
+- Guest mode
+- Guest session management
+- Sign up / Sign in
+- User accounts
+- Session management
+- Guest usage limits
+- Guest → account migration
+- User data isolation
+- Protected persistent data
+
+##### Phase 1 — Guest Identity & Session Foundation ✅
+
+- Guest identity support
+- Guest session cookie
+- Guest session persistence across refresh
+- Guest identity endpoint
+- Browser-level guest identity isolation
+- Credentialed frontend API requests
+- Guest session expiration handling
+
+#### Milestone 2 — Database & User Data Architecture
 - PostgreSQL
+- User relationships and ownership
+- Conversation ownership
+- Document ownership
+- Revision data model
+- SQLite migration
+- Database migrations
+- Proper data isolation
+
+#### Milestone 3 — Study Experience 2.0
+- AI-generated structured learning content
+- Learn mode
+- Visualize mode
+- Topic-focused study
+- Adaptive learning structure
+- Contextual learning actions
+- Learning-style controls
+- Multi-document study
+- Grounded study content
+
+#### Milestone 4 — Revision Mode
+- Dedicated Revision environment
+- Practice questions
+- Answer evaluation
+- Quiz sessions
+- Flashcards
+- Revision history
+- Difficulty-aware practice
+- Document/topic-based revision
+
+#### Milestone 5 — Learning Intelligence & Progress
+- Topic-level performance tracking
+- Weak-topic detection
+- Mastery estimation
+- Progress over time
+- Difficulty-aware performance
+- Revision recommendations
+- Adaptive revision
+- Flashcard performance
+- Spaced-repetition foundation
+
+#### Milestone 6 — Home & Personalized Dashboard
+- Continue where you left off
+- Progress summary
+- Recommended next actions
+- Weak areas
+- Recent activity
+- Personalized quick actions
+- Guest and signed-in home states
+
+#### Milestone 7 — Sharing & Learning Material Export
+- Share revision results
+- Share Study-generated material
+- Share Chat content
+- Clean text export
+- Native sharing
+- WhatsApp/social sharing
+- Shareable links
+- Privacy controls
+
+#### Milestone 8 — Production & Deployment
 - Docker
+- Production configuration
+- PostgreSQL production setup
+- Storage abstraction
+- Object storage support
+- Secure authentication
+- Authorization and user isolation
+- Production testing
+- Health checks and observability
 - Deployment
+- Backup and recovery
 
 ---
 

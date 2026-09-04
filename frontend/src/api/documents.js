@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, apiFetch } from "./config";
 
 /**
  * Uploads a document (PDF, DOCX, PPTX, PNG, or JPG/JPEG) and returns the created document's metadata
@@ -10,7 +10,7 @@ export async function uploadDocument(file) {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/upload`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/upload`, {
     method: "POST",
     body: formData,
   });
@@ -24,7 +24,7 @@ export async function uploadDocument(file) {
 }
 
 export async function getDocument(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}`);
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}`);
 
   if (!response.ok) {
     throw new Error(`Could not load document (status ${response.status})`);
@@ -46,7 +46,7 @@ export async function listDocuments({ search, sort } = {}) {
   if (sort) params.set("sort", sort);
   const queryString = params.toString();
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents${queryString ? `?${queryString}` : ""}`);
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents${queryString ? `?${queryString}` : ""}`);
 
   if (!response.ok) {
     throw new Error(`Could not load documents (status ${response.status})`);
@@ -61,7 +61,7 @@ export async function listDocuments({ search, sort } = {}) {
  * opens an existing document from the library.
  */
 export async function markDocumentOpened(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/open`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/open`, {
     method: "POST",
   });
 
@@ -73,7 +73,7 @@ export async function markDocumentOpened(documentId) {
 }
 
 export async function renameDocument(documentId, newName) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ original_filename: newName }),
@@ -88,7 +88,7 @@ export async function renameDocument(documentId, newName) {
 }
 
 export async function deleteDocument(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}`, {
     method: "DELETE",
   });
 

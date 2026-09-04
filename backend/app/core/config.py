@@ -41,6 +41,48 @@ class Settings(BaseSettings):
     # The frontend's origin, used to configure CORS below.
     frontend_origin: str = "http://localhost:5173"
 
+    # V3 Milestone 1 Phase 1: guest identity/session foundation (see
+    # app/api/deps.py and app/services/guest_session_service.py).
+    #
+    # How long a guest session stays valid with no activity before
+    # it's treated as expired. 30-60 minutes is a reasonable range for
+    # a study session someone might step away from briefly; 45 splits
+    # the difference. Sliding: any request that resolves to a session
+    # bumps its clock back to zero (see
+    # guest_session_service.touch_guest_session), so this is "minutes
+    # since last activity", not "minutes since the session started".
+    guest_session_inactivity_minutes: int = 45
+
+    # The cookie name the guest session token is stored under. Kept
+    # configurable (rather than a bare string literal at each call
+    # site) for the same reason every other cross-cutting value in
+    # this file is a setting -- one place to change it, e.g. if a
+    # later environment needs to namespace it further.
+    guest_session_cookie_name: str = "learnflow_guest_session"
+
+    # Whether the guest session cookie requires HTTPS to be sent.
+    # False by default so local development (plain http://localhost)
+    # keeps working with zero setup, matching this file's existing
+    # "safe default value consistent with the existing configuration
+    # architecture" convention. Should be set True (via the
+    # GUEST_SESSION_COOKIE_SECURE env var) in any real deployment --
+    # see the `samesite` setting below, which forces this in practice
+    # once frontend and backend are on different sites.
+    guest_session_cookie_secure: bool = False
+
+    # "lax" is correct for local dev, where the frontend
+    # (localhost:5173) and backend (localhost:8000) are different
+    # origins but the same *site* (SameSite is computed from the
+    # registrable domain, not the full origin, and "localhost" has
+    # none to register) -- Lax cookies are still sent on these
+    # cross-origin, same-site requests. A production deployment on two
+    # genuinely different domains is cross-*site*, which needs "none"
+    # here -- and per the cookie spec, SameSite=None is only honored
+    # by browsers when `Secure` is also set, so
+    # guest_session_cookie_secure must be switched to True alongside
+    # this.
+    guest_session_cookie_samesite: str = "lax"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

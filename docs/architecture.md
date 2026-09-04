@@ -380,10 +380,71 @@ state.
 
 ---
 
+## V3 — Identity & Guest Access
+
+V3 introduces an identity layer that supports both temporary guest sessions
+and persistent user accounts.
+
+The identity model is:
+
+IDENTITY
+├── Guest Session
+└── User Account
+
+Guest sessions provide temporary access to LearnFlow without requiring
+authentication. Guest data is temporary and is associated with the active
+guest session.
+
+Authenticated users receive persistent account-backed data and ownership.
+
+The frontend communicates with the backend using the centralized API layer.
+Credentialed requests allow the backend to associate requests with the
+current guest session or authenticated user.
+
+### Guest Session
+
+Guest sessions are represented by a server-recognized session identity and
+a browser cookie.
+
+The guest session:
+
+- persists across page refreshes while active
+- has a defined expiration boundary
+- provides a temporary identity for backend requests
+- is isolated from other browser sessions
+- does not represent a persistent user account
+
+Guest session expiration is a real data-lifetime boundary. Guest data may be
+migrated to a newly created account only while the guest session remains
+active.
+
+### Identity Resolution
+
+The backend exposes an identity endpoint that resolves the current request
+to its active identity.
+
+The identity response distinguishes between guest and authenticated users.
+
+The backend remains responsible for identity and authorization decisions.
+The frontend must not be treated as the source of truth for ownership or
+access control.
+
+### V3 Identity Direction
+
+The identity layer is designed as a foundation for:
+
+- authenticated user accounts
+- user-owned documents
+- user-owned conversations
+- persistent revision history
+- persistent learning progress
+- guest-to-account migration
+- backend-enforced data isolation
+
 ## Version
 
 Current Version:
-V2.4 — In Progress
+V2.4 — Complete / V3 — In Progress
 
 Open Existing Document
         OR
@@ -806,3 +867,4 @@ conversation history.
 Retrieved source references and grounding metadata are stored with the
 assistant message so previous responses remain interpretable even if
 document state changes later.
+

@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, apiFetch } from "./config";
 
 /**
  * Requests a summary for a document. The backend returns a cached
@@ -6,7 +6,7 @@ import { API_BASE_URL } from "./config";
  * this call is safe to make more than once.
  */
 export async function generateSummary(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/summary`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/summary`, {
     method: "POST",
   });
 
@@ -27,7 +27,7 @@ export async function generateSummary(documentId) {
  * that hasn't been summarized, not an error.
  */
 export async function getSummary(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/summary`);
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/summary`);
 
   if (response.status === 404) {
     return null;

@@ -1,7 +1,7 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, apiFetch } from "./config";
 
 export async function generateQuiz(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/quiz`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/quiz`, {
     method: "POST",
   });
 
@@ -21,7 +21,7 @@ export async function generateQuiz(documentId) {
  * empty array if none exist yet.
  */
 export async function getQuiz(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/quiz`);
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/quiz`);
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);

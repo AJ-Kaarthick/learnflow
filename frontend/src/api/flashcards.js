@@ -1,11 +1,11 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, apiFetch } from "./config";
 
 /**
  * Requests flashcards for a document. Returns cached cards if they
  * already exist, or generates a new set — safe to call more than once.
  */
 export async function generateFlashcards(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/flashcards`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/flashcards`, {
     method: "POST",
   });
 
@@ -30,7 +30,7 @@ export async function generateFlashcards(documentId) {
  * 404s, it just returns nothing.
  */
 export async function getFlashcards(documentId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/documents/${documentId}/flashcards`);
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/flashcards`);
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);

@@ -1,13 +1,15 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.deps import get_current_identity
 from app.api.v1 import (
     routes_chat,
     routes_conversations,
     routes_documents,
     routes_flashcards,
+    routes_identity,
     routes_mindmap,
     routes_quiz,
     routes_rag,
@@ -51,14 +53,39 @@ app.add_middleware(
 )
 
 
-app.include_router(routes_documents.router, prefix="/api/v1")
-app.include_router(routes_summary.router, prefix="/api/v1")
-app.include_router(routes_flashcards.router, prefix="/api/v1")
-app.include_router(routes_quiz.router, prefix="/api/v1")
-app.include_router(routes_mindmap.router, prefix="/api/v1")
-app.include_router(routes_rag.router, prefix="/api/v1")
-app.include_router(routes_chat.router, prefix="/api/v1")
-app.include_router(routes_conversations.router, prefix="/api/v1")
+# Every feature router resolves the current request's identity before
+# its own route handlers run -- one dependency, applied centrally here
+# (V3 Milestone 1 Phase 1), rather than each route file wiring up its
+# own guest/session check. `Depends(get_current_identity)` in a
+# router's `dependencies=` list runs the same way it would as a
+# parameter on every path operation in that router, including ones
+# that don't otherwise need `Identity` injected -- it still runs, and
+# still creates/refreshes the guest session cookie; it's just not
+# handed to the route function's body. Routes that do need the value
+# itself (currently only GET /identity/me) add
+# `Depends(get_current_identity)` to their own signature too; FastAPI
+# caches a dependency's result per request, so that doesn't re-run
+# resolution or touch the session twice.
+#
+# /health deliberately does NOT get this dependency -- see its
+# docstring below. It's a liveness check polled by tools (uptime
+# monitors, deployment platforms) that generally don't keep a cookie
+# jar between requests; resolving identity there would mint a brand
+# new, immediately-abandoned guest session on every single poll.
+IDENTITY_AWARE_ROUTERS = (
+    routes_documents.router,
+    routes_summary.router,
+    routes_flashcards.router,
+    routes_quiz.router,
+    routes_mindmap.router,
+    routes_rag.router,
+    routes_chat.router,
+    routes_conversations.router,
+    routes_identity.router,
+)
+
+for _router in IDENTITY_AWARE_ROUTERS:
+    app.include_router(_router, prefix="/api/v1", dependencies=[Depends(get_current_identity)])
 
 
 @app.get("/health")
