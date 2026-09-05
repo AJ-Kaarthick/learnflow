@@ -1,7 +1,55 @@
 import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import AppNav from "./AppNav";
+import AuthPanel from "./AuthPanel";
 import BackendStatus from "./BackendStatus";
 import SettingsPanel from "./SettingsPanel";
+
+// V3 Milestone 1 Phase 2: the minimal account-authentication control
+// -- "Sign in" for a guest, or the account's email plus "Log out" for
+// an authenticated user. Lives in TopBar for the same reason Settings
+// already does (see this file's existing comment below): authentication
+// state, like personalization, is app-wide chrome, not specific to
+// any one page. Nothing renders here at all while identity is still
+// loading (the brief moment before the first GET /identity/me
+// resolves), rather than flashing a "Sign in" button that would
+// immediately be replaced.
+function AuthControl() {
+  const { status, isAuthenticated, identity, logout } = useAuth();
+  const [authPanelOpen, setAuthPanelOpen] = useState(false);
+
+  if (status === "loading") return null;
+
+  if (isAuthenticated) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="hidden text-sm text-slate-600 sm:inline" title={identity.email}>
+          {identity.email}
+        </span>
+        <button
+          type="button"
+          onClick={() => logout()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
+        >
+          Log out
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setAuthPanelOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
+      >
+        Sign in
+      </button>
+      {authPanelOpen && <AuthPanel onClose={() => setAuthPanelOpen(false)} />}
+    </>
+  );
+}
 
 // Persistent top bar for the app. Carries the title that previously
 // lived in HomePage's <header>, plus BackendStatus (previously shown
@@ -28,6 +76,7 @@ function TopBar({ route, onOpenShortcuts }) {
       </div>
       <div className="flex items-center gap-4">
         <BackendStatus />
+        <AuthControl />
         <button
           type="button"
           onClick={() => setSettingsOpen(true)}

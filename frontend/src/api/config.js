@@ -2,7 +2,18 @@
 // security boundary — it stops a real secret from accidentally
 // shipping to every visitor). We read the backend URL from one, with
 // a local-dev fallback so the app works with zero setup.
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+//
+// `import.meta.env?.` (V3 Milestone 1 Phase 2) rather than a bare
+// `import.meta.env.`: this project's frontend test suite is plain
+// `node --test`, which runs this file with no Vite transform at all
+// -- `import.meta.env` is simply undefined there, and the old
+// unguarded access threw before api/auth.test.js and
+// api/identity.test.js (this phase's first tests to actually import
+// an api/*.js module -- see those files' own comments) ever got to
+// their first assertion. Under a real Vite build/dev server,
+// `import.meta.env` always exists, so `?.` is a no-op there; this
+// changes nothing about `API_BASE_URL`'s value in the app itself.
+export const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || "http://localhost:8000";
 
 /**
  * Thin wrapper around the global `fetch` that every api/*.js module

@@ -1858,3 +1858,86 @@ available through the centralized API layer.
 
 This phase establishes the identity boundary required for subsequent
 authentication, account ownership, and guest-to-account migration work.
+
+---
+
+# V3 — Milestone 1: Authentication & Guest Access
+
+## Phase 2 — Sign Up / Sign In & Credential Validation
+
+### Goal
+
+Introduce persistent user authentication while preserving the V3 guest
+identity foundation and existing application behavior.
+
+### Features Completed
+
+- Added user sign-up
+- Added user sign-in
+- Added email validation
+- Added password validation and policy enforcement
+- Added credential verification
+- Added invalid-credential error handling
+- Added authenticated session establishment
+- Added authenticated identity resolution
+- Added sign-out support
+- Preserved the existing guest identity foundation
+- Added backend and frontend authentication test coverage
+
+### Architecture
+
+Phase 2 builds authenticated user accounts on top of the V3 identity layer
+introduced in Phase 1.
+
+The system now distinguishes between temporary guest identities and
+authenticated user identities.
+
+Authentication requests are handled through the centralized frontend API
+layer and resolved by the backend. Credential validation and authentication
+state remain backend responsibilities.
+
+Guest sessions continue to function independently, while authenticated users
+receive a persistent account identity that will become the ownership boundary
+for later V3 milestones.
+
+### Problems Faced
+
+- Validating authentication credentials consistently
+- Providing clear errors for invalid credentials
+- Enforcing email and password validation rules
+- Preserving the existing guest identity behavior while introducing accounts
+- Keeping authentication logic behind the existing API architecture
+
+### Solutions
+
+- Added centralized authentication API handling
+- Added backend credential validation
+- Added email and password validation
+- Added authenticated session handling
+- Preserved the existing guest-session identity mechanism
+- Added regression coverage for authentication behavior
+- Verified invalid and valid credential flows independently
+
+### Verification
+
+- Backend tests: **427 passed**
+- Frontend tests: **133 passed**
+- Frontend production build successful
+- Sign-up flow verified
+- Sign-in flow verified
+- Email validation verified
+- Password validation verified
+- Invalid credentials correctly rejected
+- Valid credentials correctly accepted
+- Authenticated session establishment verified
+- Existing guest identity behavior preserved
+
+### Result
+
+LearnFlow now supports both temporary guest identities and authenticated
+user accounts. Users can create accounts and sign in using validated
+credentials while the existing guest-first identity foundation remains intact.
+
+This phase establishes the authentication layer required for subsequent
+session management, guest-to-account migration, user ownership, and protected
+persistent data.

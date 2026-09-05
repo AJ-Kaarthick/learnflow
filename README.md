@@ -395,6 +395,19 @@ LearnFlow currently supports:
 - Credentialed frontend API requests
 - Guest session expiration handling
 
+##### Phase 2 — Sign Up / Sign In & Credential Validation ✅
+
+- User sign-up
+- User sign-in
+- Email validation
+- Password validation and policy enforcement
+- Credential verification
+- Invalid-credential error handling
+- Authenticated session establishment
+- Authenticated identity resolution
+- Sign-out support
+- Backend and frontend authentication test coverage
+
 #### Milestone 2 — Database & User Data Architecture
 - PostgreSQL
 - User relationships and ownership
@@ -570,8 +583,11 @@ npm run dev
 
 ### Planned
 
-- Advanced conversation management improvements
-- Authentication
-- PostgreSQL
-- Docker
-- Deployment
+- Complete V3 Milestone 1 — Authentication & Guest Access
+- V3 Milestone 2 — Database & User Data Architecture
+- V3 Milestone 3 — Study Experience 2.0
+- V3 Milestone 4 — Revision Mode
+- V3 Milestone 5 — Learning Intelligence & Progress
+- V3 Milestone 6 — Home & Personalized Dashboard
+- V3 Milestone 7 — Sharing & Learning Material Export
+- V3 Milestone 8 — Production & Deployment

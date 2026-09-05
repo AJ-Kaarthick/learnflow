@@ -354,6 +354,122 @@ class GuestSession(Base):
     revoked_at = Column(DateTime, nullable=True)
 
 
+class User(Base):
+    """
+    A registered account (V3 Milestone 1 Phase 2). This is the durable
+    counterpart to GuestSession: a GuestSession *is* its own identity
+    (the token is the credential), but a User is a stable identity a
+    person can return to from any browser, authenticated by a
+    separate credential (a password, checked against `password_hash`)
+    rather than merely by possessing an opaque token.
+
+    Deliberately minimal, per this phase's brief -- just enough to
+    authenticate someone and know which stable id they are. No
+    profile fields (display name, avatar, ...), no email verification
+    flag, no password-reset token -- all explicitly out of scope for
+    this phase. Milestone 2 is what will give a User rows to own
+    (Documents, Conversations, ...); this table only establishes that
+    the identity exists.
+
+    `email` is the login identifier (this project's "appropriate
+    choice" per the brief -- there's no username concept anywhere
+    else in the app to reuse instead). Stored lowercased (see
+    schemas/auth.py's validators) so uniqueness and lookup are
+    case-insensitive without needing a database-level
+    citext/lower(email) index -- SQLite has neither, and this project
+    isn't moving off SQLite this phase (that's Milestone 2). `unique=True`
+    is the database-level backstop against duplicate accounts; the
+    service layer (auth_service.get_user_by_email) also checks this
+    before insert, same "backstop against race conditions" pattern as
+    Summary.document_id and ConversationDocument's composite key
+    elsewhere in this file.
+
+    `password_hash` is a bcrypt hash (see auth_service.hash_password)
+    -- never the plaintext password, never a reversible encryption of
+    it. There is no column here that could leak a recoverable
+    password even if this table were dumped outright.
+
+    Forward-compatibility notes for future authentication work (not
+    implemented in this phase, per the brief):
+
+    - Email verification: `password_hash` being nullable-in-spirit-only
+      (every row has one, since password auth is the only signup path
+      today) is exactly what will need to loosen if a future phase
+      adds "sign up, verify by email" as a *second* path -- but that's
+      a column addition (`email_verified: bool`, defaulting False) and
+      a token/expiry table, not a change to this table's shape or to
+      `id`/`email` as the stable identity a session or a future
+      ownership FK (Milestone 2) points at.
+    - An OAuth provider (e.g. "Continue with Google"): this table's
+      `id` already exists independently of *how* someone authenticates
+      -- a future `oauth_identities` table (provider, provider_user_id,
+      user_id FK -> this table) could let a `User` be reached via a
+      password, an OAuth login, or both, without this table needing a
+      `password_hash`-shaped column for every future login method or
+      any change to how `UserSession`/`Identity` represent "which User
+      is this". Account-linking rules (what happens if someone signs
+      up with a password, then later hits "Continue with Google" with
+      the same email) are a decision for whenever that phase actually
+      lands, not one this table forecloses today.
+    """
+
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    email = Column(String, nullable=False, unique=True, index=True)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class UserSession(Base):
+    """
+    An authenticated session (V3 Milestone 1 Phase 2) -- the User
+    equivalent of GuestSession, and deliberately shaped to match it:
+    `id` is itself the high-entropy bearer token (see
+    user_session_service.generate_session_token), not a
+    generate_uuid() resource id, for exactly the same reason
+    GuestSession's docstring gives -- holding this value (via the
+    httponly cookie it's issued in) *is* being authenticated as
+    `user_id`. Expiration is likewise computed from `last_seen_at`
+    against a settings value (`user_session_inactivity_days`, longer
+    than a guest's -- "stay signed in across a browser refresh /
+    normal return visit" is exactly what an authenticated session is
+    for) rather than a stored `expires_at`, and `revoked_at` exists so
+    logout can invalidate a session without deleting the row outright
+    (see user_session_service.delete_user_session, which -- like its
+    guest counterpart -- currently just deletes rather than setting
+    this; kept as a column for the same future-proofing reason
+    GuestSession keeps one).
+
+    Kept as its own table, with its own cookie (see
+    core/config.py:user_session_cookie_name), rather than reusing
+    GuestSession itself: a guest session and an authenticated session
+    are different credentials with different lifetimes and different
+    trust levels (see api/deps.py:get_current_identity, which checks
+    this table first and only falls back to guest resolution when no
+    valid row here is presented) -- conflating them into one table
+    would mean either weakening guest sessions' short inactivity
+    window to match a signed-in user's, or vice versa, and would make
+    "is this request authenticated or just a guest?" a property you'd
+    have to check a nullable column for instead of "which table did
+    this token resolve in".
+
+    No relationship()/cascade to User -- same convention as every
+    other foreign key in this file (see Message's docstring); a
+    session row is looked up by id and its `user_id` queried
+    separately (see api/deps.py) rather than traversed via an ORM
+    relationship.
+    """
+
+    __tablename__ = "user_sessions"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    revoked_at = Column(DateTime, nullable=True)
+
+
 class ConversationDocument(Base):
     """
     Join table linking a Conversation to the Documents it references —

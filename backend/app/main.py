@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import get_current_identity
 from app.api.v1 import (
+    routes_auth,
     routes_chat,
     routes_conversations,
     routes_documents,
@@ -86,6 +87,12 @@ IDENTITY_AWARE_ROUTERS = (
 
 for _router in IDENTITY_AWARE_ROUTERS:
     app.include_router(_router, prefix="/api/v1", dependencies=[Depends(get_current_identity)])
+
+# routes_auth (V3 Milestone 1 Phase 2: signup/signin/logout) is
+# deliberately NOT in IDENTITY_AWARE_ROUTERS -- see that router's own
+# comment for why running get_current_identity first would be wasted,
+# irrelevant work for every route in it.
+app.include_router(routes_auth.router, prefix="/api/v1")
 
 
 @app.get("/health")

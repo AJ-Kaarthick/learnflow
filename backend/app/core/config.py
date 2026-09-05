@@ -83,6 +83,26 @@ class Settings(BaseSettings):
     # this.
     guest_session_cookie_samesite: str = "lax"
 
+    # V3 Milestone 1 Phase 2: account authentication (see
+    # app/services/user_session_service.py and app/api/v1/routes_auth.py).
+    #
+    # How long an authenticated session stays valid with no activity.
+    # Much longer than a guest session's 45 minutes on purpose: an
+    # authenticated session's entire point is "stay signed in across a
+    # normal browser refresh, and across coming back tomorrow" --
+    # forcing a re-login on the same short inactivity window as a
+    # guest would defeat that. 30 days, sliding on activity (see
+    # user_session_service.touch_user_session), matches the "remember
+    # me by default" behavior most account-based products use.
+    user_session_inactivity_days: int = 30
+
+    # The cookie name the authenticated session token is stored under.
+    # Deliberately a different cookie from guest_session_cookie_name
+    # (not a shared one with a "type" field) -- see UserSession's
+    # docstring in db/models.py for why these are two separate
+    # credentials with two separate lifetimes.
+    user_session_cookie_name: str = "learnflow_user_session"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

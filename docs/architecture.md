@@ -429,6 +429,34 @@ The backend remains responsible for identity and authorization decisions.
 The frontend must not be treated as the source of truth for ownership or
 access control.
 
+### Authentication
+
+V3 authentication introduces persistent user accounts alongside temporary
+guest identities.
+
+Users can create accounts using email and password credentials and can sign
+in using those credentials.
+
+Authentication includes:
+
+- User sign-up
+- User sign-in
+- Email validation
+- Password validation and policy enforcement
+- Credential verification
+- Invalid-credential handling
+- Authenticated session establishment
+- Authenticated identity resolution
+- Sign-out support
+
+The backend remains responsible for credential validation and authentication
+state. The frontend communicates with authentication endpoints through the
+centralized API layer and does not act as the source of truth for identity.
+
+Authentication is built on top of the V3 identity layer established in Phase 1,
+allowing temporary guest sessions and persistent authenticated accounts to
+coexist.
+
 ### V3 Identity Direction
 
 The identity layer is designed as a foundation for:
@@ -444,7 +472,8 @@ The identity layer is designed as a foundation for:
 ## Version
 
 Current Version:
-V2.4 — Complete / V3 — In Progress
+
+V3 — In Progress
 
 Open Existing Document
         OR
