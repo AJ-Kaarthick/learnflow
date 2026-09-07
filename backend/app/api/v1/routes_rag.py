@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_identity
 from app.db.database import get_db
 from app.db.models import Document, DocumentChunk
+from app.schemas.identity import Identity
 from app.schemas.rag import IndexResponse, SearchRequest, SearchResponse, SearchResultItem
+from app.services import ownership_service
 from app.services.ai.base_provider import AIProviderError
 from app.services.ai.embedding_provider import EmbeddingProvider
 from app.services.ai.embedding_provider_factory import get_embedding_provider
@@ -13,7 +16,7 @@ from app.services.rag.retrieval_service import retrieve_relevant_chunks
 router = APIRouter(prefix="/documents", tags=["rag"])
 
 
-def _get_ready_document(document_id: str, db: Session) -> Document:
+def _get_ready_document(document_id: str, db: Session, identity: Identity) -> Document:
     """
     Shared lookup for both routes below — same "exists, and is ready"
     check routes_summary.py and friends already do before generating
@@ -32,9 +35,18 @@ def _get_ready_document(document_id: str, db: Session) -> Document:
     / chunking.chunk_text, which already documents "empty/
     whitespace-only text -> zero chunks"); nothing here guesses at
     *why* the text is missing, only whether it is.
+
+    V3 Milestone 1 Phase 3: also 404s for a document not owned by
+    `identity` — see routes_summary.py's identical check for why.
+    Indexing/search aren't gated by the AI-generation guest limit
+    (guest_limit_service.py's docstring explains why: they're a
+    technical prerequisite for chat, not user-facing "generation" of
+    study content, and already idempotent/no-cost on a repeat call) —
+    but they still only ever run against a document the requester
+    actually owns.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
-    if document is None:
+    if document is None or not ownership_service.is_owned_by(document, identity):
         raise HTTPException(status_code=404, detail="Document not found.")
     if document.status != "ready":
         raise HTTPException(
@@ -57,6 +69,7 @@ async def create_index(
     document_id: str,
     db: Session = Depends(get_db),
     embedding_provider: EmbeddingProvider = Depends(get_embedding_provider),
+    identity: Identity = Depends(get_current_identity),
 ) -> IndexResponse:
     """
     Chunks and embeds a document, so it becomes searchable. Idempotent,
@@ -74,7 +87,7 @@ async def create_index(
     or by hitting this endpoint first — retrieval_service.py doesn't
     care which.
     """
-    document = _get_ready_document(document_id, db)
+    document = _get_ready_document(document_id, db, identity)
 
     already_indexed = (
         db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).first()
@@ -99,6 +112,7 @@ async def search_document(
     payload: SearchRequest,
     db: Session = Depends(get_db),
     embedding_provider: EmbeddingProvider = Depends(get_embedding_provider),
+    identity: Identity = Depends(get_current_identity),
 ) -> SearchResponse:
     """
     Semantic search over one document's indexed chunks. This exists in
@@ -110,7 +124,7 @@ async def search_document(
     calls generate_summary_for_document() directly instead of calling
     another route.
     """
-    _get_ready_document(document_id, db)
+    _get_ready_document(document_id, db, identity)
 
     is_indexed = (
         db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).first()

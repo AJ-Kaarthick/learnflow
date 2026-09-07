@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.schemas.auth import SigninRequest, SignupRequest
 from app.schemas.identity import Identity, IdentityType
-from app.services import auth_service, user_session_service
+from app.services import auth_service, guest_migration_service, guest_session_service, user_session_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,7 +34,9 @@ def _start_authenticated_session(db: Session, response: Response, user_id: str, 
 
 
 @router.post("/signup", response_model=Identity, status_code=201)
-def signup(payload: SignupRequest, response: Response, db: Session = Depends(get_db)) -> Identity:
+def signup(
+    payload: SignupRequest, request: Request, response: Response, db: Session = Depends(get_db)
+) -> Identity:
     """
     Registers a new account and immediately signs it in -- "establish
     an authenticated session after successful signup" per this phase's
@@ -52,11 +54,53 @@ def signup(payload: SignupRequest, response: Response, db: Session = Depends(get
     which is unavoidable for a signup endpoint (unlike signin, there's
     no way to reject a duplicate registration without revealing the
     email is taken).
+
+    V3 Milestone 1 Phase 3 -- guest->account migration: "guest access
+    is an upgrade path, not a dead end." If this browser is carrying a
+    still-*active* guest session when it signs up, everything that
+    guest session owns (documents, conversations, and everything that
+    hangs off them -- see guest_migration_service.migrate_guest_data_to_user's
+    own docstring for exactly what "everything" covers and why) moves
+    to the brand-new account, atomically, before the response goes
+    out. `get_valid_guest_session` returns None for a missing,
+    expired, or already-revoked cookie -- exactly the same check
+    get_current_identity's own guest fallback would apply -- so an
+    expired guest session is silently *not* migrated (its data stays
+    subject to Phase 1's existing expiration handling) rather than
+    resurrected, and a browser with no guest cookie at all simply skips
+    this block and signs up normally, same as before this phase
+    existed.
+
+    Deliberately does not run get_current_identity here (this router
+    stays outside main.py's IDENTITY_AWARE_ROUTERS, per this file's own
+    module comment) -- doing so would mint a brand-new guest session
+    for a signup request that arrived with no guest cookie at all, and
+    that brand-new session would then immediately become migration's
+    *source* (owning nothing) instead of correctly doing nothing. Only
+    a guest cookie that already resolves to a real, active session
+    (checked read-only, via guest_session_service.get_valid_guest_session)
+    ever triggers a migration.
+
+    The now-migrated guest session's cookie is cleared from the
+    response as routine cleanup, not because anything downstream
+    depends on it being gone: get_current_identity always checks the
+    authenticated-session cookie first (see that function's own
+    docstring), so the freshly-issued user session below wins on every
+    subsequent request regardless of whether a stale guest cookie is
+    still sitting in the browser.
     """
     try:
         user = auth_service.create_user(db, payload.email, payload.password)
     except auth_service.EmailAlreadyRegisteredError:
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
+
+    guest_token = request.cookies.get(settings.guest_session_cookie_name)
+    guest_session = (
+        guest_session_service.get_valid_guest_session(db, guest_token) if guest_token else None
+    )
+    if guest_session is not None:
+        guest_migration_service.migrate_guest_data_to_user(db, guest_session.id, user.id)
+        response.delete_cookie(key=settings.guest_session_cookie_name, path="/")
 
     return _start_authenticated_session(db, response, user.id, user.email)
 

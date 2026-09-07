@@ -1941,3 +1941,117 @@ credentials while the existing guest-first identity foundation remains intact.
 This phase establishes the authentication layer required for subsequent
 session management, guest-to-account migration, user ownership, and protected
 persistent data.
+
+
+---
+
+# V3 — Milestone 1: Authentication & Guest Access
+
+## Phase 3 — Guest Limits + Guest→Account Migration
+
+### Goal
+
+Complete the V3 guest-first identity flow by adding backend-enforced guest
+usage limits, guest-to-account migration, and ownership-based data isolation
+while preserving the existing V2.4 behavior and authentication foundation.
+
+### Features Completed
+
+- Added server-enforced guest usage limits
+- Added guest usage tracking by guest session
+- Added guest-to-account data migration
+- Added transaction-safe guest migration
+- Added guest-session expiration enforcement
+- Added ownership-aware documents
+- Added ownership-aware conversations
+- Added backend-enforced user data isolation
+- Preserved authenticated user access to owned persistent data
+- Preserved guest identity and authentication behavior
+- Added password confirmation validation
+- Added password visibility controls
+- Added frontend regression coverage for authentication UX
+
+### Architecture
+
+Phase 3 completes the ownership boundary introduced by the V3 identity layer.
+
+Guest-owned documents and conversations are associated with the active guest
+session, while authenticated data is associated with the authenticated user.
+
+Guest usage limits are enforced by the backend and tracked against the guest
+session, preventing frontend state changes or page refreshes from bypassing
+the configured limits.
+
+When a guest creates an account while the guest session remains active,
+eligible guest-owned documents and conversations are migrated to the newly
+created user account.
+
+Migration is performed transactionally and is restricted to the active guest
+session. Data belonging to other guest sessions or authenticated users is not
+included.
+
+After migration, the authenticated user becomes the owner of the migrated
+data and backend authorization prevents unrelated users from accessing it.
+
+### Problems Faced
+
+- Existing local SQLite databases used the pre-Phase-3 schema and did not
+  contain the new ownership fields.
+- Guest limits needed to remain effective across refreshes and frontend state
+  changes.
+- Guest-to-account migration needed to avoid accidentally migrating unrelated
+  data.
+- Ownership needed to be enforced by the backend rather than trusted from
+  frontend state.
+- Password confirmation and visibility needed to be added without changing
+  the existing authentication architecture.
+
+### Solutions
+
+- Verified the Phase 3 ownership schema using a fresh SQLite database.
+- Added backend-enforced guest usage accounting.
+- Scoped guest migration to the active guest session.
+- Performed migration transactionally.
+- Added backend ownership checks for protected persistent data.
+- Preserved the existing guest identity and authenticated session mechanisms.
+- Added password confirmation validation and password visibility controls.
+- Added frontend regression coverage for the authentication UI changes.
+
+### Database Compatibility Note
+
+Phase 3 requires the updated ownership-aware database schema.
+
+A fresh database created from the current Phase 3 schema is supported.
+
+Existing SQLite databases created under the pre-Phase-3 schema are not
+automatically migrated. The existing database migration strategy is deferred
+to V3 Milestone 2, which will establish the long-term database architecture,
+PostgreSQL transition, and migration strategy.
+
+### Verification
+
+- Backend tests: **464 passed**
+- Frontend tests: **159 passed**
+- Production build successful
+- Guest identity and session behavior verified
+- Guest upload limit verified
+- Guest session persistence across refresh verified
+- Guest → account migration verified
+- Account logout/login persistence verified
+- Cross-account data isolation verified
+- Separate account does not see another account's documents
+- Password confirmation validation verified
+- Password visibility controls verified
+
+### Result
+
+V3 Milestone 1 now provides the complete guest-first authentication and
+ownership foundation required for subsequent V3 work.
+
+LearnFlow supports temporary guest identities, authenticated user accounts,
+backend-enforced guest limits, guest-to-account migration, and ownership-based
+data isolation.
+
+The milestone establishes the identity and ownership boundary required for
+the V3 database architecture, study, revision, progress, dashboard, and
+sharing features.

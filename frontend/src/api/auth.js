@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from "./config.js";
+import { parseErrorResponse } from "./errors.js";
 
 /**
  * The frontend counterpart to `app/api/v1/routes_auth.py` (V3
@@ -12,47 +13,14 @@ import { API_BASE_URL, apiFetch } from "./config.js";
  * in this app (see api/config.js) -- the authenticated-session cookie
  * these endpoints set is only ever readable by the browser sending it
  * back automatically, never by this code.
- */
-
-/**
- * Turns a failed response's body into a single, human-readable
- * string -- never the raw JS value from `errorBody.detail`.
  *
- * FastAPI's own 422 responses (raised by pydantic field validators in
- * schemas/auth.py -- malformed email, weak password) don't shape
- * `detail` as a string at all: it's an array of structured objects
- * (`[{ loc, msg, type, ... }]`). Manual QA on the first Phase 2 pass
- * found this reaching the UI completely unhandled -- `detail` (an
- * array of objects) got handed straight to `new Error(...)`, whose
- * `.message` became that array's own `String(...)` coercion, i.e.
- * literally the text "[object Object]". This function is what
- * prevents that: a string `detail` (this app's own hand-written
- * HTTPExceptions -- 401, 409) is used as-is; an array `detail`
- * (pydantic's shape) has each entry's `msg` pulled out instead, with
- * pydantic's own "Value error, " prefix stripped (see
- * schemas/auth.py's validators -- they raise plain
- * `ValueError("Please enter a valid email address.")`-style messages;
- * pydantic re-wraps that as "Value error, Please enter a valid email
- * address." in the response, which is the wrapper's own bookkeeping
- * text, not part of the message meant for a person to read).
+ * Error-body parsing (V3 Milestone 1 Phase 3: moved into its own
+ * module, api/errors.js, once the guest-limit shape gave every other
+ * api/*.js file the same "[object Object]" problem this file's own
+ * parseErrorDetail was originally written to fix -- see that module's
+ * docstring for the full history) is shared with every other api
+ * module now, rather than duplicated here.
  */
-async function parseErrorDetail(response, fallback) {
-  const errorBody = await response.json().catch(() => null);
-  const detail = errorBody?.detail;
-
-  if (typeof detail === "string" && detail.trim()) {
-    return detail;
-  }
-
-  if (Array.isArray(detail) && detail.length > 0) {
-    const messages = detail
-      .map((item) => (typeof item?.msg === "string" ? item.msg.replace(/^Value error,\s*/, "") : null))
-      .filter(Boolean);
-    if (messages.length > 0) return messages.join(" ");
-  }
-
-  return fallback;
-}
 
 /**
  * POST /auth/signup. Returns the Identity for the new (and
@@ -71,7 +39,7 @@ export async function signup(email, password) {
   });
 
   if (!response.ok) {
-    throw new Error(await parseErrorDetail(response, `Could not sign up (status ${response.status})`));
+    throw await parseErrorResponse(response, `Could not sign up (status ${response.status})`);
   }
 
   return response.json();
@@ -92,7 +60,7 @@ export async function signin(email, password) {
   });
 
   if (!response.ok) {
-    throw new Error(await parseErrorDetail(response, `Could not sign in (status ${response.status})`));
+    throw await parseErrorResponse(response, `Could not sign in (status ${response.status})`);
   }
 
   return response.json();

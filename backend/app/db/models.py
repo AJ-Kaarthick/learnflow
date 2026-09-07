@@ -64,6 +64,36 @@ class Document(Base):
     # nothing instead of erroring.
     page_count = Column(Integer, nullable=True)
 
+    # V3 Milestone 1 Phase 3: who this document belongs to. A pair of
+    # columns (not a single foreign key) because ownership can be
+    # either a GuestSession or a User -- two different tables -- and
+    # this project's existing convention is to never configure a real
+    # cross-table ORM relationship anyway (see this class's own
+    # docstring above, and Message.sources_json's docstring). Values
+    # mirror IdentityType exactly ("guest" / "user" -- see
+    # app/schemas/identity.py), so assigning an owner is always just
+    # `owner_type = identity.type.value; owner_id = identity.id` (see
+    # app/services/ownership_service.py), never a second vocabulary to
+    # keep in sync with Identity's.
+    #
+    # Both nullable, and both *stay* null for any row that predates
+    # this phase or was inserted directly against the database rather
+    # than through the API (this project's own test fixtures do this
+    # routinely -- see e.g. test_summary.py's
+    # _seed_ready_document_with_text). ownership_service.is_owned_by
+    # treats owner_type IS NULL as "visible to everyone", i.e. exactly
+    # how every document already behaved before this phase introduced
+    # ownership at all -- a document only becomes exclusive to one
+    # identity once something actually assigns it one, which every
+    # route that creates a Document does from this phase on (see
+    # upload_document in routes_documents.py). This is a deliberate
+    # backward-compatibility choice, not an oversight: it means
+    # Phase 3's isolation guarantee is real for every document created
+    # through the app from now on, without requiring a migration tool
+    # (out of scope per this phase's brief) to backfill owners onto
+    # rows that already existed before ownership was a concept here.
+    owner_type = Column(String, nullable=True)
+    owner_id = Column(String, nullable=True, index=True)
 
 
 class Summary(Base):
@@ -243,6 +273,20 @@ class Conversation(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # V3 Milestone 1 Phase 3: same shape and same reasoning as
+    # Document.owner_type/owner_id above -- see that docstring for why
+    # this is two plain, nullable columns rather than a foreign key,
+    # and why a null owner_type means "visible to everyone" (a
+    # pre-Phase-3 or directly-seeded row) rather than "visible to no
+    # one". A Conversation's Messages and ConversationDocument rows
+    # have no owner columns of their own: every route reaches them only
+    # via their parent conversation_id (see routes_conversations.py),
+    # so gating access on the Conversation's own ownership is
+    # sufficient -- see guest_migration_service.migrate_guest_data_to_user
+    # for where this is spelled out for the migration case specifically.
+    owner_type = Column(String, nullable=True)
+    owner_id = Column(String, nullable=True, index=True)
+
 
 class Message(Base):
     """
@@ -352,6 +396,31 @@ class GuestSession(Base):
     last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     revoked_at = Column(DateTime, nullable=True)
+
+    # V3 Milestone 1 Phase 3: guest usage limits (see
+    # app/services/guest_limit_service.py, which is the only code that
+    # reads or writes these). Three independent counters -- document
+    # uploads, AI content generation (summary/flashcards/quiz/mind
+    # map, counted once each, not per cached re-fetch -- see that
+    # service's docstring), and chat messages sent -- rather than one
+    # combined number, since the brief calls these out as distinct
+    # usage dimensions with (potentially) distinct limits
+    # (settings.guest_max_documents / guest_max_ai_generations /
+    # guest_max_chat_messages). Plain integer columns, not a separate
+    # table: there is exactly one of these per guest session, so a
+    # child table keyed by guest_session_id would be a one-to-one
+    # relationship with no second use, the same "no speculative
+    # structure" reasoning this class's own docstring already applies
+    # to not having a separate `token` column.
+    #
+    # Deliberately NOT carried over to a User on guest->account
+    # migration (see guest_migration_service.py) -- guest limits apply
+    # only to guest identities, so an authenticated account always
+    # starts unrestricted regardless of how much its guest session had
+    # already used.
+    document_upload_count = Column(Integer, nullable=False, default=0)
+    ai_generation_count = Column(Integer, nullable=False, default=0)
+    chat_message_count = Column(Integer, nullable=False, default=0)
 
 
 class User(Base):

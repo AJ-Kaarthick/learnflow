@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_identity
 from app.db.database import get_db
 from app.db.models import (
     ConversationDocument,
@@ -16,7 +17,9 @@ from app.db.models import (
     Summary,
 )
 from app.schemas.document import DocumentRenameRequest, DocumentResponse, DocumentSortOption
-from app.services import document_extraction_service, storage_service
+from app.schemas.identity import Identity
+from app.services import document_extraction_service, guest_limit_service, ownership_service, storage_service
+from app.services.guest_limit_service import GuestLimitExceededError, GuestLimitType
 from app.utils import filenames
 
 logger = logging.getLogger(__name__)
@@ -66,6 +69,7 @@ def list_documents(
     search: str | None = Query(default=None, description="Case-insensitive, partial filename match."),
     sort: DocumentSortOption = Query(default=DocumentSortOption.UPLOADED_NEWEST),
     db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
 ) -> list[DocumentResponse]:
     """
     The Document Library list. Filtering and sorting both happen here,
@@ -73,8 +77,13 @@ def list_documents(
     sort are the same "which documents, in what order" question the
     DB is already best suited to answer, and it keeps that logic in
     one tested place instead of duplicated in JS.
+
+    V3 Milestone 1 Phase 3: scoped to documents this identity owns
+    (plus any legacy/unowned row — see ownership_service.scope_to_owner)
+    so a guest's or user's library only ever shows their own work, not
+    every document anyone has ever uploaded.
     """
-    query = db.query(Document)
+    query = ownership_service.scope_to_owner(db.query(Document), Document, identity)
 
     search = (search or "").strip()
     if search:
@@ -103,7 +112,9 @@ def list_documents(
 
 @router.post("/upload", response_model=DocumentResponse, status_code=201)
 async def upload_document(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
 ) -> DocumentResponse:
     extension = ALLOWED_UPLOAD_TYPES.get(file.content_type)
     if extension is None:
@@ -119,6 +130,14 @@ async def upload_document(
     if len(file_bytes) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=400, detail="File exceeds the 20 MB limit.")
 
+    # V3 Milestone 1 Phase 3: checked before anything is written to
+    # disk or the database — a guest at the limit shouldn't pay the
+    # cost of a save that's about to be rejected anyway.
+    try:
+        guest_limit_service.enforce_limit(db, identity, GuestLimitType.DOCUMENT_UPLOAD)
+    except GuestLimitExceededError as error:
+        raise guest_limit_service.to_http_exception(error)
+
     stored_filename = storage_service.save_uploaded_file(file_bytes, extension=extension)
 
     # Save a record immediately, before extraction runs, so that even
@@ -132,6 +151,7 @@ async def upload_document(
         # extraction or stat the file back off disk.
         file_size_bytes=len(file_bytes),
     )
+    ownership_service.assign_owner(document, identity)
     db.add(document)
     db.commit()
     db.refresh(document)
@@ -170,28 +190,45 @@ async def upload_document(
     db.commit()
     db.refresh(document)
 
+    # Counted once the upload has actually succeeded (including a
+    # "failed" extraction status — the upload itself, the thing this
+    # limit governs, still happened and used up a slot), never before.
+    guest_limit_service.record_usage(db, identity, GuestLimitType.DOCUMENT_UPLOAD)
+
     return DocumentResponse.from_document(document)
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
-def get_document(document_id: str, db: Session = Depends(get_db)) -> DocumentResponse:
+def get_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
+) -> DocumentResponse:
     document = db.query(Document).filter(Document.id == document_id).first()
 
-    if document is None:
+    if document is None or not ownership_service.is_owned_by(document, identity):
+        # Same 404 either way — a document owned by someone else
+        # doesn't exist as far as this identity is concerned, so this
+        # never leaks whether a given id belongs to another guest or
+        # user versus simply not existing at all.
         raise HTTPException(status_code=404, detail="Document not found.")
 
     return DocumentResponse.from_document(document)
 
 
 @router.post("/{document_id}/open", response_model=DocumentResponse)
-def mark_document_opened(document_id: str, db: Session = Depends(get_db)) -> DocumentResponse:
+def mark_document_opened(
+    document_id: str,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
+) -> DocumentResponse:
     """
     Called whenever the user opens a document from the library, purely
     to timestamp it for the "Recently Opened" sort — this endpoint has
     no other side effects and doesn't touch the document's content.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
-    if document is None:
+    if document is None or not ownership_service.is_owned_by(document, identity):
         raise HTTPException(status_code=404, detail="Document not found.")
 
     document.last_opened_at = datetime.now(timezone.utc)
@@ -203,10 +240,13 @@ def mark_document_opened(document_id: str, db: Session = Depends(get_db)) -> Doc
 
 @router.patch("/{document_id}", response_model=DocumentResponse)
 def rename_document(
-    document_id: str, payload: DocumentRenameRequest, db: Session = Depends(get_db)
+    document_id: str,
+    payload: DocumentRenameRequest,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
 ) -> DocumentResponse:
     document = db.query(Document).filter(Document.id == document_id).first()
-    if document is None:
+    if document is None or not ownership_service.is_owned_by(document, identity):
         raise HTTPException(status_code=404, detail="Document not found.")
 
     # The extension is whatever this specific document's current name
@@ -228,12 +268,16 @@ def rename_document(
     new_filename = f"{base_name}{extension}"
 
     # Case-insensitive, whitespace-insensitive duplicate check against
-    # every *other* document. func.trim() guards against any legacy
-    # row whose name has stray leading/trailing whitespace (upload
-    # doesn't trim file.filename), so the comparison is symmetric with
-    # how new_filename was just built.
+    # every *other* document this identity owns (V3 Milestone 1 Phase
+    # 3: scoped the same way the library list is — see
+    # ownership_service.scope_to_owner — so two different guests, or a
+    # guest and a user, can each freely have a document of the same
+    # name without tripping this check). func.trim() guards against
+    # any legacy row whose name has stray leading/trailing whitespace
+    # (upload doesn't trim file.filename), so the comparison is
+    # symmetric with how new_filename was just built.
     duplicate = (
-        db.query(Document)
+        ownership_service.scope_to_owner(db.query(Document), Document, identity)
         .filter(Document.id != document_id)
         .filter(func.lower(func.trim(Document.original_filename)) == new_filename.lower())
         .first()
@@ -252,9 +296,13 @@ def rename_document(
 
 
 @router.delete("/{document_id}", status_code=204)
-def delete_document(document_id: str, db: Session = Depends(get_db)) -> None:
+def delete_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
+) -> None:
     document = db.query(Document).filter(Document.id == document_id).first()
-    if document is None:
+    if document is None or not ownership_service.is_owned_by(document, identity):
         raise HTTPException(status_code=404, detail="Document not found.")
 
     # No ORM relationships/cascades are configured on these models (see

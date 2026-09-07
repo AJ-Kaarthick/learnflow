@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from "./config";
+import { parseErrorResponse } from "./errors.js";
 
 export async function generateQuiz(documentId) {
   const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/quiz`, {
@@ -9,8 +10,7 @@ export async function generateQuiz(documentId) {
     if (response.status === 502) {
       throw new Error("The AI couldn't generate a quiz right now. Please try again in a moment.");
     }
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Quiz generation failed (status ${response.status})`);
+    throw await parseErrorResponse(response, `Quiz generation failed (status ${response.status})`);
   }
 
   return response.json();
@@ -24,8 +24,7 @@ export async function getQuiz(documentId) {
   const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/quiz`);
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Could not load quiz (status ${response.status})`);
+    throw await parseErrorResponse(response, `Could not load quiz (status ${response.status})`);
   }
 
   return response.json();

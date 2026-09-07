@@ -374,7 +374,8 @@ LearnFlow currently supports:
 
 ### 🚧 V3 — In Progress
 
-#### Milestone 1 — Authentication & Guest Access
+#### Milestone 1 — Authentication & Guest Access ✅
+
 - Guest mode
 - Guest session management
 - Sign up / Sign in
@@ -408,6 +409,20 @@ LearnFlow currently supports:
 - Sign-out support
 - Backend and frontend authentication test coverage
 
+##### Phase 3 — Guest Limits + Guest→Account Migration ✅
+
+- Server-enforced guest usage limits
+- Guest usage tracking by session
+- Guest → account data migration
+- Transaction-safe migration
+- Guest-session expiration enforcement
+- User ownership of migrated documents and conversations
+- Backend-enforced user data isolation
+- Protected authenticated user data
+- Password confirmation validation
+- Password visibility controls
+- Backend and frontend regression coverage
+
 #### Milestone 2 — Database & User Data Architecture
 - PostgreSQL
 - User relationships and ownership
@@ -428,6 +443,12 @@ LearnFlow currently supports:
 - Learning-style controls
 - Multi-document study
 - Grounded study content
+
+> **Development database note:** V3 Milestone 1 introduces ownership fields
+> required for guest and authenticated-user data isolation. A fresh database
+> created from the current schema is supported. Existing pre-Phase-3 SQLite
+> databases are not automatically migrated and require the database migration
+> work planned for V3 Milestone 2.
 
 #### Milestone 4 — Revision Mode
 - Dedicated Revision environment
@@ -580,10 +601,14 @@ npm run dev
 - AI-generated semantic conversation titles
 - Dynamic conversation document context
 - localStorage conversation-state migration
+- V3 guest identity and session foundation
+- V3 email/password authentication
+- V3 guest usage limits
+- V3 guest-to-account migration
+- V3 user data isolation
 
 ### Planned
 
-- Complete V3 Milestone 1 — Authentication & Guest Access
 - V3 Milestone 2 — Database & User Data Architecture
 - V3 Milestone 3 — Study Experience 2.0
 - V3 Milestone 4 — Revision Mode

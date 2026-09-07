@@ -84,3 +84,50 @@ export function meetsPasswordRequirements(password) {
 export function getPasswordStrengthError(password) {
   return meetsPasswordRequirements(password) ? null : PASSWORD_REQUIREMENTS_MESSAGE;
 }
+
+// --- Password confirmation (sign-up modal, V3 Milestone 1 Phase 3) -----
+//
+// Purely a client-side UX nicety, same caveat as the rest of this
+// file: nothing about account security depends on the two fields
+// agreeing here, since the backend only ever receives a single
+// `password` value (see api/auth.js's signup) -- this just catches a
+// typo before it round-trips to the server as a created account the
+// person can't immediately re-enter the password for.
+
+export const PASSWORD_CONFIRMATION_MISMATCH_ERROR = "Passwords do not match.";
+
+/** True if `password` and `confirmPassword` are exactly equal. */
+export function passwordsMatch(password, confirmPassword) {
+  return (password || "") === (confirmPassword || "");
+}
+
+/**
+ * Returns the friendly error to show when the confirm-password field
+ * doesn't match `password`, or null if it does. Deliberately flags an
+ * empty `confirmPassword` against a non-empty `password` too (rather
+ * than treating "not yet typed" as "not yet wrong") -- AuthPanel.jsx
+ * only calls this at submit time, by which point the field should no
+ * longer be blank.
+ */
+export function getPasswordConfirmationError(password, confirmPassword) {
+  return passwordsMatch(password, confirmPassword) ? null : PASSWORD_CONFIRMATION_MISMATCH_ERROR;
+}
+
+// --- Password visibility toggle (sign-in + sign-up password fields) ----
+//
+// Extracted as pure functions -- rather than inlined as a ternary at
+// each call site -- for the same "directly testable under this
+// project's DOM-less `node --test` suite" reason as everything else
+// in this file, since AuthPanel.jsx itself has no test file (see
+// AuthContext.jsx's own comment on why components/context aren't
+// unit-tested here).
+
+/** The `<input type="...">` to use for a password field given whether it's currently shown in the clear. */
+export function getPasswordInputType(isVisible) {
+  return isVisible ? "text" : "password";
+}
+
+/** The `aria-label` for the eye toggle button, describing the action tapping it will perform next. */
+export function getPasswordVisibilityToggleAriaLabel(isVisible, fieldLabel = "password") {
+  return isVisible ? `Hide ${fieldLabel}` : `Show ${fieldLabel}`;
+}

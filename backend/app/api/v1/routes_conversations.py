@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_identity
 from app.db.database import get_db
 from app.db.models import Conversation, ConversationDocument, Document, DocumentChunk, Message
 from app.schemas.conversation import (
@@ -17,24 +18,30 @@ from app.schemas.conversation import (
     ConversationSummaryResponse,
     MessageResponse,
 )
+from app.schemas.identity import Identity
+from app.services import guest_limit_service, ownership_service
 from app.services.ai.base_provider import AIProvider, AIProviderError
 from app.services.ai.embedding_provider import EmbeddingProvider
 from app.services.ai.embedding_provider_factory import get_embedding_provider
 from app.services.ai.provider_factory import get_ai_provider
 from app.services.chat_service import answer_question
 from app.services.conversation_titling import generate_conversation_title
+from app.services.guest_limit_service import GuestLimitExceededError, GuestLimitType
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
-def _get_conversation_or_404(conversation_id: str, db: Session) -> Conversation:
+def _get_conversation_or_404(conversation_id: str, db: Session, identity: Identity) -> Conversation:
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if conversation is None:
+    if conversation is None or not ownership_service.is_owned_by(conversation, identity):
+        # V3 Milestone 1 Phase 3: a conversation owned by a different
+        # identity 404s exactly like a missing one — see
+        # routes_summary.py's identical reasoning for documents.
         raise HTTPException(status_code=404, detail="Conversation not found.")
     return conversation
 
 
-def _get_documents_or_404(document_ids: list[str], db: Session) -> list[Document]:
+def _get_documents_or_404(document_ids: list[str], db: Session, identity: Identity) -> list[Document]:
     """
     Loads every requested document, 404ing on the first id that
     doesn't resolve to a real Document -- same fail-fast, name-the-
@@ -45,11 +52,20 @@ def _get_documents_or_404(document_ids: list[str], db: Session) -> list[Document
     Document Library is allowed today. Whether a document is actually
     usable is a chat-send-time concern (Milestone 2), not an
     association-time one.
+
+    V3 Milestone 1 Phase 3: also 404s on a document that exists but
+    isn't owned by `identity` -- this is what actually prevents a
+    conversation from ever being associated with someone else's
+    document in the first place, which is what lets
+    _get_indexed_document_for_conversation below (and, transitively,
+    guest_migration_service's migration) trust a conversation's own
+    ownership as sufficient without separately re-checking every
+    document hanging off it.
     """
     documents = []
     for document_id in document_ids:
         document = db.query(Document).filter(Document.id == document_id).first()
-        if document is None:
+        if document is None or not ownership_service.is_owned_by(document, identity):
             raise HTTPException(status_code=404, detail=f"Document not found: {document_id}.")
         documents.append(document)
     return documents
@@ -342,7 +358,9 @@ def _set_conversation_documents(conversation_id: str, documents: list[Document],
 
 @router.post("", response_model=ConversationDetailResponse, status_code=201)
 def create_conversation(
-    payload: ConversationCreateRequest, db: Session = Depends(get_db)
+    payload: ConversationCreateRequest,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
 ) -> ConversationDetailResponse:
     """
     Creates a new, empty conversation -- optionally pre-associated with
@@ -353,9 +371,10 @@ def create_conversation(
     renames it or Milestone 3's auto-titling generates one from the
     first message.
     """
-    documents = _get_documents_or_404(payload.document_ids, db)
+    documents = _get_documents_or_404(payload.document_ids, db, identity)
 
     conversation = Conversation()
+    ownership_service.assign_owner(conversation, identity)
     db.add(conversation)
     db.flush()  # assigns conversation.id without committing, so the association rows below can reference it
 
@@ -368,7 +387,10 @@ def create_conversation(
 
 
 @router.get("", response_model=list[ConversationSummaryResponse])
-def list_conversations(db: Session = Depends(get_db)) -> list[ConversationSummaryResponse]:
+def list_conversations(
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
+) -> list[ConversationSummaryResponse]:
     """
     The conversation list/sidebar. Ordered by updated_at descending --
     most recently active first, the same convention as
@@ -376,26 +398,39 @@ def list_conversations(db: Session = Depends(get_db)) -> list[ConversationSummar
     updated_at after creation yet (see Conversation's docstring), so
     today this sorts by creation recency; it starts reflecting real
     activity as soon as Milestone 2 lands.
+
+    V3 Milestone 1 Phase 3: scoped to conversations this identity owns
+    (plus any legacy/unowned row), the same way GET /documents is --
+    see ownership_service.scope_to_owner.
     """
-    conversations = db.query(Conversation).order_by(Conversation.updated_at.desc()).all()
+    conversations = ownership_service.scope_to_owner(
+        db.query(Conversation), Conversation, identity
+    ).order_by(Conversation.updated_at.desc()).all()
     return [ConversationSummaryResponse.model_validate(conversation) for conversation in conversations]
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetailResponse)
-def get_conversation(conversation_id: str, db: Session = Depends(get_db)) -> ConversationDetailResponse:
+def get_conversation(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
+) -> ConversationDetailResponse:
     """
     Full detail for restoring a conversation -- metadata, documents,
     and messages in one round trip, exactly what a future frontend
     needs when switching into a conversation or restoring one after a
     refresh.
     """
-    conversation = _get_conversation_or_404(conversation_id, db)
+    conversation = _get_conversation_or_404(conversation_id, db, identity)
     return _to_detail_response(conversation, db)
 
 
 @router.patch("/{conversation_id}", response_model=ConversationSummaryResponse)
 def rename_conversation(
-    conversation_id: str, payload: ConversationRenameRequest, db: Session = Depends(get_db)
+    conversation_id: str,
+    payload: ConversationRenameRequest,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
 ) -> ConversationSummaryResponse:
     """
     Manually renames a conversation. Always sets title_is_custom=True
@@ -403,7 +438,7 @@ def rename_conversation(
     entire guarantee that a manual rename is never later overwritten
     by AI auto-titling (Milestone 3).
     """
-    conversation = _get_conversation_or_404(conversation_id, db)
+    conversation = _get_conversation_or_404(conversation_id, db, identity)
     conversation.title = payload.title
     conversation.title_is_custom = True
     db.commit()
@@ -412,7 +447,11 @@ def rename_conversation(
 
 
 @router.delete("/{conversation_id}", status_code=204)
-def delete_conversation(conversation_id: str, db: Session = Depends(get_db)) -> None:
+def delete_conversation(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
+) -> None:
     """
     Deletes a conversation and everything that belongs only to it --
     its messages and its document associations. Documents themselves
@@ -422,7 +461,7 @@ def delete_conversation(conversation_id: str, db: Session = Depends(get_db)) -> 
     child tables, since no ORM relationship/cascade is configured here
     either.
     """
-    _get_conversation_or_404(conversation_id, db)
+    _get_conversation_or_404(conversation_id, db, identity)
 
     db.query(Message).filter(Message.conversation_id == conversation_id).delete()
     db.query(ConversationDocument).filter(ConversationDocument.conversation_id == conversation_id).delete()
@@ -432,7 +471,10 @@ def delete_conversation(conversation_id: str, db: Session = Depends(get_db)) -> 
 
 @router.put("/{conversation_id}/documents", response_model=ConversationDetailResponse)
 def replace_conversation_documents(
-    conversation_id: str, payload: ConversationDocumentsRequest, db: Session = Depends(get_db)
+    conversation_id: str,
+    payload: ConversationDocumentsRequest,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
 ) -> ConversationDetailResponse:
     """
     Replaces a conversation's associated document set with exactly the
@@ -443,8 +485,8 @@ def replace_conversation_documents(
     same, which is the entire point of Milestone 2 over the old
     document-set-derived conversation key.
     """
-    conversation = _get_conversation_or_404(conversation_id, db)
-    documents = _get_documents_or_404(payload.document_ids, db)
+    conversation = _get_conversation_or_404(conversation_id, db, identity)
+    documents = _get_documents_or_404(payload.document_ids, db, identity)
 
     _set_conversation_documents(conversation_id, documents, db)
     db.commit()
@@ -459,6 +501,7 @@ async def send_message(
     db: Session = Depends(get_db),
     ai_provider: AIProvider = Depends(get_ai_provider),
     embedding_provider: EmbeddingProvider = Depends(get_embedding_provider),
+    identity: Identity = Depends(get_current_identity),
 ) -> ConversationMessageResponse:
     """
     Sends one message in a persistent conversation (Milestone 2): loads
@@ -524,12 +567,23 @@ async def send_message(
     the AI call returns) is what actually protects a manual rename that
     happens *during* title generation.
     """
-    conversation = _get_conversation_or_404(conversation_id, db)
+    conversation = _get_conversation_or_404(conversation_id, db, identity)
     documents = _get_conversation_documents_for_chat(conversation_id, db)
     documents_by_id = {document.id: document for document in documents}
 
     history = _load_history_turns(conversation_id, db)
     is_first_message = not history
+
+    # V3 Milestone 1 Phase 3: checked before the AI call, same as
+    # routes_chat.py's stateless endpoints — a guest's chat-message
+    # limit is one shared counter across all three send-a-message
+    # entry points (see guest_limit_service.py's docstring), so it
+    # can't be bypassed just by using the persisted conversation
+    # endpoint instead of a stateless one, or vice versa.
+    try:
+        guest_limit_service.enforce_limit(db, identity, GuestLimitType.CHAT_MESSAGE)
+    except GuestLimitExceededError as error:
+        raise guest_limit_service.to_http_exception(error)
 
     try:
         result = await answer_question(
@@ -543,6 +597,8 @@ async def send_message(
         )
     except AIProviderError as error:
         raise HTTPException(status_code=502, detail=str(error))
+
+    guest_limit_service.record_usage(db, identity, GuestLimitType.CHAT_MESSAGE)
 
     generated_title: str | None = None
     if is_first_message and not conversation.title_is_custom:

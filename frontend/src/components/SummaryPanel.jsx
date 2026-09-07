@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { generateSummary } from "../api/summary";
+import { isGuestLimitError } from "../api/errors.js";
+import GuestLimitNotice from "./GuestLimitNotice";
 import { downloadTextFile } from "../utils/downloadFile";
 import { summaryToMarkdown } from "../utils/markdownExport";
 
@@ -10,12 +12,17 @@ function SummaryPanel({ documentId, initialSummary = null, onGenerated }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [summary, setSummary] = useState(initialSummary);
   const [errorMessage, setErrorMessage] = useState("");
+  // Kept alongside errorMessage (V3 Milestone 1 Phase 3) so a guest-
+  // limit rejection can be told apart from any other generation error
+  // and rendered as GuestLimitNotice instead of the plain red text.
+  const [generationError, setGenerationError] = useState(null);
   const [copyState, setCopyState] = useState("idle"); // idle | copied
   const [downloadState, setDownloadState] = useState("idle"); // idle | downloaded
 
   async function handleGenerate() {
     setStatus("loading");
     setErrorMessage("");
+    setGenerationError(null);
     try {
       const result = await generateSummary(documentId);
       setSummary(result);
@@ -30,6 +37,7 @@ function SummaryPanel({ documentId, initialSummary = null, onGenerated }) {
     } catch (error) {
       setStatus("error");
       setErrorMessage(error.message);
+      setGenerationError(error);
     }
   }
 
@@ -95,7 +103,10 @@ function SummaryPanel({ documentId, initialSummary = null, onGenerated }) {
         </p>
       )}
 
-      {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
+      {status === "error" && isGuestLimitError(generationError) && <GuestLimitNotice error={generationError} />}
+      {status === "error" && !isGuestLimitError(generationError) && (
+        <p className="text-sm text-red-600">{errorMessage}</p>
+      )}
 
       {summary && (
         <p className="max-w-3xl text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">

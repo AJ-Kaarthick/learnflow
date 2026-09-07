@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_identity
 from app.db.database import get_db
 from app.db.models import Document, DocumentChunk
 from app.schemas.chat import (
@@ -12,12 +13,15 @@ from app.schemas.chat import (
     MultiDocumentChatResponse,
     MultiDocumentSourceItem,
 )
+from app.schemas.identity import Identity
 from app.schemas.rag import SearchResultItem
+from app.services import guest_limit_service, ownership_service
 from app.services.ai.base_provider import AIProvider, AIProviderError
 from app.services.ai.embedding_provider import EmbeddingProvider
 from app.services.ai.embedding_provider_factory import get_embedding_provider
 from app.services.ai.provider_factory import get_ai_provider
 from app.services.chat_service import answer_question
+from app.services.guest_limit_service import GuestLimitExceededError, GuestLimitType
 
 router = APIRouter(prefix="/documents", tags=["chat"])
 
@@ -78,7 +82,7 @@ def _group_sources_by_document(
     ]
 
 
-def _get_indexed_document(document_id: str, db: Session) -> Document:
+def _get_indexed_document(document_id: str, db: Session, identity: Identity) -> Document:
     """
     Shared by both routes below (single- and multi-document chat) —
     each selected document needs the exact same "exists, is ready, is
@@ -102,9 +106,14 @@ def _get_indexed_document(document_id: str, db: Session) -> Document:
     POST /documents/{id}/index first" error below, which is actively
     wrong advice here — indexing has nothing to index, so calling it
     again is a no-op that will never produce chunks.
+
+    V3 Milestone 1 Phase 3: also 404s for a document not owned by
+    `identity`, using this file's own "not found" wording — see
+    routes_summary.py's identical check for why a mismatched owner
+    gets exactly the same response as a missing document.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
-    if document is None:
+    if document is None or not ownership_service.is_owned_by(document, identity):
         raise HTTPException(status_code=404, detail=f"Document not found: {document_id}.")
     if document.status != "ready":
         raise HTTPException(
@@ -142,6 +151,7 @@ async def chat_with_document(
     db: Session = Depends(get_db),
     ai_provider: AIProvider = Depends(get_ai_provider),
     embedding_provider: EmbeddingProvider = Depends(get_embedding_provider),
+    identity: Identity = Depends(get_current_identity),
 ) -> ChatResponse:
     """
     Answers a question about one document, grounded only in its
@@ -155,7 +165,18 @@ async def chat_with_document(
     chat existed — it calls the exact same answer_question() as
     POST /documents/chat below, just with a one-document list.
     """
-    document = _get_indexed_document(document_id, db)
+    document = _get_indexed_document(document_id, db, identity)
+
+    # V3 Milestone 1 Phase 3: checked before the AI call, same as every
+    # other guest limit — see guest_limit_service.enforce_limit. Chat
+    # is metered by messages *sent*, regardless of which of this file's
+    # two endpoints (or routes_conversations.py's persisted send_message)
+    # a guest uses, since all three ultimately ask the same question of
+    # the same AI provider.
+    try:
+        guest_limit_service.enforce_limit(db, identity, GuestLimitType.CHAT_MESSAGE)
+    except GuestLimitExceededError as error:
+        raise guest_limit_service.to_http_exception(error)
 
     try:
         result = await answer_question(
@@ -169,6 +190,8 @@ async def chat_with_document(
         )
     except AIProviderError as error:
         raise HTTPException(status_code=502, detail=str(error))
+
+    guest_limit_service.record_usage(db, identity, GuestLimitType.CHAT_MESSAGE)
 
     return ChatResponse(
         document_id=document_id,
@@ -193,6 +216,7 @@ async def chat_with_documents(
     db: Session = Depends(get_db),
     ai_provider: AIProvider = Depends(get_ai_provider),
     embedding_provider: EmbeddingProvider = Depends(get_embedding_provider),
+    identity: Identity = Depends(get_current_identity),
 ) -> MultiDocumentChatResponse:
     """
     Answers a question grounded across several documents at once — the
@@ -208,13 +232,21 @@ async def chat_with_documents(
     first and passes the list through; nothing about retrieval, prompt
     construction, or generation is duplicated between them.
 
-    Every requested document must exist, be ready, and already be
-    indexed, exactly like the single-document route — if any one of
-    them isn't, the whole request fails with a 404/400 identifying
-    which document, rather than silently answering from fewer documents
-    than the user actually selected.
+    Every requested document must exist, be ready, already be indexed,
+    and be owned by the requesting identity, exactly like the
+    single-document route — if any one of them isn't, the whole
+    request fails with a 404/400 identifying which document, rather
+    than silently answering from fewer documents than the user
+    actually selected.
     """
-    documents = [_get_indexed_document(document_id, db) for document_id in payload.document_ids]
+    documents = [
+        _get_indexed_document(document_id, db, identity) for document_id in payload.document_ids
+    ]
+
+    try:
+        guest_limit_service.enforce_limit(db, identity, GuestLimitType.CHAT_MESSAGE)
+    except GuestLimitExceededError as error:
+        raise guest_limit_service.to_http_exception(error)
 
     try:
         result = await answer_question(
@@ -228,6 +260,8 @@ async def chat_with_documents(
         )
     except AIProviderError as error:
         raise HTTPException(status_code=502, detail=str(error))
+
+    guest_limit_service.record_usage(db, identity, GuestLimitType.CHAT_MESSAGE)
 
     documents_by_id = {document.id: document for document in documents}
 

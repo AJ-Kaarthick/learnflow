@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import { uploadDocument } from "../api/documents";
+import { isGuestLimitError } from "../api/errors.js";
+import GuestLimitNotice from "./GuestLimitNotice";
 
 // Mirrors the backend's own rules and wording exactly (see
 // ALLOWED_UPLOAD_TYPES / MAX_FILE_SIZE_BYTES in routes_documents.py).
@@ -35,6 +37,11 @@ function UploadForm({ onUploadComplete }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [status, setStatus] = useState("idle"); // idle | uploading | error
   const [errorMessage, setErrorMessage] = useState("");
+  // Kept alongside errorMessage (V3 Milestone 1 Phase 3) so a guest-
+  // limit rejection can be told apart from any other upload error and
+  // rendered as GuestLimitNotice (message + a "Sign up" path) instead
+  // of the plain red text below.
+  const [uploadError, setUploadError] = useState(null);
 
   // Lets us reset the native input after a successful upload, so
   // selecting the exact same file again later still fires a change
@@ -46,6 +53,7 @@ function UploadForm({ onUploadComplete }) {
     const file = event.target.files[0] || null;
     setStatus("idle");
     setErrorMessage("");
+    setUploadError(null);
 
     if (!file) {
       setSelectedFile(null);
@@ -72,6 +80,7 @@ function UploadForm({ onUploadComplete }) {
 
     setStatus("uploading");
     setErrorMessage("");
+    setUploadError(null);
     try {
       const document = await uploadDocument(selectedFile);
       setStatus("idle");
@@ -83,6 +92,7 @@ function UploadForm({ onUploadComplete }) {
     } catch (error) {
       setStatus("error");
       setErrorMessage(error.message);
+      setUploadError(error);
     }
   }
 
@@ -115,7 +125,10 @@ function UploadForm({ onUploadComplete }) {
         )}
         {isUploading ? "Uploading..." : "Upload Document"}
       </button>
-      {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
+      {status === "error" && isGuestLimitError(uploadError) && <GuestLimitNotice error={uploadError} />}
+      {status === "error" && !isGuestLimitError(uploadError) && (
+        <p className="text-sm text-red-600">{errorMessage}</p>
+      )}
     </form>
   );
 }

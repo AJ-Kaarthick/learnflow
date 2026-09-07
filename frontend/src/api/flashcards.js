@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from "./config";
+import { parseErrorResponse } from "./errors.js";
 
 /**
  * Requests flashcards for a document. Returns cached cards if they
@@ -15,10 +16,7 @@ export async function generateFlashcards(documentId) {
         "The AI couldn't generate flashcards right now. Please try again in a moment."
       );
     }
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(
-      errorBody?.detail || `Flashcard generation failed (status ${response.status})`
-    );
+    throw await parseErrorResponse(response, `Flashcard generation failed (status ${response.status})`);
   }
 
   return response.json();
@@ -33,10 +31,7 @@ export async function getFlashcards(documentId) {
   const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/flashcards`);
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(
-      errorBody?.detail || `Could not load flashcards (status ${response.status})`
-    );
+    throw await parseErrorResponse(response, `Could not load flashcards (status ${response.status})`);
   }
 
   return response.json();

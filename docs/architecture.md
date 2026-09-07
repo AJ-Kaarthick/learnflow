@@ -457,6 +457,61 @@ Authentication is built on top of the V3 identity layer established in Phase 1,
 allowing temporary guest sessions and persistent authenticated accounts to
 coexist.
 
+### Guest Limits
+
+Guest usage is enforced by the backend and associated with the active guest
+session rather than frontend state.
+
+Guest limits therefore remain effective across page refreshes and cannot be
+bypassed by changing frontend state.
+
+Authenticated users are not subject to guest usage limits.
+
+### Guest → Account Migration
+
+While a guest session remains active, a user may create an account and migrate
+the guest-owned persistent data associated with that session into the newly
+created account.
+
+Migration transfers ownership of eligible guest data to the authenticated
+user and is performed transactionally.
+
+The migration boundary is the active guest session. Data belonging to other
+guest sessions or authenticated users is never included.
+
+After migration, the data is owned by the authenticated user and is protected
+by backend ownership checks.
+
+If the guest session has expired, guest data is no longer eligible for
+migration.
+
+### Ownership and Data Isolation
+
+V3 introduces explicit ownership for persistent user data.
+
+The backend resolves the current identity for every protected request and
+enforces ownership before returning or modifying user-owned resources.
+
+The ownership model distinguishes:
+
+- temporary guest-session ownership
+- authenticated user ownership
+
+User-owned documents and conversations cannot be accessed by other
+authenticated users or unrelated guest sessions.
+
+### Phase 3 Database Compatibility
+
+Phase 3 introduces ownership-related schema fields required by the guest and
+authenticated-user ownership model.
+
+Fresh databases created from the current Phase 3 schema are supported.
+
+Existing SQLite databases created under the pre-Phase-3 schema are not
+automatically migrated. Database/schema migration is deferred to V3
+Milestone 2, where the long-term database architecture and migration strategy
+will be established.
+
 ### V3 Identity Direction
 
 The identity layer is designed as a foundation for:

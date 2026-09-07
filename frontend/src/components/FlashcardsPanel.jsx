@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { generateFlashcards } from "../api/flashcards";
+import { isGuestLimitError } from "../api/errors.js";
+import GuestLimitNotice from "./GuestLimitNotice";
 import { downloadTextFile } from "../utils/downloadFile";
 import { flashcardsToMarkdown } from "../utils/markdownExport";
 
@@ -14,6 +16,10 @@ function FlashcardsPanel({ documentId, initialFlashcards = [], onGenerated }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [flashcards, setFlashcards] = useState(initialFlashcards);
   const [errorMessage, setErrorMessage] = useState("");
+  // Kept alongside errorMessage (V3 Milestone 1 Phase 3) so a guest-
+  // limit rejection can be told apart from any other generation error
+  // and rendered as GuestLimitNotice instead of the plain red text.
+  const [generationError, setGenerationError] = useState(null);
   const [flippedIds, setFlippedIds] = useState(new Set());
   const [copyState, setCopyState] = useState("idle"); // idle | copied
   const [downloadState, setDownloadState] = useState("idle"); // idle | downloaded
@@ -21,6 +27,7 @@ function FlashcardsPanel({ documentId, initialFlashcards = [], onGenerated }) {
   async function handleGenerate() {
     setStatus("loading");
     setErrorMessage("");
+    setGenerationError(null);
     try {
       const cards = await generateFlashcards(documentId);
       setFlashcards(cards);
@@ -33,6 +40,7 @@ function FlashcardsPanel({ documentId, initialFlashcards = [], onGenerated }) {
     } catch (error) {
       setStatus("error");
       setErrorMessage(error.message);
+      setGenerationError(error);
     }
   }
 
@@ -106,7 +114,10 @@ function FlashcardsPanel({ documentId, initialFlashcards = [], onGenerated }) {
         </p>
       )}
 
-      {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
+      {status === "error" && isGuestLimitError(generationError) && <GuestLimitNotice error={generationError} />}
+      {status === "error" && !isGuestLimitError(generationError) && (
+        <p className="text-sm text-red-600">{errorMessage}</p>
+      )}
 
       {flashcards.length > 0 && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

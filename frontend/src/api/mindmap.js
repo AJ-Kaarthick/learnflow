@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from "./config";
+import { parseErrorResponse } from "./errors.js";
 
 export async function generateMindMap(documentId) {
   const response = await apiFetch(`${API_BASE_URL}/api/v1/documents/${documentId}/mindmap`, {
@@ -11,10 +12,7 @@ export async function generateMindMap(documentId) {
         "The AI couldn't generate a mind map right now. Please try again in a moment."
       );
     }
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(
-      errorBody?.detail || `Mind map generation failed (status ${response.status})`
-    );
+    throw await parseErrorResponse(response, `Mind map generation failed (status ${response.status})`);
   }
 
   return response.json();
@@ -31,8 +29,7 @@ export async function getMindMap(documentId) {
     return null;
   }
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Could not load mind map (status ${response.status})`);
+    throw await parseErrorResponse(response, `Could not load mind map (status ${response.status})`);
   }
 
   return response.json();

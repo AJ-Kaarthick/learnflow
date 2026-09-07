@@ -103,6 +103,27 @@ class Settings(BaseSettings):
     # credentials with two separate lifetimes.
     user_session_cookie_name: str = "learnflow_user_session"
 
+    # V3 Milestone 1 Phase 3: guest usage limits (see
+    # app/services/guest_limit_service.py). Centralized here rather
+    # than scattered as magic numbers across routes, per this phase's
+    # brief -- changing a limit is a one-line edit (or an env var) in
+    # exactly one place. Nothing here is a deeply-researched product
+    # number -- the brief is explicit that if exact limits aren't
+    # already defined elsewhere in the project (they aren't: nothing
+    # before this phase counted or capped guest usage at all), a
+    # "minimal sensible" default is fine as long as it's centralized
+    # and clearly reported. These three are that: enough for someone
+    # to genuinely try LearnFlow as a guest, small enough that there's
+    # a real reason to create an account.
+    #
+    # Every limit here applies only to guest identities -- see
+    # guest_limit_service.enforce_limit, which is a no-op for an
+    # authenticated User -- so none of these ever throttle a signed-in
+    # account.
+    guest_max_documents: int = 3
+    guest_max_ai_generations: int = 5
+    guest_max_chat_messages: int = 15
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

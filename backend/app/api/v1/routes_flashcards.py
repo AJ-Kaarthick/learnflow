@@ -1,17 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_identity
 from app.db.database import get_db
 from app.db.models import Document, Flashcard
 from app.schemas.flashcard import FlashcardResponse
+from app.schemas.identity import Identity
+from app.services import guest_limit_service, ownership_service
 from app.services.ai.base_provider import AIProvider, AIProviderError
 from app.services.ai.provider_factory import get_ai_provider
 from app.services.flashcard_service import generate_flashcards_for_document
+from app.services.guest_limit_service import GuestLimitExceededError, GuestLimitType
 
 router = APIRouter(prefix="/documents", tags=["flashcards"])
 
 
-def _get_ready_document(document_id: str, db: Session) -> Document:
+def _get_ready_document(document_id: str, db: Session, identity: Identity) -> Document:
     """
     Same "exists, is ready, and actually has readable text" check as
     routes_rag.py's _get_ready_document / routes_chat.py's
@@ -22,9 +26,12 @@ def _get_ready_document(document_id: str, db: Session) -> Document:
     an empty document and the AI would invent flashcards about
     whatever it wants instead of the document, since there's nothing
     document-specific in the prompt to ground it.
+
+    V3 Milestone 1 Phase 3: also 404s for a document not owned by
+    `identity` — see routes_summary.py's identical check for why.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
-    if document is None:
+    if document is None or not ownership_service.is_owned_by(document, identity):
         raise HTTPException(status_code=404, detail="Document not found.")
     if document.status != "ready":
         raise HTTPException(
@@ -49,21 +56,42 @@ async def create_flashcards(
     document_id: str,
     db: Session = Depends(get_db),
     provider: AIProvider = Depends(get_ai_provider),
+    identity: Identity = Depends(get_current_identity),
 ) -> list[FlashcardResponse]:
-    document = _get_ready_document(document_id, db)
+    document = _get_ready_document(document_id, db, identity)
+
+    # V3 Milestone 1 Phase 3: generation is cached (see
+    # generate_flashcards_for_document's own docstring), so the guest
+    # AI-generation limit is only checked/counted when there's nothing
+    # cached yet — a re-fetch of an already-generated set is free.
+    is_new_generation = (
+        db.query(Flashcard).filter(Flashcard.document_id == document_id).first() is None
+    )
+    if is_new_generation:
+        try:
+            guest_limit_service.enforce_limit(db, identity, GuestLimitType.AI_GENERATION)
+        except GuestLimitExceededError as error:
+            raise guest_limit_service.to_http_exception(error)
 
     try:
         flashcards = await generate_flashcards_for_document(document, db, provider)
     except AIProviderError as error:
         raise HTTPException(status_code=502, detail=str(error))
 
+    if is_new_generation:
+        guest_limit_service.record_usage(db, identity, GuestLimitType.AI_GENERATION)
+
     return [FlashcardResponse.model_validate(card) for card in flashcards]
 
 
 @router.get("/{document_id}/flashcards", response_model=list[FlashcardResponse])
-def get_flashcards(document_id: str, db: Session = Depends(get_db)) -> list[FlashcardResponse]:
+def get_flashcards(
+    document_id: str,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
+) -> list[FlashcardResponse]:
     document = db.query(Document).filter(Document.id == document_id).first()
-    if document is None:
+    if document is None or not ownership_service.is_owned_by(document, identity):
         raise HTTPException(status_code=404, detail="Document not found.")
 
     # Checked before the Flashcard lookup below for the same reason as

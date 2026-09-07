@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from "./config";
+import { parseErrorResponse } from "./errors.js";
 
 /**
  * Chunks and embeds a document so it can be chatted with. Safe to
@@ -13,8 +14,7 @@ export async function indexDocument(documentId) {
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Could not prepare this document for chat (status ${response.status})`);
+    throw await parseErrorResponse(response, `Could not prepare this document for chat (status ${response.status})`);
   }
 
   return response.json();
@@ -56,8 +56,7 @@ export async function sendChatMessage(documentId, question, { topK, history, sig
     if (response.status === 502) {
       throw new Error("The AI couldn't answer right now. Please try again in a moment.");
     }
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Chat request failed (status ${response.status})`);
+    throw await parseErrorResponse(response, `Chat request failed (status ${response.status})`);
   }
 
   return response.json();
@@ -89,8 +88,7 @@ export async function sendMultiDocumentChatMessage(documentIds, question, { topK
     if (response.status === 502) {
       throw new Error("The AI couldn't answer right now. Please try again in a moment.");
     }
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Chat request failed (status ${response.status})`);
+    throw await parseErrorResponse(response, `Chat request failed (status ${response.status})`);
   }
 
   return response.json();

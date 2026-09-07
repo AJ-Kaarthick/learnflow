@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from "./config";
+import { parseErrorResponse } from "./errors.js";
 
 /**
  * Requests a summary for a document. The backend returns a cached
@@ -14,8 +15,7 @@ export async function generateSummary(documentId) {
     if (response.status === 502) {
       throw new Error("The AI couldn't generate a summary right now. Please try again in a moment.");
     }
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Summary generation failed (status ${response.status})`);
+    throw await parseErrorResponse(response, `Summary generation failed (status ${response.status})`);
   }
 
   return response.json();
@@ -33,8 +33,7 @@ export async function getSummary(documentId) {
     return null;
   }
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Could not load summary (status ${response.status})`);
+    throw await parseErrorResponse(response, `Could not load summary (status ${response.status})`);
   }
 
   return response.json();

@@ -1,10 +1,12 @@
-import { API_BASE_URL, apiFetch } from "./config";
+import { API_BASE_URL, apiFetch } from "./config.js";
+import { parseErrorResponse } from "./errors.js";
 
 /**
  * Uploads a document (PDF, DOCX, PPTX, PNG, or JPG/JPEG) and returns the created document's metadata
  * (id, status, extracted text preview). Throws with the backend's
  * error message if the upload is rejected (wrong file type, too
- * large, etc.) so the UI can show something meaningful.
+ * large, a guest past their upload limit -- see api/errors.js's
+ * GuestLimitError -- etc.) so the UI can show something meaningful.
  */
 export async function uploadDocument(file) {
   const formData = new FormData();
@@ -16,8 +18,7 @@ export async function uploadDocument(file) {
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Upload failed with status ${response.status}`);
+    throw await parseErrorResponse(response, `Upload failed with status ${response.status}`);
   }
 
   return response.json();
@@ -80,8 +81,7 @@ export async function renameDocument(documentId, newName) {
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Rename failed (status ${response.status})`);
+    throw await parseErrorResponse(response, `Rename failed (status ${response.status})`);
   }
 
   return response.json();
@@ -93,7 +93,6 @@ export async function deleteDocument(documentId) {
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || `Delete failed (status ${response.status})`);
+    throw await parseErrorResponse(response, `Delete failed (status ${response.status})`);
   }
 }

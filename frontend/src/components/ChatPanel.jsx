@@ -3,9 +3,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { indexDocument } from "../api/chat";
 import { sendConversationMessage } from "../api/conversations";
+import { isGuestLimitError } from "../api/errors.js";
 import { appendPersistedTurn, toInternalMessages } from "../utils/conversationMessages";
 import { describeUnreadableDocuments, splitDocumentsByReadability } from "../utils/documentReadiness";
 import ExpandableText from "./ExpandableText";
+import GuestLimitNotice from "./GuestLimitNotice";
 
 const SECONDARY_BUTTON_CLASSES =
   "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40";
@@ -171,6 +173,12 @@ function ChatMessageBubble({ message, copiedMessageId, onCopy }) {
             </button>
           )}
         </div>
+
+        {message.limitError && (
+          <div className="pt-1">
+            <GuestLimitNotice error={message.limitError} />
+          </div>
+        )}
 
         {!isUser && message.sources && message.sources.length > 0 && (
           <details className="group overflow-hidden rounded-xl border border-slate-200 bg-surface text-xs text-slate-600">
@@ -471,6 +479,12 @@ function ChatPanel({ conversationId, initialMessages, documents, onMessageSent }
           role: "assistant",
           content: error.message,
           isError: true,
+          // V3 Milestone 1 Phase 3: kept on the message (not just its
+          // .message string) so ChatMessageBubble can additionally
+          // render GuestLimitNotice — a "Sign up to keep chatting"
+          // path — under this specific bubble when the rejection was
+          // a guest chat-message limit, not some other failure.
+          limitError: isGuestLimitError(error) ? error : null,
           createdAt: Date.now(),
         },
       ]);

@@ -30,6 +30,20 @@ DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessin
 
 client = TestClient(app)
 
+# V3 Milestone 1 Phase 3: this file uploads more documents against the
+# same shared `client` than the new guest document-upload limit allows
+# (see app/services/guest_limit_service.py) -- none of that is what
+# this file is actually testing (DOCX format support), so signing this
+# client in as a real account up front, once, sidesteps a limit that
+# predates every test below without changing what any of them assert.
+# Authenticated users aren't subject to guest limits at all (see
+# GuestLimitType's own module docstring), matching how a real user
+# uploading this many files would actually behave.
+client.post(
+    "/api/v1/auth/signup",
+    json={"email": "docx-support-tests@example.com", "password": "TestPass123!"},
+)
+
 
 # ---------------------------------------------------------------------------
 # Fakes (local to this file, same convention every other test file uses —

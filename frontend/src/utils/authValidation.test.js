@@ -2,11 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   EMAIL_FORMAT_ERROR,
+  PASSWORD_CONFIRMATION_MISMATCH_ERROR,
   PASSWORD_REQUIREMENTS_MESSAGE,
   getEmailFormatError,
+  getPasswordConfirmationError,
+  getPasswordInputType,
   getPasswordStrengthError,
+  getPasswordVisibilityToggleAriaLabel,
   isValidEmailFormat,
   meetsPasswordRequirements,
+  passwordsMatch,
 } from "./authValidation.js";
 
 // V3 Milestone 1 Phase 2 fix: manual QA on the first Phase 2 pass
@@ -95,4 +100,59 @@ test("PASSWORD_REQUIREMENTS_MESSAGE matches the wording backend/app/schemas/auth
     PASSWORD_REQUIREMENTS_MESSAGE,
     "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character."
   );
+});
+
+// --- Password confirmation (sign-up modal, V3 Milestone 1 Phase 3) -----
+// Pins down the client-side match check backing the new "Confirm
+// password" field in AuthPanel.jsx. This is a pure-function test, not
+// a rendered-component test, matching this project's established
+// convention of only unit-testing plain functions and leaving
+// components/context untested (see AuthContext.jsx's comment on why)
+// -- AuthPanel.jsx wires its confirm-password field, its mismatch
+// error, and its eye-toggle buttons directly to these same functions,
+// so exercising them here is exercising the exact logic that decides
+// whether a signup submission is allowed to proceed.
+
+test("passwordsMatch returns true for identical values", () => {
+  assert.equal(passwordsMatch("Password1!", "Password1!"), true);
+});
+
+test("passwordsMatch returns false when the values differ", () => {
+  assert.equal(passwordsMatch("Password1!", "Password2!"), false);
+});
+
+test("passwordsMatch treats a missing value as an empty string without throwing", () => {
+  assert.equal(passwordsMatch(undefined, undefined), true);
+  assert.equal(passwordsMatch("Password1!", undefined), false);
+  assert.equal(passwordsMatch(undefined, "Password1!"), false);
+});
+
+test("getPasswordConfirmationError returns null when the passwords match (signup may proceed)", () => {
+  assert.equal(getPasswordConfirmationError("Password1!", "Password1!"), null);
+});
+
+test("getPasswordConfirmationError returns the mismatch message when the passwords differ", () => {
+  assert.equal(getPasswordConfirmationError("Password1!", "Password1"), PASSWORD_CONFIRMATION_MISMATCH_ERROR);
+  assert.equal(getPasswordConfirmationError("Password1!", "Password1"), "Passwords do not match.");
+});
+
+test("getPasswordConfirmationError flags a blank confirm-password field against a non-empty password", () => {
+  assert.equal(getPasswordConfirmationError("Password1!", ""), PASSWORD_CONFIRMATION_MISMATCH_ERROR);
+});
+
+// --- Password visibility toggle (sign-in + sign-up password fields) ----
+
+test("getPasswordInputType returns 'password' when hidden and 'text' when visible", () => {
+  assert.equal(getPasswordInputType(false), "password");
+  assert.equal(getPasswordInputType(true), "text");
+});
+
+test("getPasswordVisibilityToggleAriaLabel describes the action tapping the eye icon will perform next", () => {
+  assert.equal(getPasswordVisibilityToggleAriaLabel(false, "password"), "Show password");
+  assert.equal(getPasswordVisibilityToggleAriaLabel(true, "password"), "Hide password");
+});
+
+test("getPasswordVisibilityToggleAriaLabel works for the confirm-password field's own label too", () => {
+  assert.equal(getPasswordVisibilityToggleAriaLabel(false, "confirm password"), "Show confirm password");
+  assert.equal(getPasswordVisibilityToggleAriaLabel(true, "confirm password"), "Hide confirm password");
 });

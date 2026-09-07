@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { generateQuiz } from "../api/quiz";
+import { isGuestLimitError } from "../api/errors.js";
+import GuestLimitNotice from "./GuestLimitNotice";
 import { downloadTextFile } from "../utils/downloadFile";
 import { quizToMarkdown } from "../utils/markdownExport";
 
@@ -22,6 +24,10 @@ function QuizPanel({ documentId, initialQuestions = [], onGenerated }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [questions, setQuestions] = useState(initialQuestions);
   const [errorMessage, setErrorMessage] = useState("");
+  // Kept alongside errorMessage (V3 Milestone 1 Phase 3) so a guest-
+  // limit rejection can be told apart from any other generation error
+  // and rendered as GuestLimitNotice instead of the plain red text.
+  const [generationError, setGenerationError] = useState(null);
   const [selectedAnswers, setSelectedAnswers] = useState({}); // questionId -> optionIndex
   const [submitted, setSubmitted] = useState(false);
   const [copyState, setCopyState] = useState("idle"); // idle | copied
@@ -30,6 +36,7 @@ function QuizPanel({ documentId, initialQuestions = [], onGenerated }) {
   async function handleGenerate() {
     setStatus("loading");
     setErrorMessage("");
+    setGenerationError(null);
     setSubmitted(false);
     setSelectedAnswers({});
     try {
@@ -44,6 +51,7 @@ function QuizPanel({ documentId, initialQuestions = [], onGenerated }) {
     } catch (error) {
       setStatus("error");
       setErrorMessage(error.message);
+      setGenerationError(error);
     }
   }
 
@@ -116,7 +124,10 @@ function QuizPanel({ documentId, initialQuestions = [], onGenerated }) {
         </p>
       )}
 
-      {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
+      {status === "error" && isGuestLimitError(generationError) && <GuestLimitNotice error={generationError} />}
+      {status === "error" && !isGuestLimitError(generationError) && (
+        <p className="text-sm text-red-600">{errorMessage}</p>
+      )}
 
       {questions.map((question, questionIndex) => (
         <div key={question.id} className="max-w-3xl space-y-2">

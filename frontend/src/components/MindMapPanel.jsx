@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Transformer } from "markmap-lib";
 import { Markmap } from "markmap-view";
 import { generateMindMap } from "../api/mindmap";
+import { isGuestLimitError } from "../api/errors.js";
+import GuestLimitNotice from "./GuestLimitNotice";
 import { treeToMarkdown } from "../utils/treeToMarkdown";
 import { downloadTextFile } from "../utils/downloadFile";
 
@@ -17,6 +19,10 @@ function MindMapPanel({ documentId, initialMindmap = null, onGenerated }) {
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [structure, setStructure] = useState(initialMindmap?.structure ?? null);
   const [errorMessage, setErrorMessage] = useState("");
+  // Kept alongside errorMessage (V3 Milestone 1 Phase 3) so a guest-
+  // limit rejection can be told apart from any other generation error
+  // and rendered as GuestLimitNotice instead of the plain red text.
+  const [generationError, setGenerationError] = useState(null);
   const [downloadState, setDownloadState] = useState("idle"); // idle | downloaded
 
   const svgRef = useRef(null);
@@ -25,6 +31,7 @@ function MindMapPanel({ documentId, initialMindmap = null, onGenerated }) {
   async function handleGenerate() {
     setStatus("loading");
     setErrorMessage("");
+    setGenerationError(null);
     try {
       const result = await generateMindMap(documentId);
       setStructure(result.structure);
@@ -39,6 +46,7 @@ function MindMapPanel({ documentId, initialMindmap = null, onGenerated }) {
     } catch (error) {
       setStatus("error");
       setErrorMessage(error.message);
+      setGenerationError(error);
     }
   }
 
@@ -98,7 +106,10 @@ function MindMapPanel({ documentId, initialMindmap = null, onGenerated }) {
         </p>
       )}
 
-      {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
+      {status === "error" && isGuestLimitError(generationError) && <GuestLimitNotice error={generationError} />}
+      {status === "error" && !isGuestLimitError(generationError) && (
+        <p className="text-sm text-red-600">{errorMessage}</p>
+      )}
 
       {structure && (
         <svg

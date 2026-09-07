@@ -31,6 +31,46 @@ import {
 
 const AuthContext = createContext(null);
 
+// V3 Milestone 1 Phase 3: called after signup, signin, and logout all
+// succeed, once each has already updated `state` to the new identity.
+//
+// Introducing real per-identity data (guest/user ownership on
+// documents and conversations -- see backend/app/db/models.py) is
+// what makes this necessary for the first time: through Phase 1/2,
+// every identity saw the exact same global library, so switching
+// identity had no visible effect on anything already loaded client-
+// side. Now it does -- StudyPage's document list, ChatPage's
+// conversation sidebar, and whatever's currently open in the
+// workspace were all fetched under the *previous* identity's cookie,
+// and have no way to know they need to re-fetch just because
+// AuthContext's own state changed underneath them (neither page
+// currently takes `identity` as a dependency of its data-loading
+// effects).
+//
+// A full reload is the simplest way to guarantee that every one of
+// those, plus anything added later that has the same "loaded under
+// whichever identity was active at the time" shape, re-fetches from
+// the backend under the browser's new identity -- rather than adding
+// an identity-change listener to each page individually today, and to
+// every future one that loads identity-scoped data. The tradeoff is
+// losing in-memory-only UI state across the reload (e.g. an unsaved
+// draft in the chat composer) -- acceptable here because signup,
+// signin, and logout are already deliberate, infrequent actions the
+// person just took, not something that happens mid-flow.
+//
+// Guarded for this project's `node --test` frontend suite, which has
+// no `window` (see api/config.js's identical guard on
+// `import.meta.env` for the same underlying constraint) -- AuthContext
+// itself has no test file (this project only unit-tests plain
+// functions -- see utils/authState.js -- not components/context, per
+// its own established convention), so this only ever actually runs in
+// a real browser.
+function reloadForIdentitySwitch() {
+  if (typeof window !== "undefined" && typeof window.location?.reload === "function") {
+    window.location.reload();
+  }
+}
+
 export function AuthProvider({ children }) {
   const [state, setState] = useState(INITIAL_AUTH_STATE);
 
@@ -61,6 +101,14 @@ export function AuthProvider({ children }) {
     try {
       const identity = await apiSignup(email, password);
       setState(authStateFromIdentity(identity));
+      // V3 Milestone 1 Phase 3: signup is the one action that can
+      // bring migrated guest data (documents, conversations) along
+      // with it (see routes_auth.py's signup) -- reloading is what
+      // actually surfaces that migrated work without asking the
+      // person to manually refresh, on top of the general "every
+      // identity switch needs a reload" reasoning in
+      // reloadForIdentitySwitch's own docstring above.
+      reloadForIdentitySwitch();
       return true;
     } catch (error) {
       setState((previous) => authStateAfterAuthError(previous, error));
@@ -72,6 +120,7 @@ export function AuthProvider({ children }) {
     try {
       const identity = await apiSignin(email, password);
       setState(authStateFromIdentity(identity));
+      reloadForIdentitySwitch();
       return true;
     } catch (error) {
       setState((previous) => authStateAfterAuthError(previous, error));
@@ -90,6 +139,7 @@ export function AuthProvider({ children }) {
       // uses.
       const identity = await getIdentity();
       setState(authStateFromIdentity(identity));
+      reloadForIdentitySwitch();
       return true;
     } catch (error) {
       setState((previous) => authStateAfterAuthError(previous, error));

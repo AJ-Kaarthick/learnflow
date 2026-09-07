@@ -1,17 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_identity
 from app.db.database import get_db
 from app.db.models import Document, MindMap
+from app.schemas.identity import Identity
 from app.schemas.mindmap import MindMapResponse
+from app.services import guest_limit_service, ownership_service
 from app.services.ai.base_provider import AIProvider, AIProviderError
 from app.services.ai.provider_factory import get_ai_provider
+from app.services.guest_limit_service import GuestLimitExceededError, GuestLimitType
 from app.services.mindmap_service import generate_mindmap_for_document
 
 router = APIRouter(prefix="/documents", tags=["mindmap"])
 
 
-def _get_ready_document(document_id: str, db: Session) -> Document:
+def _get_ready_document(document_id: str, db: Session, identity: Identity) -> Document:
     """
     Same "exists, is ready, and actually has readable text" check as
     routes_rag.py's _get_ready_document / routes_chat.py's
@@ -21,9 +25,12 @@ def _get_ready_document(document_id: str, db: Session) -> Document:
     document with nothing readable in it would reach
     build_mindmap_prompt() empty, and the AI would invent a generic
     structure with no real relationship to the document.
+
+    V3 Milestone 1 Phase 3: also 404s for a document not owned by
+    `identity` — see routes_summary.py's identical check for why.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
-    if document is None:
+    if document is None or not ownership_service.is_owned_by(document, identity):
         raise HTTPException(status_code=404, detail="Document not found.")
     if document.status != "ready":
         raise HTTPException(
@@ -46,25 +53,48 @@ async def create_mindmap(
     document_id: str,
     db: Session = Depends(get_db),
     provider: AIProvider = Depends(get_ai_provider),
+    identity: Identity = Depends(get_current_identity),
 ) -> MindMapResponse:
-    document = _get_ready_document(document_id, db)
+    document = _get_ready_document(document_id, db, identity)
+
+    # V3 Milestone 1 Phase 3: generation is cached (see
+    # generate_mindmap_for_document's own docstring), so the guest
+    # AI-generation limit is only checked/counted when there's nothing
+    # cached yet — a re-fetch of an already-generated mind map is free.
+    is_new_generation = (
+        db.query(MindMap).filter(MindMap.document_id == document_id).first() is None
+    )
+    if is_new_generation:
+        try:
+            guest_limit_service.enforce_limit(db, identity, GuestLimitType.AI_GENERATION)
+        except GuestLimitExceededError as error:
+            raise guest_limit_service.to_http_exception(error)
 
     try:
         mindmap = await generate_mindmap_for_document(document, db, provider)
     except AIProviderError as error:
         raise HTTPException(status_code=502, detail=str(error))
 
+    if is_new_generation:
+        guest_limit_service.record_usage(db, identity, GuestLimitType.AI_GENERATION)
+
     return MindMapResponse.model_validate(mindmap)
 
 
 @router.get("/{document_id}/mindmap", response_model=MindMapResponse)
-def get_mindmap(document_id: str, db: Session = Depends(get_db)) -> MindMapResponse:
+def get_mindmap(
+    document_id: str,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
+) -> MindMapResponse:
     # Checked before the MindMap lookup below for the same reason as
     # routes_summary.py's get_summary: a document with no readable
     # text must never have a stale/pre-existing mind map (generated
     # before this guard existed, or seeded directly) served back as if
     # it were valid content for this document.
     document = db.query(Document).filter(Document.id == document_id).first()
+    if document is not None and not ownership_service.is_owned_by(document, identity):
+        raise HTTPException(status_code=404, detail="No mind map yet for this document.")
     if (
         document is not None
         and document.status == "ready"

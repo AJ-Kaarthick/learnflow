@@ -121,6 +121,37 @@ def touch_guest_session(db: Session, session: GuestSession) -> None:
     db.commit()
 
 
+def revoke_guest_session(db: Session, token: str) -> None:
+    """
+    Marks a guest session as revoked (V3 Milestone 1 Phase 3) -- see
+    GuestSession.revoked_at's own docstring, which names exactly this
+    use case ahead of time: retiring the guest session a guest->account
+    migration just moved data out of, so it can never be resolved (see
+    get_valid_guest_session's `revoked_at.is_(None)` filter) or have
+    its data claimed a second time.
+
+    Deliberately does NOT commit, unlike every other function in this
+    file -- this one is meant to run as one step of a larger atomic
+    transaction (see guest_migration_service.migrate_guest_data_to_user,
+    the only caller), which commits once, together with the ownership
+    transfer it performs alongside this call. Committing here
+    separately would split that transaction into two, reopening
+    exactly the partial-migration window the brief's atomicity
+    requirement rules out -- if this function's own commit succeeded
+    but the ownership transfer that follows it failed, the guest
+    session would be revoked with its data never actually migrated
+    anywhere, an unrecoverable and pointless failure mode.
+
+    A no-op (not an error) if the session no longer exists -- the same
+    "lazy, encounter-driven cleanup already happened, nothing left to
+    revoke" case delete_guest_session already tolerates via a bare
+    DELETE affecting zero rows.
+    """
+    session = db.query(GuestSession).filter(GuestSession.id == token).first()
+    if session is not None:
+        session.revoked_at = datetime.now(timezone.utc)
+
+
 def delete_guest_session(db: Session, token: str) -> None:
     """
     Removes a guest session row outright. Used when a request presents

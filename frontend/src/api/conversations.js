@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from "./config";
+import { parseErrorResponse } from "./errors.js";
 
 /**
  * The frontend counterpart to `app/api/v1/routes_conversations.py`
@@ -24,11 +25,6 @@ import { API_BASE_URL, apiFetch } from "./config";
  * entry point until this fix (see deleteConversation below and
  * ChatPage.jsx's handleDeleteConversation).
  */
-
-async function parseErrorDetail(response, fallback) {
-  const errorBody = await response.json().catch(() => null);
-  return errorBody?.detail || fallback;
-}
 
 /**
  * GET /conversations — the list/sidebar. Ordered by the backend,
@@ -76,7 +72,7 @@ export async function createConversation(documentIds = []) {
   });
 
   if (!response.ok) {
-    throw new Error(await parseErrorDetail(response, `Could not create a new conversation (status ${response.status})`));
+    throw await parseErrorResponse(response, `Could not create a new conversation (status ${response.status})`);
   }
 
   return response.json();
@@ -98,9 +94,7 @@ export async function replaceConversationDocuments(conversationId, documentIds) 
   });
 
   if (!response.ok) {
-    throw new Error(
-      await parseErrorDetail(response, `Could not update this conversation's documents (status ${response.status})`)
-    );
+    throw await parseErrorResponse(response, `Could not update this conversation's documents (status ${response.status})`);
   }
 
   return response.json();
@@ -123,7 +117,7 @@ export async function renameConversation(conversationId, title) {
   });
 
   if (!response.ok) {
-    throw new Error(await parseErrorDetail(response, `Could not rename this conversation (status ${response.status})`));
+    throw await parseErrorResponse(response, `Could not rename this conversation (status ${response.status})`);
   }
 
   return response.json();
@@ -146,9 +140,7 @@ export async function deleteConversation(conversationId) {
   });
 
   if (!response.ok) {
-    throw new Error(
-      await parseErrorDetail(response, `Could not delete this conversation (status ${response.status})`)
-    );
+    throw await parseErrorResponse(response, `Could not delete this conversation (status ${response.status})`);
   }
 }
 
@@ -185,7 +177,7 @@ export async function sendConversationMessage(conversationId, content, { topK, s
     if (response.status === 502) {
       throw new Error("The AI couldn't answer right now. Please try again in a moment.");
     }
-    throw new Error(await parseErrorDetail(response, `Chat request failed (status ${response.status})`));
+    throw await parseErrorResponse(response, `Chat request failed (status ${response.status})`);
   }
 
   return response.json();
