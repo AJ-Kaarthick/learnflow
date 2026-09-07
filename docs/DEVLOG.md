@@ -1942,7 +1942,6 @@ This phase establishes the authentication layer required for subsequent
 session management, guest-to-account migration, user ownership, and protected
 persistent data.
 
-
 ---
 
 # V3 — Milestone 1: Authentication & Guest Access
