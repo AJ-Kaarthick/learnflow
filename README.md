@@ -423,7 +423,7 @@ LearnFlow currently supports:
 - Password visibility controls
 - Backend and frontend regression coverage
 
-#### Milestone 2 — Database & User Data Architecture
+#### Milestone 2 — Database & User Data Architecture 🚧
 - PostgreSQL
 - User relationships and ownership
 - Conversation ownership
@@ -432,6 +432,26 @@ LearnFlow currently supports:
 - SQLite migration
 - Database migrations
 - Proper data isolation
+
+##### Phase 1 — Database Architecture & Migration Foundation ✅
+
+- Alembic migration framework
+- Current V3 schema represented in migration history
+- Fresh database initialization through Alembic
+- Dialect-aware SQLite/PostgreSQL database configuration
+- PostgreSQL compatibility
+- Timezone-aware database timestamps
+- Legacy SQLite schema drift detection
+- Safe handling of legacy databases without false migration stamping
+- Preservation of legacy database data
+- Migration regression coverage
+- PostgreSQL migration compatibility testing
+
+> **Development database note:** Existing SQLite databases created under the
+> pre-Phase-3 schema are not automatically migrated. V3 M2 Phase 1 establishes
+> the migration framework and schema-management foundation. The actual
+> SQLite → PostgreSQL data migration and legacy schema reconciliation are
+> handled in V3 M2 Phase 2.
 
 #### Milestone 3 — Study Experience 2.0
 - AI-generated structured learning content
@@ -606,10 +626,13 @@ npm run dev
 - V3 guest usage limits
 - V3 guest-to-account migration
 - V3 user data isolation
+- V3 M2 database migration foundation
+- Alembic schema migration infrastructure
+- SQLite/PostgreSQL database compatibility foundation
+- Legacy SQLite schema drift detection
 
 ### Planned
 
-- V3 Milestone 2 — Database & User Data Architecture
 - V3 Milestone 3 — Study Experience 2.0
 - V3 Milestone 4 — Revision Mode
 - V3 Milestone 5 — Learning Intelligence & Progress

@@ -2054,3 +2054,112 @@ data isolation.
 The milestone establishes the identity and ownership boundary required for
 the V3 database architecture, study, revision, progress, dashboard, and
 sharing features.
+
+---
+
+# V3 — Milestone 2: Database & User Data Architecture
+
+## Phase 1 — Database Architecture & Migration Foundation
+
+### Goal
+
+Establish the long-term database migration and schema-management foundation
+required for the V3 user-data architecture while preserving existing LearnFlow
+behavior and preparing the project for the SQLite → PostgreSQL migration.
+
+### Features Completed
+
+- Added Alembic as the authoritative database migration framework
+- Added the current V3 schema to migration history
+- Added fresh database initialization through Alembic
+- Added dialect-aware database engine configuration
+- Added PostgreSQL compatibility
+- Added timezone-aware database timestamps
+- Added legacy SQLite schema drift detection
+- Prevented incompatible legacy databases from being falsely stamped as current
+- Preserved existing legacy database data
+- Added migration regression coverage
+- Added PostgreSQL compatibility testing
+
+### Architecture
+
+Alembic is now the authoritative mechanism for database schema evolution.
+
+Fresh databases are initialized through the migration history.
+
+Already-managed databases use normal Alembic upgrade behavior.
+
+Legacy databases are inspected before migration state is established. A legacy
+database whose schema genuinely matches the current schema may be adopted at
+the current migration head.
+
+An incompatible legacy database is not falsely stamped as current. Schema drift
+is reported and the existing database remains untouched.
+
+The application therefore does not silently claim that an incompatible legacy
+database matches the current schema.
+
+SQLite and PostgreSQL use the same environment-driven database configuration,
+with dialect-specific engine behavior where required.
+
+### Problems Faced
+
+- Existing V2.4 SQLite databases predated the V3 ownership schema.
+- SQLAlchemy's previous startup schema creation approach could not safely evolve
+  existing tables.
+- Blindly stamping an incompatible legacy database would incorrectly mark it as
+  current.
+- SQLite-specific engine configuration was not suitable for PostgreSQL.
+- Database timestamp behavior needed to remain compatible across database
+  dialects.
+
+### Solutions
+
+- Introduced Alembic for authoritative schema migrations.
+- Added a genesis migration representing the current V3 schema.
+- Added safe migration/bootstrap handling for fresh, managed, and legacy
+  databases.
+- Added schema drift detection before legacy database adoption.
+- Preserved incompatible legacy databases without destructive changes.
+- Added dialect-aware SQLAlchemy engine configuration.
+- Updated database timestamps to use timezone-aware types.
+- Added SQLite and PostgreSQL regression coverage.
+
+### Database Compatibility Note
+
+Existing SQLite databases created under the pre-Phase-3 schema are not
+automatically migrated.
+
+This is intentional.
+
+M2 Phase 1 establishes the migration infrastructure and schema-management
+foundation. The actual SQLite → PostgreSQL data migration and legacy schema/data
+reconciliation are deferred to M2 Phase 2.
+
+An incompatible legacy database is therefore expected to require the Phase 2
+migration work before it can be used with the complete ownership-aware schema.
+
+### Verification
+
+- Backend tests: **479 passed, 1 skipped** without PostgreSQL
+- Backend tests: **482 passed, 0 skipped** with PostgreSQL 16
+- Frontend tests: **159 passed**
+- Production build successful
+- Fresh SQLite migration verified
+- Legacy schema drift detection verified
+- Incompatible legacy database not falsely stamped
+- Legacy data preservation verified
+- PostgreSQL compatibility verified against a live PostgreSQL 16 instance
+- Real FastAPI application boot verified against a simulated legacy database
+
+### Result
+
+V3 Milestone 2 now has a reliable database migration foundation.
+
+LearnFlow can initialize the current schema through Alembic, operate with
+SQLite or PostgreSQL-compatible database configuration, detect incompatible
+legacy schemas, and preserve legacy data without falsely claiming that the
+database is already current.
+
+The actual SQLite → PostgreSQL data migration and legacy data reconciliation
+remain the responsibility of V3 Milestone 2, Phase 2.

@@ -17,18 +17,25 @@ from app.api.v1 import (
     routes_summary,
 )
 from app.core.config import settings
-from app.db.database import Base, engine
+from app.db.database import engine
+from app.db.migration_bootstrap import run_startup_migrations
 from app.services.ocr.dependency_check import check_ocr_dependencies
 
 logger = logging.getLogger(__name__)
 
-# Creates any tables that don't exist yet, based on the models we've
-# defined (see db/models.py). Fine for SQLite in V1. A real production
-# app would use a migration tool (Alembic) instead, so schema changes
-# are tracked and reversible — worth introducing if/when we move to
-# Postgres, since "just recreate the table" stops being an option once
-# there's real user data in it.
-Base.metadata.create_all(bind=engine)
+# V3 Milestone 2 Phase 1: Alembic (see alembic/, and
+# app/db/migration_bootstrap.py) is now the authoritative mechanism
+# for schema evolution, replacing the old
+# `Base.metadata.create_all(bind=engine)` bootstrap this line used to
+# be. That approach could only ever create tables that didn't exist
+# yet; it had no way to alter an existing table (e.g. add a column to
+# an already-created one) and no record of what schema state a given
+# database was actually at -- both of which matter now that this
+# project has real schema history and a PostgreSQL migration ahead of
+# it. See migration_bootstrap.run_startup_migrations's own docstring
+# for exactly how an already-existing (pre-Alembic) local database is
+# adopted without touching its data.
+run_startup_migrations(engine)
 
 # OCR (V2.3 Milestone 1) depends on two OS-level binaries pip can't
 # install — see dependency_check.py for why. Checked once here, at

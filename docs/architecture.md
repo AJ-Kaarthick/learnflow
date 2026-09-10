@@ -17,8 +17,11 @@ LearnFlow converts uploaded PDFs, DOCX, PPTX, and supported image documents with
 - FastAPI
 
 ### Database
-- SQLite
+
+- SQLite for development
+- PostgreSQL-compatible architecture
 - SQLAlchemy ORM
+- Alembic migrations
 
 ### AI
 - Gemini
@@ -500,17 +503,61 @@ The ownership model distinguishes:
 User-owned documents and conversations cannot be accessed by other
 authenticated users or unrelated guest sessions.
 
-### Phase 3 Database Compatibility
+### Database Compatibility and Migration
 
-Phase 3 introduces ownership-related schema fields required by the guest and
-authenticated-user ownership model.
+V3 Milestone 1 introduced ownership-related schema fields required by the
+guest and authenticated-user ownership model.
 
-Fresh databases created from the current Phase 3 schema are supported.
+Fresh databases created from the current schema are supported.
 
 Existing SQLite databases created under the pre-Phase-3 schema are not
-automatically migrated. Database/schema migration is deferred to V3
-Milestone 2, where the long-term database architecture and migration strategy
-will be established.
+automatically migrated.
+
+V3 Milestone 2 establishes the long-term database architecture and migration
+strategy using Alembic.
+
+M2 Phase 1 provides:
+
+- authoritative schema migration history
+- fresh database initialization through Alembic
+- SQLite and PostgreSQL-compatible database configuration
+- legacy schema drift detection
+- safe handling of incompatible legacy databases
+- preservation of legacy database data
+- prevention of falsely stamping incompatible databases as current
+
+An incompatible legacy database is not destructively modified or falsely
+marked as being at the current migration head.
+
+The actual SQLite → PostgreSQL data migration and legacy schema reconciliation
+are handled in V3 Milestone 2, Phase 2.
+
+### V3 — Database Architecture
+
+V3 Milestone 2 establishes the database foundation required for persistent,
+ownership-aware user data.
+
+The database layer uses SQLAlchemy with environment-driven database
+configuration and supports both SQLite for development and PostgreSQL for the
+long-term persistent database architecture.
+
+Alembic is the authoritative database migration framework.
+
+The current schema includes ownership-aware persistent data for guest sessions
+and authenticated users.
+
+The migration architecture is designed to distinguish:
+
+- fresh databases
+- Alembic-managed databases
+- legacy databases whose schema already matches the current schema
+- legacy databases with schema drift
+
+Incompatible legacy databases are detected rather than falsely treated as
+current.
+
+The database migration boundary preserves existing legacy data while deferring
+actual data reconciliation and SQLite → PostgreSQL migration to M2 Phase 2.
 
 ### V3 Identity Direction
 

@@ -2,6 +2,21 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic-settings==2.5.2
 sqlalchemy==2.0.35
+# V3 Milestone 2 Phase 1: schema migration framework (see alembic/ and
+# app/db/migration_bootstrap.py). Authoritative mechanism for schema
+# evolution from this phase on -- replaces the old
+# Base.metadata.create_all() "create tables if missing" bootstrap,
+# which had no way to alter an existing table or record what schema
+# state a database was actually at.
+alembic==1.13.3
+# V3 Milestone 2 Phase 1: PostgreSQL driver. PostgreSQL is the V3
+# primary persistent database target (see app/core/config.py's
+# database_url); SQLite remains fully supported for local
+# development/tests and needs no driver beyond the stdlib's sqlite3.
+# psycopg2-binary (not psycopg2) so no local build toolchain/libpq
+# headers are required -- exactly the same "zero extra setup" bar
+# SQLite has always cleared for this project.
+psycopg2-binary==2.9.10
 pypdf==5.0.1
 python-docx==1.2.0
 python-pptx==1.0.2

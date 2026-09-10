@@ -10,6 +10,20 @@ def generate_uuid() -> str:
     return str(uuid.uuid4())
 
 
+# V3 Milestone 2 Phase 1: every timestamp column below uses
+# `DateTime(timezone=True)` rather than bare `DateTime`. SQLite has no
+# native timezone-aware timestamp type and ignores this flag entirely
+# (every existing SQLite column keeps working exactly as before, byte
+# for byte), but PostgreSQL does: `DateTime(timezone=True)` maps to a
+# real `TIMESTAMP WITH TIME ZONE` column there, matching what every
+# value in this file was already storing at the Python level --
+# `datetime.now(timezone.utc)`, always UTC and always tz-aware. Without
+# this, a naive `TIMESTAMP` column on PostgreSQL would silently accept
+# a tz-aware Python datetime and store it ambiguously. This is a DDL
+# (column type) change only; it does not alter or require altering any
+# already-written row's data.
+
+
 class Document(Base):
     """
     One uploaded document (PDF or DOCX — see
@@ -37,13 +51,13 @@ class Document(Base):
     # grows more states, an Enum column would be the next step.
     status = Column(String, nullable=False, default="processing")
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Set by POST /documents/{id}/open whenever the user opens this
     # document (see routes_documents.py). Null until opened for the
     # first time. Exists purely to power the "Recently Opened" sort
     # option — nothing else reads it.
-    last_opened_at = Column(DateTime, nullable=True)
+    last_opened_at = Column(DateTime(timezone=True), nullable=True)
 
     # Size of the uploaded file in bytes. Captured once at upload time
     # (see routes_documents.py) rather than stat'd from disk on every
@@ -109,7 +123,7 @@ class Summary(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     document_id = Column(String, ForeignKey("documents.id"), nullable=False, unique=True)
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class Flashcard(Base):
@@ -131,7 +145,7 @@ class Flashcard(Base):
     # SQL query has no inherent ordering guarantee.
     position = Column(Integer, nullable=False)
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class QuizQuestion(Base):
@@ -158,7 +172,7 @@ class QuizQuestion(Base):
     options = Column(JSON, nullable=False)  # list[str]
     correct_answer_index = Column(Integer, nullable=False)
     position = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class MindMap(Base):
@@ -178,7 +192,7 @@ class MindMap(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     document_id = Column(String, ForeignKey("documents.id"), nullable=False, unique=True)
     structure = Column(JSON, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class DocumentChunk(Base):
@@ -228,7 +242,7 @@ class DocumentChunk(Base):
     # about what changing GEMINI_EMBEDDING_MODEL later would require.
     embedding = Column(JSON, nullable=False)
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class Conversation(Base):
@@ -270,8 +284,8 @@ class Conversation(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     title = Column(String, nullable=False, default="New Conversation")
     title_is_custom = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # V3 Milestone 1 Phase 3: same shape and same reasoning as
     # Document.owner_type/owner_id above -- see that docstring for why
@@ -334,7 +348,7 @@ class Message(Base):
     position = Column(Integer, nullable=False)
     sources_json = Column(JSON, nullable=True)
     grounded = Column(Boolean, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class GuestSession(Base):
@@ -386,16 +400,16 @@ class GuestSession(Base):
     __tablename__ = "guest_sessions"
 
     id = Column(String, primary_key=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Bumped on every request that resolves to this session (see
     # guest_session_service.touch_guest_session) -- this sliding
     # window, not created_at, is what expiration is measured against,
     # so an actively-used guest session never expires mid-study-session
     # purely because it's been open a long time.
-    last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_seen_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    revoked_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
 
     # V3 Milestone 1 Phase 3: guest usage limits (see
     # app/services/guest_limit_service.py, which is the only code that
@@ -487,7 +501,7 @@ class User(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     email = Column(String, nullable=False, unique=True, index=True)
     password_hash = Column(String, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class UserSession(Base):
@@ -534,9 +548,9 @@ class UserSession(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    revoked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_seen_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class ConversationDocument(Base):
@@ -572,4 +586,4 @@ class ConversationDocument(Base):
 
     conversation_id = Column(String, ForeignKey("conversations.id"), primary_key=True)
     document_id = Column(String, ForeignKey("documents.id"), primary_key=True)
-    added_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    added_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
