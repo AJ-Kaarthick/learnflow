@@ -447,11 +447,21 @@ LearnFlow currently supports:
 - Migration regression coverage
 - PostgreSQL migration compatibility testing
 
+##### Phase 2 — SQLite → PostgreSQL Data Migration & Legacy Schema Reconciliation ✅
+
+- Dedicated administrative migration CLI (`python -m app.db.cli migrate`)
+- Migration of legacy V2.4 SQLite to PostgreSQL with required target user ownership
+- Migration of modern V3 SQLite to PostgreSQL with preserved ownership
+- Physical document file existence validation and target storage synchronization
+- Full transactional safety with automatic rollback and copied-file cleanup on failure
+- Idempotent reruns with deterministic conflict detection
+- Dry-run validation mode (`--dry-run`)
+- Comprehensive migration test suite (legacy V2.4, modern V3, type normalization, files, transactions)
+
 > **Development database note:** Existing SQLite databases created under the
-> pre-Phase-3 schema are not automatically migrated. V3 M2 Phase 1 establishes
-> the migration framework and schema-management foundation. The actual
-> SQLite → PostgreSQL data migration and legacy schema reconciliation are
-> handled in V3 M2 Phase 2.
+> pre-Phase-3 schema are not automatically migrated at application startup.
+> Legacy V2.4 databases can be migrated to PostgreSQL using the administrative CLI:
+> `python -m app.db.cli migrate --sqlite-path ./learnflow.db --postgres-url <url> --target-user-email <email>`.
 
 #### Milestone 3 — Study Experience 2.0
 - AI-generated structured learning content

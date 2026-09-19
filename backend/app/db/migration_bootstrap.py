@@ -218,7 +218,10 @@ def _log_incompatible_legacy_database(drift: SchemaDrift) -> None:
         "table (one that doesn't exist in this database at all yet) is "
         "still created, the same additive-only way this project's startup "
         "has always created a new table -- but no column is added to a "
-        "table that already exists.",
+        "table that already exists. "
+        "To migrate this legacy SQLite database into PostgreSQL with ownership "
+        "reconciliation, run: python -m app.db.cli migrate --sqlite-path <path_to_db> "
+        "--postgres-url <postgres_url> --target-user-email <user_email>.",
         sorted(drift.missing_tables) or "none",
         {table: sorted(columns) for table, columns in drift.missing_columns.items()} or "none",
     )

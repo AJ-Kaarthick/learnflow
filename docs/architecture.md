@@ -530,7 +530,31 @@ An incompatible legacy database is not destructively modified or falsely
 marked as being at the current migration head.
 
 The actual SQLite → PostgreSQL data migration and legacy schema reconciliation
-are handled in V3 Milestone 2, Phase 2.
+are provided in V3 Milestone 2, Phase 2 via the dedicated administrative migration
+CLI (`python -m app.db.cli migrate`).
+
+Key architectural properties:
+- **Separation from Startup:** Application startup (`run_startup_migrations`) strictly
+  initializes and validates the active database; it does not automatically migrate data
+  across distinct database engines.
+- **Read-Only Source:** The source SQLite database is accessed in read-only mode and is
+  never modified, re-stamped, or mutated.
+- **Authoritative Target:** Target PostgreSQL must be initialized to the current Alembic
+  migration head (`alembic upgrade head`) prior to data transfer.
+- **Explicit Legacy Ownership:** Legacy V2.4 databases lack ownership fields (`owner_type`,
+  `owner_id`). Migrating legacy application data requires an explicit target user identity
+  (`--target-user-email` or `--target-user-id`). Migrated records are attributed as
+  `owner_type = "user", owner_id = target_user.id`. NULL ownership is prohibited.
+- **Modern V3 Preservation:** Modern V3 SQLite databases preserve their existing valid
+  user and guest ownership tags.
+- **Physical File Validation:** Document binaries (`stored_filename`) in storage are
+  validated for existence before database commit. When source and target storage locations
+  differ, files are safely copied.
+- **Transactional Safety & Idempotency:** Target writes occur within a single database
+  transaction. Failures trigger immediate rollback and cleanup of newly copied files.
+  Rerunning migration against identical records is idempotent (skipping duplicates).
+- **Dry-Run Planning:** `--dry-run` validates source schemas, records, foreign keys, and
+  file existence without persisting changes.
 
 ### V3 — Database Architecture
 
@@ -556,8 +580,9 @@ The migration architecture is designed to distinguish:
 Incompatible legacy databases are detected rather than falsely treated as
 current.
 
-The database migration boundary preserves existing legacy data while deferring
-actual data reconciliation and SQLite → PostgreSQL migration to M2 Phase 2.
+The database migration boundary preserves existing legacy data during application startup,
+while actual data reconciliation and SQLite → PostgreSQL migration are performed via the
+administrative migration tool (`python -m app.db.cli migrate`).
 
 ### V3 Identity Direction
 

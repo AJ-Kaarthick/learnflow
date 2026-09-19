@@ -2163,3 +2163,86 @@ database is already current.
 
 The actual SQLite → PostgreSQL data migration and legacy data reconciliation
 remain the responsibility of V3 Milestone 2, Phase 2.
+
+## Phase 2 — SQLite → PostgreSQL Data Migration & Legacy Schema Reconciliation
+
+### Goal
+
+Provide a safe, explicit, repeatable migration path from both legacy V2.4 SQLite and
+modern V3 SQLite into PostgreSQL, reconciling legacy unowned learning records with the V3
+ownership architecture, validating physical storage files, and ensuring transactional safety.
+
+### Features Completed
+
+- Implemented dedicated migration engine (`backend/app/db/sqlite_to_postgres.py`)
+- Added migration CLI (`backend/app/db/cli.py`) with support for `--sqlite-path`,
+  `--postgres-url`, `--target-user-email`, `--target-user-id`, `--source-storage-dir`,
+  `--target-storage-dir`, and `--dry-run`
+- Enforced read-only access to source SQLite databases
+- Enforced target PostgreSQL pre-migration check against Alembic head
+- Enforced mandatory target user identity for legacy V2.4 application data (`owner_type = "user"`,
+  `owner_id = target_user.id`), rejecting NULL ownership
+- Supported modern V3 SQLite migration while preserving existing valid user and guest ownership
+- Added physical document file validation ensuring all referenced binaries exist in storage
+- Added cross-storage physical file copying with cleanup on transaction failure
+- Enforced atomic transaction boundary with full rollback on migration failure
+- Added deterministic idempotency preventing duplicate records on rerun while catching conflicts
+- Preserved all dependent learning data (summaries, flashcards, quiz questions, mind maps,
+  chunks with embedding vectors, conversations, messages with grounding metadata, and associations)
+- Added type normalization converting naive SQLite timestamps to UTC TIMESTAMPTZ, booleans, and JSON
+- Added comprehensive automated test suite in `tests/test_sqlite_to_postgres.py`
+
+### Architecture
+
+The SQLite → PostgreSQL data migration is intentionally decoupled from web application startup.
+Startup remains responsible for bootstrapping the active database, while data migration is an
+explicit administrative operation executed through the CLI.
+
+Legacy V2.4 was fundamentally single-user and local with no concept of accounts or guest sessions.
+Therefore, migrating legacy application data strictly requires an explicit target user identity
+resolved against the target database's `users` table.
+
+Physical files in storage are treated as first-class components of the migration: database rows
+are never migrated if their underlying physical files cannot be verified.
+
+Target database writes execute in strict foreign-key dependency order within a single transaction,
+guaranteeing clean rollback if any record or storage operation fails.
+
+### Problems Faced
+
+- Legacy V2.4 databases lacked ownership columns, which caused standard ORM queries to fail
+  due to missing columns.
+- SQLite drops timezone information from timestamps and stores booleans as integers.
+- Vector embeddings and complex JSON structures stored in SQLite text fields required careful
+  deserialization to avoid double-encoding in PostgreSQL.
+- Filesystem file copies are not natively transactional with relational database commits.
+
+### Solutions
+
+- Used low-level inspection and raw mapping queries against the read-only SQLite database to
+  extract records independently of model column presence.
+- Implemented robust type normalization routines for datetimes, booleans, and JSON structures.
+- Implemented physical file validation prior to transaction start and tracked newly copied files
+  so they can be removed if the database transaction aborts.
+- Enforced target user resolution, rejecting migrations where legacy application data lacks
+  an owner.
+
+### Verification
+
+- Backend tests: **500 passed, 0 skipped** (with live PostgreSQL test suite enabled; **490 passed, 2 skipped** in standalone SQLite environments)
+- Frontend tests: **159 passed, 0 failed**
+- Legacy V2.4 schema detection and data migration verified
+- Target user resolution (by id, by email, nonexistent, conflict, missing) verified
+- Modern V3 SQLite migration with preserved ownership verified
+- Type normalization across datetimes, booleans, JSON, and embeddings verified
+- Missing physical file detection and safe cross-directory file copying verified
+- Mid-transaction failure rollback and copied file cleanup verified
+- Idempotent rerun and conflict detection verified
+- Dry-run validation mode verified
+- CLI execution verified
+
+### Result
+
+V3 Milestone 2 Phase 2 is complete. LearnFlow provides a robust, safe, and repeatable data
+migration path from SQLite to PostgreSQL with legacy schema reconciliation and physical storage
+synchronization.
