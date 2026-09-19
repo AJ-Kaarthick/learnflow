@@ -215,3 +215,13 @@ test("loadSelectedStudyDocumentIds switches to activeDocumentId when activeDocum
   saveActiveDocumentId(30);
   assert.deepEqual(loadSelectedStudyDocumentIds(), [30]);
 });
+
+test("saveActiveStudyTab round-trips learn tab setting", async () => {
+  const { loadActiveStudyTab, saveActiveStudyTab } = await import("./persistence.js");
+
+  assert.equal(loadActiveStudyTab(), "summary");
+  saveActiveStudyTab("learn");
+  assert.equal(loadActiveStudyTab(), "learn");
+  saveActiveStudyTab("summary");
+  assert.equal(loadActiveStudyTab(), "summary");
+});

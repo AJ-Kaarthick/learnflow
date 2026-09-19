@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import EmptyWorkspaceState from "./EmptyWorkspaceState";
 import FlashcardsPanel from "./FlashcardsPanel";
+import LearnPanel from "./LearnPanel.jsx";
 import MindMapPanel from "./MindMapPanel";
 import NoReadableTextState from "./NoReadableTextState";
 import QuizPanel from "./QuizPanel";
 import SummaryPanel from "./SummaryPanel";
 import { classifyStudyReadiness, describeStudyReadiness, hasNoReadableText } from "../utils/documentReadiness";
+import { createInitialLearnSession } from "../utils/learnState.js";
 import { loadActiveStudyTab, saveActiveStudyTab } from "../utils/persistence";
 
 // Maps the raw backend status value to copy a student should actually
@@ -50,10 +52,10 @@ function formatPageCountOrFileType(document) {
   return document.original_filename.slice(lastDot + 1).toUpperCase();
 }
 
-// The four study tools, tabbed rather than stacked (see StudyWorkspace
-// below for why this milestone introduces the tab bar). Order here
-// also defines tab order in the UI.
+// The five study tools, tabbed rather than stacked.
+// Order here also defines tab order in the UI (Learn is first per V3 M3 Phase 3).
 const STUDY_TABS = [
+  { id: "learn", label: "Learn" },
   { id: "summary", label: "Summary" },
   { id: "flashcards", label: "Flashcards" },
   { id: "quiz", label: "Quiz" },
@@ -83,6 +85,9 @@ function StudyWorkspace({
         ? [document]
         : [];
   const isMultiDocument = effectiveSelected.length > 1;
+
+  // In-memory Learn Mode session state preserved across tab switches in the workspace
+  const [learnSession, setLearnSession] = useState(() => createInitialLearnSession());
 
   // Which study tool is showing. Workspace-wide preference restored from localStorage.
   const [activeTab, setActiveTab] = useState(() => {
@@ -275,8 +280,17 @@ function StudyWorkspace({
             <div>
               <p className="text-xs text-slate-500">
                 Multi-document study active ({readiness.readable.length} readable document{readiness.readable.length === 1 ? "" : "s"}).
-                Showing single-document tools for{" "}
-                <span className="font-semibold text-slate-800">{document?.original_filename}</span>.
+                {activeTab === "learn" ? (
+                  <>
+                    {" "}Curriculum and topics synthesized across all{" "}
+                    <span className="font-semibold text-slate-800">{effectiveSelected.length}</span> selected documents.
+                  </>
+                ) : (
+                  <>
+                    {" "}Showing single-document tools for{" "}
+                    <span className="font-semibold text-slate-800">{document?.original_filename}</span>.
+                  </>
+                )}
               </p>
             </div>
             {document && (
@@ -367,7 +381,14 @@ function StudyWorkspace({
             })}
           </div>
 
-          {contentLoading || !cachedContent ? (
+          {activeTab === "learn" ? (
+            <LearnPanel
+              selectedDocuments={effectiveSelected}
+              session={learnSession}
+              onUpdateSession={setLearnSession}
+              isNoneReadable={readiness.isNoneReadable}
+            />
+          ) : contentLoading || !cachedContent ? (
             <p className="text-center text-sm text-slate-500">Loading saved content...</p>
           ) : noReadableText ? (
             // No panel is mounted here at all — not just visually
