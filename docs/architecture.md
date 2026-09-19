@@ -18,8 +18,8 @@ LearnFlow converts uploaded PDFs, DOCX, PPTX, and supported image documents with
 
 ### Database
 
-- SQLite for development
-- PostgreSQL-compatible architecture
+- PostgreSQL as the primary V3 persistent database architecture
+- SQLite for development and legacy compatibility
 - SQLAlchemy ORM
 - Alembic migrations
 
@@ -584,6 +584,86 @@ The database migration boundary preserves existing legacy data during applicatio
 while actual data reconciliation and SQLite → PostgreSQL migration are performed via the
 administrative migration tool (`python -m app.db.cli migrate`).
 
+### V3 — Persistent Revision Data Model (M2 Phase 3)
+
+V3 Milestone 2, Phase 3 establishes the persistent revision data foundation required for
+spaced learning, multi-document review sessions, and long-term learning history.
+
+#### Entity Hierarchy
+
+The revision domain is structured into four relational models:
+
+```
+RevisionSession (owner_type, owner_id)
+    │
+    ├──< RevisionSessionDocument >── Document
+    │
+    └──< RevisionQuestion
+              │
+              └──< RevisionAttempt
+```
+
+1. **`RevisionSession`**: Represents a learning or review session. Owns the entire revision
+   aggregate and carries top-level ownership (`owner_type`, `owner_id`). Supports metadata
+   such as `title`, `session_type` (e.g. quick_review, deep_dive), and `status` (active,
+   completed, abandoned).
+2. **`RevisionSessionDocument`**: A composite join table `(session_id, document_id)` enabling
+   multi-document revision sessions. A session can synthesize material from multiple documents,
+   and a document can belong to multiple sessions.
+3. **`RevisionQuestion`**: Represents a specific generated question or prompt within a session.
+   Captures immutable prompt content, answer key, distractors, explanation, difficulty, and
+   frozen evidence provenance (`source_document_id`, `evidence_snippet`, `evidence_metadata`).
+4. **`RevisionAttempt`**: Represents a learner's actual submission against a question. Captures
+   the learner's answer, correctness, numeric score, evaluation feedback, time spent, and
+   submission timestamp.
+
+#### Architectural Principles & Boundaries
+
+- **Separation of Question and Attempt (`Question != Attempt`):**
+  Questions are generated prompts and evidence definitions. Attempts are learner responses
+  and evaluation outcomes. A learner may attempt a question multiple times over time (e.g.
+  in spaced repetition or retry flows). Each attempt is tracked as an append-only row with a
+  unique `(question_id, attempt_number)` constraint, preserving historical progression.
+- **Top-Level Ownership Inheritance:**
+  Ownership (`owner_type`, `owner_id`) is strictly enforced at the `RevisionSession` root.
+  Child tables (`RevisionQuestion`, `RevisionAttempt`, `RevisionSessionDocument`) inherit
+  ownership transitively through foreign keys. This avoids denormalized, redundant ownership
+  columns while ensuring strict tenant isolation. New V3 revision sessions prohibit NULL
+  ownership.
+- **Document Deletion Decoupling & Historical Durability:**
+  Deleting an underlying source document must not destroy past revision sessions or learner
+  performance history. When a document is deleted:
+  - `RevisionSessionDocument` associations for that document are cleanly removed.
+  - `RevisionQuestion.source_document_id` is set to `NULL` (`ondelete="SET NULL"`).
+  - The `RevisionSession`, `RevisionQuestion`, and `RevisionAttempt` records remain intact.
+  - The question's frozen `evidence_snippet` and `evidence_metadata` preserve the exact text
+    excerpt and grounding context used when the question was generated, ensuring historical
+    review remains fully interpretable even if the source document no longer exists.
+- **Guest-to-Account Migration Integration:**
+  Guest revision sessions created during anonymous usage are seamlessly transferred to registered
+  accounts during signup or login via `GuestMigrationService`, updating `owner_type = "user"` and
+  `owner_id = user.id`.
+- **Raw Evidence vs. Derived Intelligence Boundary:**
+  Phase 3 intentionally limits its scope to storing raw historical evidence (questions, attempts,
+  scores, timestamps, answers, and evidence snippets). It does not compute or persist derived
+  mastery metrics, spaced repetition intervals, or adaptive recommendation logic. Those belong
+  to future milestones and will be derived dynamically from the persistent attempt history.
+
+### Future Milestone Boundaries
+
+To maintain clean architectural layering, capabilities belonging to subsequent milestones
+are strictly decoupled from Milestone 2:
+
+- **Milestone 3 (Study Experience 2.0):** Advanced structured study modes (Learn/Visualize),
+  topic-focused study pipelines, and contextual study actions.
+- **Milestone 4 (Revision Mode):** Revision UI, revision API endpoints (`/revision/*`),
+  AI revision question generation services, and real-time answer evaluation.
+- **Milestone 5 (Learning Intelligence & Progress):** Spaced repetition algorithms, mastery
+  estimation, weak-area detection, and revision recommendations.
+- **Milestone 6 (Personalized Dashboard):** Home dashboard, progress summaries, and activity feeds.
+- **Milestone 7 (Sharing & Export):** Material sharing, export utilities, and privacy controls.
+- **Milestone 8 (Production & Deployment):** Cloud object storage, containerization, and production ops.
+
 ### V3 Identity Direction
 
 The identity layer is designed as a foundation for:
@@ -859,7 +939,7 @@ stateless chat requests.
 
 V2.4 introduces server-backed persistent conversations and messages. The
 conversation records, message history, titles, and conversation-document
-associations are persisted through the backend and SQLite.
+associations are persisted through the backend database (SQLite or PostgreSQL in V3).
 
 The migration from legacy conversation-specific localStorage state is complete.
 The frontend retains only the active conversation ID as a minimal UI selection

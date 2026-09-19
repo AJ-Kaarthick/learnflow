@@ -148,7 +148,7 @@ def test_ownership_fields_survive_migration(temp_database_url):
     command.upgrade(alembic_cfg, "head")
 
     inspector = inspect(engine)
-    for table_name in ("documents", "conversations"):
+    for table_name in ("documents", "conversations", "revision_sessions"):
         columns = {col["name"] for col in inspector.get_columns(table_name)}
         assert "owner_type" in columns
         assert "owner_id" in columns

@@ -148,7 +148,7 @@ def test_ownership_fields_survive_migration_on_postgres(postgres_engine):
     command.upgrade(alembic_cfg, "head")
 
     inspector = inspect(postgres_engine)
-    for table_name in ("documents", "conversations"):
+    for table_name in ("documents", "conversations", "revision_sessions"):
         columns = {col["name"] for col in inspector.get_columns(table_name)}
         assert "owner_type" in columns
         assert "owner_id" in columns
@@ -166,8 +166,9 @@ def test_timestamp_columns_are_timezone_aware_on_postgres(postgres_engine):
     command.upgrade(alembic_cfg, "head")
 
     inspector = inspect(postgres_engine)
-    documents_columns = {col["name"]: col for col in inspector.get_columns("documents")}
-    assert documents_columns["created_at"]["type"].timezone is True
+    for table_name in ("documents", "revision_sessions", "revision_questions", "revision_attempts"):
+        table_columns = {col["name"]: col for col in inspector.get_columns(table_name)}
+        assert table_columns["created_at"]["type"].timezone is True
 
 
 def test_migration_is_reversible_on_postgres(postgres_engine):

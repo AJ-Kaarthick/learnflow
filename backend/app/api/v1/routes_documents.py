@@ -14,6 +14,8 @@ from app.db.models import (
     Flashcard,
     MindMap,
     QuizQuestion,
+    RevisionQuestion,
+    RevisionSessionDocument,
     Summary,
 )
 from app.schemas.document import DocumentRenameRequest, DocumentResponse, DocumentSortOption
@@ -321,6 +323,14 @@ def delete_document(
     # onto the Message row at answer time, not looked up live (see
     # Message.sources_json's docstring in db/models.py).
     db.query(ConversationDocument).filter(ConversationDocument.document_id == document_id).delete()
+    # V3 Milestone 2 Phase 3: removes the document association from
+    # RevisionSessionDocument, but leaves RevisionSession, RevisionQuestion,
+    # and RevisionAttempt rows intact. Sets source_document_id to None on
+    # RevisionQuestion so historical questions and their evidence snapshots survive.
+    db.query(RevisionSessionDocument).filter(RevisionSessionDocument.document_id == document_id).delete()
+    db.query(RevisionQuestion).filter(RevisionQuestion.source_document_id == document_id).update(
+        {"source_document_id": None}, synchronize_session=False
+    )
 
     storage_service.delete_file(document.stored_filename)
 

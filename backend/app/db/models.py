@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import relationship
 
 from app.db.database import Base
 
@@ -587,3 +588,121 @@ class ConversationDocument(Base):
     conversation_id = Column(String, ForeignKey("conversations.id"), primary_key=True)
     document_id = Column(String, ForeignKey("documents.id"), primary_key=True)
     added_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class RevisionSession(Base):
+    """
+    A persistent Revision session (V3 Milestone 2 Phase 3). Represents a
+    discrete revision event (practice quiz, recall session, or review)
+    spanning one or more documents.
+
+    `owner_type` and `owner_id` mirror the project's established ownership
+    architecture (IdentityType "user" | "guest"). Unlike legacy pre-V3
+    Document/Conversation records, normal V3 Revision sessions must always
+    receive an explicit owner at creation time via
+    ownership_service.assign_owner().
+
+    Child Revision entities (questions, attempts, document associations)
+    do not duplicate owner fields: all access control is scoped through
+    the parent RevisionSession.
+    """
+
+    __tablename__ = "revision_sessions"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    title = Column(String, nullable=False, default="Revision Session")
+    owner_type = Column(String, nullable=False)
+    owner_id = Column(String, nullable=False, index=True)
+    status = Column(String, nullable=False, default="in_progress")
+    config = Column(JSON, nullable=True)
+    total_questions = Column(Integer, nullable=False, default=0)
+    score = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    documents = relationship("RevisionSessionDocument", back_populates="session", cascade="all, delete-orphan")
+    questions = relationship("RevisionQuestion", back_populates="session", cascade="all, delete-orphan", order_by="RevisionQuestion.position")
+    attempts = relationship("RevisionAttempt", back_populates="session", cascade="all, delete-orphan")
+
+
+class RevisionSessionDocument(Base):
+    """
+    Join table linking a RevisionSession to the Documents it covers (V3
+    Milestone 2 Phase 3). Supports multi-document revision sessions.
+    Composite primary key on (session_id, document_id).
+    """
+
+    __tablename__ = "revision_session_documents"
+
+    session_id = Column(String, ForeignKey("revision_sessions.id", ondelete="CASCADE"), primary_key=True)
+    document_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True, index=True)
+    added_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    session = relationship("RevisionSession", back_populates="documents")
+    document = relationship("Document")
+
+
+class RevisionQuestion(Base):
+    """
+    One persistent generated revision question belonging to a RevisionSession
+    (V3 Milestone 2 Phase 3). Immutable generated learning content.
+
+    Captures raw learning evidence and durable provenance (source_document_id,
+    source_chunk_id, evidence_snippet, evidence_metadata) so the question
+    and its evidence citations survive even if the original source document
+    is subsequently deleted.
+    """
+
+    __tablename__ = "revision_questions"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    session_id = Column(String, ForeignKey("revision_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    position = Column(Integer, nullable=False)
+    question_type = Column(String, nullable=False, default="multiple_choice")
+    question_text = Column(Text, nullable=False)
+    options = Column(JSON, nullable=True)  # list[str] for multiple choice, null for open
+    correct_answer = Column(Text, nullable=False)
+    explanation = Column(Text, nullable=True)
+    source_document_id = Column(String, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_chunk_id = Column(String, nullable=True)
+    evidence_snippet = Column(Text, nullable=True)
+    evidence_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    session = relationship("RevisionSession", back_populates="questions")
+    attempts = relationship("RevisionAttempt", back_populates="question", cascade="all, delete-orphan", order_by="RevisionAttempt.attempt_number")
+    source_document = relationship("Document")
+
+
+class RevisionAttempt(Base):
+    """
+    A persistent learner response to a RevisionQuestion (V3 Milestone 2
+    Phase 3).
+
+    Strictly separated from RevisionQuestion (Question != Attempt):
+    RevisionQuestion represents the immutable prompt, while RevisionAttempt
+    records the learner's submitted answer, evaluation result, score, and
+    timestamps. Supports multiple attempts per question via attempt_number
+    without mutating the question.
+    """
+
+    __tablename__ = "revision_attempts"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    question_id = Column(String, ForeignKey("revision_questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id = Column(String, ForeignKey("revision_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    attempt_number = Column(Integer, nullable=False, default=1)
+    submitted_answer = Column(Text, nullable=False)
+    is_correct = Column(Boolean, nullable=False)
+    score = Column(Float, nullable=False, default=0.0)
+    feedback = Column(Text, nullable=True)
+    evaluation_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("question_id", "attempt_number", name="uq_revision_attempts_question_attempt"),
+    )
+
+    question = relationship("RevisionQuestion", back_populates="attempts")
+    session = relationship("RevisionSession", back_populates="attempts")

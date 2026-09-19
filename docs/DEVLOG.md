@@ -2246,3 +2246,86 @@ guaranteeing clean rollback if any record or storage operation fails.
 V3 Milestone 2 Phase 2 is complete. LearnFlow provides a robust, safe, and repeatable data
 migration path from SQLite to PostgreSQL with legacy schema reconciliation and physical storage
 synchronization.
+
+## Phase 3 — Persistent Revision Data Model
+
+### Goal
+
+Establish the persistent revision data model foundation separating immutable question definitions
+from learner attempts, enabling multi-document review sessions, enforcing top-level ownership
+scoping, ensuring historical durability across document deletions, and supporting guest-to-account
+ownership migration.
+
+### Features Completed
+
+- Implemented core SQLAlchemy revision models in `backend/app/db/models.py`:
+  - `RevisionSession`: Root session aggregate with `owner_type`, `owner_id`, `title`, `session_type`,
+    and `status`
+  - `RevisionSessionDocument`: Composite primary key join table `(session_id, document_id)` enabling
+    multi-document revision scoping
+  - `RevisionQuestion`: Immutable question definition with prompt, answer key, options, explanation,
+    position, difficulty, and frozen evidence provenance (`source_document_id`, `evidence_snippet`,
+    `evidence_metadata`)
+  - `RevisionAttempt`: Append-only learner attempt with `attempt_number`, answer, correctness, score,
+    feedback, time spent, and submission timestamp
+- Added clean, reversible Alembic migration `74eb271ec556_revision_data_model.py` chained from `505909c1ba21`
+  with indexes and foreign key constraints
+- Implemented `Question != Attempt` structural separation allowing multiple attempts per question over time
+- Enforced top-level session ownership inheritance (`RevisionQuestion`, `RevisionAttempt`, and
+  `RevisionSessionDocument` inherit ownership from `RevisionSession`)
+- Decoupled document deletion: Deleting a document unlinks `RevisionSessionDocument` join rows and sets
+  `RevisionQuestion.source_document_id = NULL` without deleting the session, questions, or attempts
+- Preserved frozen evidence provenance: Questions maintain self-contained evidence snapshots
+  (`evidence_snippet`, `evidence_metadata`) ensuring historical revision integrity even if source documents are deleted
+- Integrated revision session transfer into `guest_migration_service.py` (`revision_sessions_migrated`)
+- Maintained compatibility with both SQLite and PostgreSQL 16 (including `TIMESTAMPTZ` and indexed ownership)
+- Preserved complete boundary separation: Did not touch Study Quiz behavior, and did not introduce premature
+  Revision API routes, UI, generation services, or derived mastery/spaced repetition logic
+- Added comprehensive automated test suite in `backend/tests/test_revision_models.py` (14 unit and integration
+  tests), and extended `test_postgres_compatibility.py` and `test_migrations.py`
+
+### Architecture & Boundaries
+
+The revision domain separates raw historical learning evidence from derived intelligence:
+- **Root Aggregate:** `RevisionSession` is the single owner-scoped root (`owner_type`, `owner_id`).
+- **Composite Scoping:** `RevisionSessionDocument` enables sessions to span arbitrary sets of documents.
+- **Immutable Questions vs Mutable Attempts:** Questions capture the prompt and evidence snapshot at generation time;
+  attempts capture learner responses and evaluations at review time.
+- **Document Deletion Resilience:** Historical review sessions and learner attempts survive source document deletion.
+- **No Premature Intelligence:** Spaced repetition scheduling and mastery metrics are intentionally deferred to future
+  milestones; Phase 3 strictly provides the durable relational foundation.
+
+### Problems Faced
+
+- In the test suite, dynamic migration bootstrapping occurs upon importing `app.main`. Ephemeral test databases
+  need migration bootstrap to properly configure revision tables before running tests.
+- Inserting duplicate composite PKs or unique constraint violations within the same SQLAlchemy session raised
+  client-side identity map warnings (`SAWarning: New instance conflicts with persistent instance`).
+- Ensuring `ondelete="SET NULL"` for `RevisionQuestion.source_document_id` works cleanly in both SQLite and
+  PostgreSQL during active deletion workflows.
+
+### Solutions
+
+- Explicitly imported `app` from `app.main` in test files that spin up fresh database engines to ensure Alembic
+  startup migrations run consistently.
+- Executed constraint violation assertions across distinct session instances (`Session(bind)`) to test true
+  database-level constraint enforcement.
+- Updated `routes_documents.py` to explicitly remove join table records and nullify `source_document_id` on
+  deletion, providing guaranteed cross-database durability.
+
+### Verification
+
+- Backend tests: **514 passed, 0 skipped, 0 failed** in 63.01s (with live PostgreSQL 16 instance enabled)
+- Frontend tests: **159 passed, 0 failed**
+- Alembic migration upgrade and downgrade verified
+- Schema idempotency and clean single migration head verified
+- Question vs Attempt separation and sequential attempt numbering verified
+- Multi-document revision scoping verified
+- Top-level ownership isolation and guest-to-user migration verified
+- Source document deletion resilience with frozen evidence snapshots verified
+- PostgreSQL 16 compatibility (`TIMESTAMPTZ`, index creation, ownership queries) verified
+
+### Result
+
+V3 Milestone 2 Phase 3 is complete. LearnFlow has a robust, durable, and ownership-aware revision data model
+ready for integration and future revision milestone capabilities.

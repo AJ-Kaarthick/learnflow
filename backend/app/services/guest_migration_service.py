@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Conversation, Document
+from app.db.models import Conversation, Document, RevisionSession
 from app.schemas.identity import IdentityType
 from app.services import guest_session_service
 
@@ -25,6 +25,7 @@ from app.services import guest_session_service
 class MigrationResult:
     documents_migrated: int
     conversations_migrated: int
+    revision_sessions_migrated: int = 0
 
 
 def migrate_guest_data_to_user(db: Session, guest_session_id: str, user_id: str) -> MigrationResult:
@@ -86,6 +87,11 @@ def migrate_guest_data_to_user(db: Session, guest_session_id: str, user_id: str)
         .filter(Conversation.owner_type == IdentityType.GUEST.value, Conversation.owner_id == guest_session_id)
         .update({"owner_type": IdentityType.USER.value, "owner_id": user_id}, synchronize_session=False)
     )
+    revision_sessions_migrated = (
+        db.query(RevisionSession)
+        .filter(RevisionSession.owner_type == IdentityType.GUEST.value, RevisionSession.owner_id == guest_session_id)
+        .update({"owner_type": IdentityType.USER.value, "owner_id": user_id}, synchronize_session=False)
+    )
 
     guest_session_service.revoke_guest_session(db, guest_session_id)
 
@@ -94,4 +100,5 @@ def migrate_guest_data_to_user(db: Session, guest_session_id: str, user_id: str)
     return MigrationResult(
         documents_migrated=documents_migrated,
         conversations_migrated=conversations_migrated,
+        revision_sessions_migrated=revision_sessions_migrated,
     )

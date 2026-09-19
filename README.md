@@ -58,7 +58,7 @@ LearnFlow currently supports:
 - 📄 Display page count when supported (PDF)
 - 📋 Copy summaries, flashcards, and quizzes
 - 💾 Download summaries, flashcards, quizzes, and mind maps as Markdown
-- 💾 Store generated learning content in SQLite
+- 💾 Store generated learning content in SQLite and PostgreSQL
 - 🔄 Provider-swappable AI architecture
 - 🧩 Semantic document indexing (RAG foundation)
 - 🧩 Automatic OCR processing for image-based documents
@@ -458,6 +458,22 @@ LearnFlow currently supports:
 - Dry-run validation mode (`--dry-run`)
 - Comprehensive migration test suite (legacy V2.4, modern V3, type normalization, files, transactions)
 
+##### Phase 3 — Revision Data Model ✅
+
+- Core SQLAlchemy revision models (`RevisionSession`, `RevisionSessionDocument`, `RevisionQuestion`, `RevisionAttempt`)
+- Persistent structural separation of Question and Attempt (`Question != Attempt`) supporting multi-attempt history
+- Multi-document revision sessions via composite join table
+- Top-level session ownership inheritance (`owner_type`, `owner_id`)
+- Document deletion decoupling preserving revision history and evidence snapshots
+- Guest-to-account revision session ownership transfer
+- Alembic migration `74eb271ec556` for SQLite and PostgreSQL
+
+##### Phase 4 — Integration, Isolation & Regression ⏳
+
+- End-to-end integration across guest sessions, user accounts, documents, conversations, and revision sessions
+- Multi-tenant data isolation verification
+- Final regression testing on SQLite and PostgreSQL 16
+
 > **Development database note:** Existing SQLite databases created under the
 > pre-Phase-3 schema are not automatically migrated at application startup.
 > Legacy V2.4 databases can be migrated to PostgreSQL using the administrative CLI:
@@ -473,12 +489,6 @@ LearnFlow currently supports:
 - Learning-style controls
 - Multi-document study
 - Grounded study content
-
-> **Development database note:** V3 Milestone 1 introduces ownership fields
-> required for guest and authenticated-user data isolation. A fresh database
-> created from the current schema is supported. Existing pre-Phase-3 SQLite
-> databases are not automatically migrated and require the database migration
-> work planned for V3 Milestone 2.
 
 #### Milestone 4 — Revision Mode
 - Dedicated Revision environment
@@ -591,7 +601,9 @@ npm run dev
 - FastAPI
 - Python
 - SQLAlchemy
-- SQLite
+- Alembic
+- SQLite (development & testing)
+- PostgreSQL (V3 persistent database architecture)
 
 ### AI
 - Gemini
@@ -640,9 +652,12 @@ npm run dev
 - Alembic schema migration infrastructure
 - SQLite/PostgreSQL database compatibility foundation
 - Legacy SQLite schema drift detection
+- SQLite → PostgreSQL data migration CLI and storage synchronization
+- Persistent Revision data model foundation (sessions, questions, attempts)
 
 ### Planned
 
+- V3 Milestone 2 Phase 4 — Integration, Isolation & Regression
 - V3 Milestone 3 — Study Experience 2.0
 - V3 Milestone 4 — Revision Mode
 - V3 Milestone 5 — Learning Intelligence & Progress
