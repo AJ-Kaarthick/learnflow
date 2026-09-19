@@ -5,7 +5,7 @@ import MindMapPanel from "./MindMapPanel";
 import NoReadableTextState from "./NoReadableTextState";
 import QuizPanel from "./QuizPanel";
 import SummaryPanel from "./SummaryPanel";
-import { hasNoReadableText } from "../utils/documentReadiness";
+import { classifyStudyReadiness, describeStudyReadiness, hasNoReadableText } from "../utils/documentReadiness";
 import { loadActiveStudyTab, saveActiveStudyTab } from "../utils/persistence";
 
 // Maps the raw backend status value to copy a student should actually
@@ -61,37 +61,30 @@ const STUDY_TABS = [
 ];
 const STUDY_TAB_IDS = STUDY_TABS.map((tab) => tab.id);
 
-// The center panel (≈60%) of the workspace: the open document's info
-// block, then a tab bar switching between its Summary / Flashcards /
-// Quiz / Mind Map.
-//
-// Milestone 1 rendered all four study panels stacked, one below the
-// other, with tabs deliberately deferred ("only one study mode
-// visible at a time is a later milestone"). This milestone (V2.1
-// Milestone 2, Workspace Session Persistence) is required to restore
-// "whether the user was viewing Summary/Flashcards/Quiz/Mind Map"
-// after a refresh — which only means something once there's a single
-// active tab to restore. So the tab bar below is introduced here, as
-// the minimal prerequisite for that requirement: still frontend-only,
-// same visual language as the rest of the workspace, no behavior
-// changes to the four panels themselves.
-//
-// The info block itself used to also show a preview of the extracted
-// text (with a Read More/Show Less toggle) above the tab bar. That's
-// gone as of the V2.2 library/workspace polish pass — the Summary tab
-// one click away already explains the document, so a second, raw
-// excerpt of it here was duplicated information competing for the
-// same space. What's left is just enough to orient the student
-// (title, status, and the same at-a-glance metadata the library
-// shows) before they get to the tools they're actually here for.
-function StudyWorkspace({ document, contentLoading, cachedContent, onContentGenerated }) {
-  // Which study tool is showing. This is a workspace-wide preference
-  // (which tool the student was using), not something scoped to a
-  // particular document, so it's read once here rather than threaded
-  // through `document` — switching to a different document keeps
-  // whichever tab was active, the same way switching files in an
-  // editor keeps the same side panel open. Falls back to "summary" if
-  // storage is empty or holds a value from an older schema.
+// The center panel of the workspace:
+// - In single-document mode: the open document's info block, then tabs.
+// - In multi-document mode: document chip row (1-10 documents) with add/remove
+//   actions, readiness status, active focus indicator, and tabs for the focused document.
+function StudyWorkspace({
+  document,
+  selectedDocuments = [],
+  contentLoading,
+  cachedContent,
+  onContentGenerated,
+  onSelectActiveDocument,
+  onRemoveDocument,
+  onOpenDocumentSelector,
+  selectionError,
+}) {
+  const effectiveSelected =
+    selectedDocuments && selectedDocuments.length > 0
+      ? selectedDocuments
+      : document
+        ? [document]
+        : [];
+  const isMultiDocument = effectiveSelected.length > 1;
+
+  // Which study tool is showing. Workspace-wide preference restored from localStorage.
   const [activeTab, setActiveTab] = useState(() => {
     const stored = loadActiveStudyTab();
     return STUDY_TAB_IDS.includes(stored) ? stored : STUDY_TAB_IDS[0];
@@ -101,72 +94,254 @@ function StudyWorkspace({ document, contentLoading, cachedContent, onContentGene
     saveActiveStudyTab(activeTab);
   }, [activeTab]);
 
-  if (!document) {
+  if (!document && effectiveSelected.length === 0) {
     return <EmptyWorkspaceState />;
   }
 
-  const noReadableText = hasNoReadableText(document);
-  // The pre-existing "very little text" advisory line remains for the
-  // 1-49 character range (still enough for the AI to at least attempt
-  // something from real, if sparse, content) — it no longer covers
-  // character_count === 0, which is the stronger, generation-blocking
-  // case now called out on its own, in the same amber tone, right
-  // below it.
+  const readiness = classifyStudyReadiness(effectiveSelected);
+  const readinessExplanation = describeStudyReadiness(readiness);
+
+  // If zero selected documents are readable, block study generation with an explanation
+  if (readiness.isNoneReadable) {
+    return (
+      <div className="space-y-6">
+        {selectionError && (
+          <div className="rounded-md bg-red-50 p-2.5 text-xs text-red-700" role="alert">
+            {selectionError}
+          </div>
+        )}
+
+        {/* Selected document chips */}
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-3">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Study Documents ({effectiveSelected.length}/10):
+          </span>
+          {effectiveSelected.map((doc) => {
+            const isActive = doc.id === document?.id;
+            const isUnusable = doc.status !== "ready" || (doc.character_count ?? 0) === 0;
+            return (
+              <span
+                key={doc.id}
+                className={`inline-flex max-w-full items-center gap-1.5 rounded-full py-1 pl-3 pr-2 text-xs font-medium transition-colors ${
+                  isActive
+                    ? "bg-accent-600 text-white shadow-sm"
+                    : isUnusable
+                      ? "border border-amber-300 bg-amber-100 text-amber-800"
+                      : "bg-accent-50 text-accent-800 hover:bg-accent-100"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectActiveDocument?.(doc)}
+                  className="max-w-[180px] truncate text-left focus-visible:outline-none"
+                  title={doc.original_filename}
+                >
+                  {doc.original_filename}
+                </button>
+                {onRemoveDocument && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveDocument(doc.id)}
+                    aria-label={`Remove ${doc.original_filename} from study`}
+                    className={`shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 ${
+                      isActive ? "text-white/80 hover:text-white" : "text-accent-400 hover:text-accent-700"
+                    }`}
+                  >
+                    &times;
+                  </button>
+                )}
+              </span>
+            );
+          })}
+          {effectiveSelected.length < 10 && onOpenDocumentSelector && (
+            <button
+              type="button"
+              onClick={onOpenDocumentSelector}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:border-accent-400 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
+                <path d="M10 4a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 10 4Z" />
+              </svg>
+              Add
+            </button>
+          )}
+        </div>
+
+        <div
+          className="space-y-2 rounded-xl border border-amber-300 bg-amber-50/80 p-6 text-center"
+          role="alert"
+        >
+          <p className="text-sm font-semibold text-amber-900">
+            No readable documents available for study
+          </p>
+          <p className="mx-auto max-w-lg text-xs leading-relaxed text-amber-800">
+            {readinessExplanation}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const noReadableText = document ? hasNoReadableText(document) : false;
   const extractedVeryLittleText =
-    document.status === "ready" && !noReadableText && document.character_count < 50;
-  const pageOrType = formatPageCountOrFileType(document);
-  const fileSize = formatFileSize(document.file_size_bytes);
+    document?.status === "ready" && !noReadableText && (document.character_count ?? 0) < 50;
+  const pageOrType = document ? formatPageCountOrFileType(document) : null;
+  const fileSize = document ? formatFileSize(document.file_size_bytes) : null;
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1.5 border-b border-slate-100 pb-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-lg font-semibold text-slate-900">{document.original_filename}</p>
-          <span
-            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${statusPillClasses(
-              document.status
-            )}`}
-          >
-            {statusLabel(document.status)}
-          </span>
+      {selectionError && (
+        <div className="rounded-md bg-red-50 p-2.5 text-xs text-red-700" role="alert">
+          {selectionError}
         </div>
+      )}
 
-        <p className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-          {pageOrType && (
-            <span title={formatPageCount(document.page_count) ? "Page count" : "File type"}>
-              {pageOrType}
+      {isMultiDocument ? (
+        <div className="space-y-3 border-b border-slate-100 pb-4">
+          {/* Multi-document chip row */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Study Documents ({effectiveSelected.length}/10):
             </span>
+            {effectiveSelected.map((doc) => {
+              const isActive = doc.id === document?.id;
+              const isUnusable = doc.status !== "ready" || (doc.character_count ?? 0) === 0;
+              return (
+                <span
+                  key={doc.id}
+                  className={`inline-flex max-w-full items-center gap-1.5 rounded-full py-1 pl-3 pr-2 text-xs font-medium transition-colors ${
+                    isActive
+                      ? "bg-accent-600 text-white shadow-sm"
+                      : isUnusable
+                        ? "border border-amber-300 bg-amber-100 text-amber-800"
+                        : "bg-accent-50 text-accent-800 hover:bg-accent-100"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectActiveDocument?.(doc)}
+                    className="max-w-[180px] truncate text-left focus-visible:outline-none"
+                    title={
+                      isUnusable
+                        ? `${doc.original_filename} (not ready for study)`
+                        : `Focus ${doc.original_filename}`
+                    }
+                  >
+                    {doc.original_filename}
+                  </button>
+                  {onRemoveDocument && (
+                    <button
+                      type="button"
+                      onClick={() => onRemoveDocument(doc.id)}
+                      aria-label={`Remove ${doc.original_filename} from study`}
+                      className={`shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 ${
+                        isActive
+                          ? "text-white/80 hover:text-white"
+                          : "text-accent-400 hover:text-accent-700"
+                      }`}
+                    >
+                      &times;
+                    </button>
+                  )}
+                </span>
+              );
+            })}
+            {effectiveSelected.length < 10 && onOpenDocumentSelector && (
+              <button
+                type="button"
+                onClick={onOpenDocumentSelector}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:border-accent-400 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
+                  <path d="M10 4a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 10 4Z" />
+                </svg>
+                Add
+              </button>
+            )}
+          </div>
+
+          {/* Advisory banner if some selected documents were excluded */}
+          {readinessExplanation && (
+            <div
+              className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+              role="status"
+            >
+              {readinessExplanation}
+            </div>
           )}
-          {fileSize && (
-            <>
-              <span aria-hidden="true">&middot;</span>
-              <span title="File size">{fileSize}</span>
-            </>
+
+          {/* Orientation notice for multi-document mode */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div>
+              <p className="text-xs text-slate-500">
+                Multi-document study active ({readiness.readable.length} readable document{readiness.readable.length === 1 ? "" : "s"}).
+                Showing single-document tools for{" "}
+                <span className="font-semibold text-slate-800">{document?.original_filename}</span>.
+              </p>
+            </div>
+            {document && (
+              <span
+                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${statusPillClasses(
+                  document.status
+                )}`}
+              >
+                {statusLabel(document.status)}
+              </span>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Single-document info block (100% backward compatibility) */
+        <div className="space-y-1.5 border-b border-slate-100 pb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-lg font-semibold text-slate-900">{document.original_filename}</p>
+            <span
+              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${statusPillClasses(
+                document.status
+              )}`}
+            >
+              {statusLabel(document.status)}
+            </span>
+          </div>
+
+          <p className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+            {pageOrType && (
+              <span title={formatPageCount(document.page_count) ? "Page count" : "File type"}>
+                {pageOrType}
+              </span>
+            )}
+            {fileSize && (
+              <>
+                <span aria-hidden="true">&middot;</span>
+                <span title="File size">{fileSize}</span>
+              </>
+            )}
+          </p>
+
+          {extractedVeryLittleText && (
+            <p className="text-xs text-amber-600">
+              Very little text was extracted. This might be a scanned/image-only document, which
+              isn&apos;t supported yet.
+            </p>
           )}
-        </p>
 
-        {extractedVeryLittleText && (
-          <p className="text-xs text-amber-600">
-            Very little text was extracted. This might be a scanned/image-only document, which
-            isn&apos;t supported yet.
-          </p>
-        )}
+          {noReadableText && (
+            <p className="text-xs text-amber-700">
+              No readable text was detected in this document, so Summary, Flashcards, Quiz, and
+              Mind Map are unavailable for it. This usually means it&apos;s a scanned or
+              image-only file.
+            </p>
+          )}
 
-        {noReadableText && (
-          <p className="text-xs text-amber-700">
-            No readable text was detected in this document, so Summary, Flashcards, Quiz, and
-            Mind Map are unavailable for it. This usually means it&apos;s a scanned or
-            image-only file.
-          </p>
-        )}
+          {document.status === "failed" && (
+            <p className="text-sm text-red-600">
+              We couldn&apos;t read this file — it may be corrupted, password-protected, or in an
+              unsupported format. Try uploading a different file.
+            </p>
+          )}
+        </div>
+      )}
 
-        {document.status === "failed" && (
-          <p className="text-sm text-red-600">
-            We couldn&apos;t read this file — it may be corrupted, password-protected, or in an
-            unsupported format. Try uploading a different file.
-          </p>
-        )}
-      </div>
 
       {document.status === "ready" && (
         <>

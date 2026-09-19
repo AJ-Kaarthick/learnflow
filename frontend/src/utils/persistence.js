@@ -54,6 +54,9 @@ const DEFAULT_WORKSPACE_STATE = {
   librarySearch: "",
   librarySort: "uploaded_newest",
   libraryScrollTop: 0,
+  // V3 Milestone 3 (Phase 1): tracks which documents are selected for
+  // study in the client workspace (1 to 10 documents).
+  selectedStudyDocumentIds: [],
 };
 
 function readRaw(key) {
@@ -108,6 +111,37 @@ export function loadActiveDocumentId() {
 export function saveActiveDocumentId(documentId) {
   patchWorkspaceState({ activeDocumentId: documentId ?? null });
 }
+
+export function loadSelectedStudyDocumentIds() {
+  const state = loadWorkspaceState();
+  if (Array.isArray(state.selectedStudyDocumentIds) && state.selectedStudyDocumentIds.length > 0) {
+    if (
+      state.activeDocumentId != null &&
+      !state.selectedStudyDocumentIds.includes(state.activeDocumentId)
+    ) {
+      return [state.activeDocumentId];
+    }
+    return state.selectedStudyDocumentIds;
+  }
+  return state.activeDocumentId ? [state.activeDocumentId] : [];
+}
+
+export function saveSelectedStudyDocumentIds(documentIds, activeId = null) {
+  const normalized = Array.isArray(documentIds)
+    ? documentIds.filter((id) => id != null)
+    : [];
+  const resolvedActive =
+    activeId != null && normalized.includes(activeId)
+      ? activeId
+      : normalized.length > 0
+        ? normalized[0]
+        : null;
+  patchWorkspaceState({
+    selectedStudyDocumentIds: normalized,
+    activeDocumentId: resolvedActive,
+  });
+}
+
 
 export function loadActiveStudyTab() {
   return loadWorkspaceState().activeStudyTab;

@@ -58,10 +58,8 @@ export function splitDocumentsByReadability(documents) {
 }
 
 // Oxford-comma joiner for filenames in describeUnreadableDocuments
-// below — "A" / "A and B" / "A, B, and C". Not exported: it's a pure
-// formatting detail of that one message, not a general-purpose list
-// utility anything else in the app currently needs.
-function joinFilenames(filenames) {
+// and describeStudyReadiness — "A" / "A and B" / "A, B, and C".
+export function joinFilenames(filenames) {
   if (filenames.length === 1) return filenames[0];
   if (filenames.length === 2) return `${filenames[0]} and ${filenames[1]}`;
   return `${filenames.slice(0, -1).join(", ")}, and ${filenames[filenames.length - 1]}`;
@@ -109,4 +107,115 @@ export function describeUnreadableDocuments(unreadableDocuments, readableCount) 
       : "The other documents you selected are still available to chat with.";
 
   return `${whatAndWhy} ${reassurance}`;
+}
+
+/**
+ * Whether a document is ready and has extractable readable text, making it
+ * a valid source for study generation.
+ */
+export function isReadableStudyDocument(document) {
+  return Boolean(document) && document.status === "ready" && (document.character_count ?? 0) > 0;
+}
+
+/**
+ * Classifies documents in a study selection according to their readiness:
+ * - readable: status === "ready" and character_count > 0
+ * - unreadable: status === "ready" and character_count === 0 (scanned/image-only)
+ * - processing: status === "processing" or "uploading"
+ * - failed: status === "failed"
+ * - excluded: all documents from unreadable + processing + failed
+ */
+export function classifyStudyReadiness(documents) {
+  const readable = [];
+  const unreadable = [];
+  const processing = [];
+  const failed = [];
+
+  for (const doc of documents ?? []) {
+    if (!doc) continue;
+    if (doc.status === "ready") {
+      if ((doc.character_count ?? 0) > 0) {
+        readable.push(doc);
+      } else {
+        unreadable.push(doc);
+      }
+    } else if (doc.status === "processing" || doc.status === "uploading") {
+      processing.push(doc);
+    } else if (doc.status === "failed") {
+      failed.push(doc);
+    } else {
+      unreadable.push(doc);
+    }
+  }
+
+  const excluded = [...unreadable, ...processing, ...failed];
+
+  return {
+    readable,
+    unreadable,
+    processing,
+    failed,
+    excluded,
+    isAllReadable: excluded.length === 0 && readable.length > 0,
+    hasReadable: readable.length > 0,
+    isNoneReadable: readable.length === 0,
+  };
+}
+
+/**
+ * Builds an explanatory message describing any excluded documents in a study
+ * selection, giving their specific filenames and reasons (no readable text,
+ * still processing, or failed). When readable documents remain, provides
+ * reassurance that the readable subset will participate in study. When zero
+ * readable documents remain, provides a blocking message indicating that at least
+ * one ready document with readable text is required.
+ */
+export function describeStudyReadiness(categorized) {
+  if (!categorized || !categorized.excluded || categorized.excluded.length === 0) {
+    return null;
+  }
+
+  const { readable, unreadable, processing, failed } = categorized;
+  const parts = [];
+
+  if (unreadable.length > 0) {
+    const names = joinFilenames(unreadable.map((d) => d.original_filename));
+    parts.push(
+      unreadable.length > 1
+        ? `${names} have no readable text (scanned or image-only).`
+        : `${names} has no readable text (scanned or image-only).`
+    );
+  }
+
+  if (processing.length > 0) {
+    const names = joinFilenames(processing.map((d) => d.original_filename));
+    parts.push(
+      processing.length > 1
+        ? `${names} are still processing.`
+        : `${names} is still processing.`
+    );
+  }
+
+  if (failed.length > 0) {
+    const names = joinFilenames(failed.map((d) => d.original_filename));
+    parts.push(
+      failed.length > 1
+        ? `${names} couldn't be processed.`
+        : `${names} couldn't be processed.`
+    );
+  }
+
+  const exclusionDetail = parts.join(" ");
+
+  if (readable.length === 0) {
+    return `${exclusionDetail} None of the selected documents are ready for study. Please select at least one ready document with readable text.`;
+  }
+
+  const readableNames = joinFilenames(readable.map((d) => d.original_filename));
+  const reassurance =
+    readable.length === 1
+      ? `${readableNames} is ready and will participate in study.`
+      : `${readableNames} are ready and will participate in study.`;
+
+  return `${exclusionDetail} ${reassurance}`;
 }

@@ -5,10 +5,24 @@ import { getMindMap } from "../api/mindmap";
 import { getQuiz } from "../api/quiz";
 import { getSummary } from "../api/summary";
 import LibraryPanel from "../components/LibraryPanel";
+import Modal from "../components/Modal";
 import StudyWorkspace from "../components/StudyWorkspace";
 import { mergeGeneratedContent } from "../utils/cachedContent";
 import { hydrateDocumentIds } from "../utils/documentHydration";
-import { loadActiveDocumentId, saveActiveDocumentId } from "../utils/persistence";
+import {
+  loadActiveDocumentId,
+  loadSelectedStudyDocumentIds,
+  saveActiveDocumentId,
+  saveSelectedStudyDocumentIds,
+} from "../utils/persistence";
+import {
+  MAX_STUDY_DOCUMENTS,
+  openStudyDocument,
+  removeStudyDocument,
+  resolveActiveStudyDocument,
+  syncStudyUpload,
+  toggleStudyDocument,
+} from "../utils/studySelection";
 
 // Loads everything already generated for a document in one place, so
 // individual panels don't each decide independently when to fetch —
@@ -26,54 +40,48 @@ async function loadCachedContent(documentId) {
   return { summary, flashcards, quiz, mindmap };
 }
 
-// V2.4 Milestone 1: this is what's left of the old combined HomePage
-// once the permanent AI Assistant panel — and everything that existed
-// only to keep it in sync with whatever document was open (see the
-// old openDocument's automatic-chat-selection comment, now gone) —
-// moves to its own page (ChatPage.jsx). Study and Chat now restore
-// and persist their own halves of workspace state independently
-// (`activeDocumentId` here; ChatPage's half was `selectedDocumentIds`
-// through V2.4 Milestone 1, and is `activeConversationId` as of
-// Milestone 2's server-backed conversations — see persistence.js)
-// rather than one page owning both and syncing them, which
-// persistence.js already stored as separate fields even before this
-// milestone — so nothing about *this* page's own storage needed to
-// change, only Chat's half.
+// V3 Milestone 3 (Phase 1): Multi-Document Study Foundation
+// Supports selecting and working with 1–10 documents in the study
+// workspace while preserving the single-document study behavior.
 function StudyPage() {
   // Bumped whenever an action outside LibraryPanel's own search/sort
   // controls changes the underlying document data (open, rename,
   // delete, upload) so it knows to re-fetch.
   const [refreshSignal, setRefreshSignal] = useState(0);
 
+  // The collection of currently selected study documents (1 to 10).
+  const [selectedDocuments, setSelectedDocuments] = useState([]);
+  // The currently focused document (whose individual study tools are shown).
   const [document, setDocument] = useState(null);
   const [cachedContent, setCachedContent] = useState(null);
   const [contentLoading, setContentLoading] = useState(false);
+  const [selectionError, setSelectionError] = useState(null);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   // Guards the "persist on change" effect below so the very first
-  // render — before restoreActiveDocument (below) has had a chance to
-  // run — doesn't immediately overwrite last session's saved active
-  // document with this render's still-empty initial state.
+  // render — before restoreActiveStudySession has had a chance to
+  // run — doesn't immediately overwrite last session's saved state.
   const hasRestoredRef = useRef(false);
 
-  // Restores the previous session's active study document on first
-  // mount. Drops the id (both from what gets restored and from what
-  // stays in storage) if it no longer resolves — the document was
-  // deleted in a previous session — so a stale id doesn't linger
-  // forever.
+  // Restores the previous session's study document selection on mount.
   useEffect(() => {
     let cancelled = false;
 
-    async function restoreActiveDocument() {
+    async function restoreActiveStudySession() {
       try {
-        const persistedActiveId = loadActiveDocumentId();
-        if (!persistedActiveId) return;
+        const persistedIds = loadSelectedStudyDocumentIds();
+        if (!persistedIds || persistedIds.length === 0) return;
 
-        const [activeDoc] = await hydrateDocumentIds([persistedActiveId]);
+        const hydrated = await hydrateDocumentIds(persistedIds);
         if (cancelled) return;
 
-        if (activeDoc) {
+        if (hydrated.length > 0) {
+          setSelectedDocuments(hydrated);
+          const persistedActiveId = loadActiveDocumentId();
+          const activeDoc = resolveActiveStudyDocument(hydrated, persistedActiveId);
           setDocument(activeDoc);
-          if (activeDoc.status === "ready") {
+
+          if (activeDoc && activeDoc.status === "ready") {
             setContentLoading(true);
             const content = await loadCachedContent(activeDoc.id);
             if (!cancelled) {
@@ -82,8 +90,8 @@ function StudyPage() {
             }
           }
         } else {
-          // The previously active document is gone — nothing to
-          // restore it to, and no point keeping the stale id around.
+          // Previously selected documents no longer resolve.
+          saveSelectedStudyDocumentIds([]);
           saveActiveDocumentId(null);
         }
       } finally {
@@ -91,38 +99,30 @@ function StudyPage() {
       }
     }
 
-    restoreActiveDocument();
+    restoreActiveStudySession();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keeps storage in sync with the live active document as the user
-  // works, so the *next* refresh restores wherever they ended up —
-  // not just wherever restoreActiveDocument found them.
+  // Keeps localStorage in sync with the live study selection and active document.
   useEffect(() => {
     if (!hasRestoredRef.current) return;
-    saveActiveDocumentId(document?.id ?? null);
-  }, [document]);
+    saveSelectedStudyDocumentIds(selectedDocuments.map((doc) => doc.id), document?.id ?? null);
+  }, [selectedDocuments, document]);
 
-  // Merges a freshly generated result back into cachedContent, the
-  // single place StudyWorkspace's panels read their starting data
-  // from. Without this, cachedContent stays whatever it was when the
-  // document was opened — see the equivalent comment on the old
-  // HomePage for the full history of why this exists.
   function handleContentGenerated(kind, value) {
     setCachedContent((previous) => mergeGeneratedContent(previous, kind, value));
   }
 
-  async function handleOpenDocument(doc) {
+  async function handleSelectActiveDocument(doc) {
+    if (document?.id === doc?.id) return;
     setDocument(doc);
     setCachedContent(null);
 
-    // Timestamp the open server-side (powers the "Recently Opened"
-    // sort, and Home's "Continue studying" list) and refresh the
-    // library so it reflects the new order. Best-effort: if this
-    // fails, opening the document should still work normally.
+    if (!doc) return;
+
     markDocumentOpened(doc.id)
       .catch(() => {})
       .finally(() => setRefreshSignal((count) => count + 1));
@@ -134,21 +134,69 @@ function StudyPage() {
     setContentLoading(false);
   }
 
+  async function handleOpenDocument(doc) {
+    setSelectionError(null);
+    const res = openStudyDocument(selectedDocuments, doc, MAX_STUDY_DOCUMENTS);
+    if (res.error) {
+      setSelectionError(res.error);
+    }
+    setSelectedDocuments(res.nextDocuments);
+    await handleSelectActiveDocument(res.activeDocument);
+  }
+
+  function handleToggleSelect(doc) {
+    setSelectionError(null);
+    const res = toggleStudyDocument(selectedDocuments, doc, MAX_STUDY_DOCUMENTS);
+    if (res.error) {
+      setSelectionError(res.error);
+      return;
+    }
+
+    setSelectedDocuments(res.nextDocuments);
+
+    // If the unselected document was active, focus the next available document
+    if (document?.id === doc.id) {
+      const nextActive = resolveActiveStudyDocument(res.nextDocuments, null);
+      handleSelectActiveDocument(nextActive);
+    } else if (!document && res.nextDocuments.length > 0) {
+      handleSelectActiveDocument(res.nextDocuments[0]);
+    }
+  }
+
+  function handleRemoveDocument(documentId) {
+    setSelectionError(null);
+    const res = removeStudyDocument(selectedDocuments, documentId);
+    setSelectedDocuments(res.nextDocuments);
+
+    if (document?.id === documentId) {
+      const nextActive = resolveActiveStudyDocument(res.nextDocuments, null);
+      handleSelectActiveDocument(nextActive);
+    }
+  }
+
   async function handleUploadComplete(newDocument) {
-    await handleOpenDocument(newDocument);
+    setSelectionError(null);
+    const res = syncStudyUpload(selectedDocuments, newDocument, MAX_STUDY_DOCUMENTS);
+    setSelectedDocuments(res.nextDocuments);
+    await handleSelectActiveDocument(res.activeDocument);
   }
 
   async function handleRename(documentId, newName) {
     const updated = await renameDocument(documentId, newName);
+    setSelectedDocuments((previous) =>
+      previous.map((doc) => (doc.id === documentId ? updated : doc))
+    );
     setDocument((previous) => (previous && previous.id === documentId ? updated : previous));
     setRefreshSignal((count) => count + 1);
   }
 
   async function handleDelete(documentId) {
     await deleteDocument(documentId);
+    const remaining = selectedDocuments.filter((doc) => doc.id !== documentId);
+    setSelectedDocuments(remaining);
     if (document && document.id === documentId) {
-      setDocument(null);
-      setCachedContent(null);
+      const nextActive = resolveActiveStudyDocument(remaining, null);
+      handleSelectActiveDocument(nextActive);
     }
     setRefreshSignal((count) => count + 1);
   }
@@ -162,35 +210,59 @@ function StudyPage() {
         <LibraryPanel
           refreshSignal={refreshSignal}
           activeDocumentId={document?.id ?? null}
-          selectable={false}
+          selectedDocumentIds={selectedDocuments.map((doc) => doc.id)}
+          selectable={true}
+          selectionScope="study"
+          maxSelected={MAX_STUDY_DOCUMENTS}
           onOpen={handleOpenDocument}
           onRename={handleRename}
           onDelete={handleDelete}
+          onToggleSelect={handleToggleSelect}
           onUploadComplete={handleUploadComplete}
         />
       </aside>
 
-      {/* No more fixed-width chat column reserving ~26% of the
-          screen (see the old WorkspaceShell) — Study now gets
-          everything the library doesn't need, which is the whole
-          point of this milestone's "significantly more space for the
-          selected study material". */}
-      {/* No `id`/`tabIndex` here for a skip-link target anymore —
-          AppShell's skip link now focuses its own `#page-content`
-          wrapper (see AppShell.jsx), which works the same way
-          regardless of which page is mounted inside it, rather than
-          each page needing to expose an identically-named landmark. */}
       <main
         aria-label="Study workspace"
         className="min-w-0 flex-1 p-6 lg:h-full lg:overflow-y-auto lg:p-10"
       >
         <StudyWorkspace
           document={document}
+          selectedDocuments={selectedDocuments}
           contentLoading={contentLoading}
           cachedContent={cachedContent}
           onContentGenerated={handleContentGenerated}
+          onSelectActiveDocument={handleSelectActiveDocument}
+          onRemoveDocument={handleRemoveDocument}
+          onOpenDocumentSelector={() => setIsPickerOpen(true)}
+          selectionError={selectionError}
         />
       </main>
+
+      {isPickerOpen && (
+        <Modal
+          title="Select documents to study"
+          onClose={() => setIsPickerOpen(false)}
+          maxWidthClassName="max-w-2xl"
+        >
+          <LibraryPanel
+            refreshSignal={refreshSignal}
+            activeDocumentId={document?.id ?? null}
+            selectedDocumentIds={selectedDocuments.map((doc) => doc.id)}
+            selectable={true}
+            selectionScope="study"
+            maxSelected={MAX_STUDY_DOCUMENTS}
+            onOpen={(doc) => {
+              handleOpenDocument(doc);
+              setIsPickerOpen(false);
+            }}
+            onRename={handleRename}
+            onDelete={handleDelete}
+            onToggleSelect={handleToggleSelect}
+            onUploadComplete={handleUploadComplete}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

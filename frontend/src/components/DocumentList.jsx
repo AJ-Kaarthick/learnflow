@@ -102,13 +102,16 @@ function DeleteIcon({ busy = false }) {
 function DocumentList({
   documents,
   activeDocumentId,
-  selectedDocumentIds,
+  selectedDocumentIds = [],
   selectable = true,
+  selectionScope = "chat",
+  maxSelected = 10,
   onOpen,
   onRename,
   onDelete,
   onToggleSelect,
 }) {
+
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
   const [editError, setEditError] = useState(null);
@@ -171,7 +174,8 @@ function DocumentList({
         const isActive = doc.id === activeDocumentId;
         const isBusy = busyId === doc.id;
         const isSelected = selectedDocumentIds.includes(doc.id);
-        const canSelect = doc.status === "ready";
+        const isAtLimit = selectedDocumentIds.length >= maxSelected && !isSelected;
+        const canSelect = doc.status === "ready" && !isAtLimit;
         const pageOrType = formatPageCountOrFileType(doc);
         const fileSize = formatFileSize(doc.file_size_bytes);
 
@@ -189,14 +193,17 @@ function DocumentList({
                 disabled={!canSelect}
                 onChange={() => onToggleSelect(doc)}
                 title={
-                  canSelect
-                    ? `Include "${doc.original_filename}" in chat`
-                    : "Only ready documents can be included in chat"
+                  isAtLimit
+                    ? `Maximum of ${maxSelected} documents selected`
+                    : canSelect
+                      ? `Include "${doc.original_filename}" in ${selectionScope}`
+                      : `Only ready documents can be included in ${selectionScope}`
                 }
-                aria-label={`Include ${doc.original_filename} in chat`}
+                aria-label={`Include ${doc.original_filename} in ${selectionScope}`}
                 className="h-4 w-4 shrink-0 rounded border-slate-300 text-accent-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-40"
               />
             )}
+
             <div className="min-w-0 flex-1">
               {isEditing ? (
                 <div className="space-y-1">

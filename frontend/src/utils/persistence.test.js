@@ -161,3 +161,57 @@ test("the persisted workspace blob never contains a messages, documents, or sele
   // id, not an object/array that could smuggle content alongside it.
   assert.equal(typeof parsed.activeConversationId, "string");
 });
+
+// ---------------------------------------------------------------------
+// V3 Milestone 3 Phase 1: Study 2.0 selection persistence tests
+// ---------------------------------------------------------------------
+
+test("loadSelectedStudyDocumentIds returns empty array when nothing saved", async () => {
+  const { loadSelectedStudyDocumentIds } = await import("./persistence.js");
+  assert.deepEqual(loadSelectedStudyDocumentIds(), []);
+});
+
+test("loadSelectedStudyDocumentIds falls back to activeDocumentId for backward compatibility", async () => {
+  const { loadSelectedStudyDocumentIds, saveActiveDocumentId } = await import("./persistence.js");
+  saveActiveDocumentId(42);
+  assert.deepEqual(loadSelectedStudyDocumentIds(), [42]);
+});
+
+test("saveSelectedStudyDocumentIds round-trips array of document IDs and syncs activeDocumentId", async () => {
+  const { loadSelectedStudyDocumentIds, saveSelectedStudyDocumentIds, loadActiveDocumentId } =
+    await import("./persistence.js");
+
+  saveSelectedStudyDocumentIds([10, 20, 30]);
+  assert.deepEqual(loadSelectedStudyDocumentIds(), [10, 20, 30]);
+  assert.equal(loadActiveDocumentId(), 10);
+});
+
+test("saveSelectedStudyDocumentIds with empty array clears both selected and active IDs", async () => {
+  const { loadSelectedStudyDocumentIds, saveSelectedStudyDocumentIds, loadActiveDocumentId } =
+    await import("./persistence.js");
+
+  saveSelectedStudyDocumentIds([1, 2]);
+  assert.deepEqual(loadSelectedStudyDocumentIds(), [1, 2]);
+
+  saveSelectedStudyDocumentIds([]);
+  assert.deepEqual(loadSelectedStudyDocumentIds(), []);
+  assert.equal(loadActiveDocumentId(), null);
+});
+
+test("saveSelectedStudyDocumentIds respects explicit activeId parameter", async () => {
+  const { loadSelectedStudyDocumentIds, saveSelectedStudyDocumentIds, loadActiveDocumentId } =
+    await import("./persistence.js");
+
+  saveSelectedStudyDocumentIds([10, 20, 30], 20);
+  assert.deepEqual(loadSelectedStudyDocumentIds(), [10, 20, 30]);
+  assert.equal(loadActiveDocumentId(), 20);
+});
+
+test("loadSelectedStudyDocumentIds switches to activeDocumentId when activeDocumentId is set outside selection", async () => {
+  const { loadSelectedStudyDocumentIds, saveSelectedStudyDocumentIds, saveActiveDocumentId } =
+    await import("./persistence.js");
+
+  saveSelectedStudyDocumentIds([10, 20]);
+  saveActiveDocumentId(30);
+  assert.deepEqual(loadSelectedStudyDocumentIds(), [30]);
+});

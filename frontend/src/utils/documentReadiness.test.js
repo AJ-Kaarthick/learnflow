@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  classifyStudyReadiness,
+  describeStudyReadiness,
   describeUnreadableDocuments,
   hasNoReadableText,
+  isReadableStudyDocument,
   splitDocumentsByReadability,
 } from "./documentReadiness.js";
+
 
 // Regression coverage for: "Study generation tabs (Summary, Flashcards,
 // Quiz, Mind Map) can produce/display AI content even when the
@@ -174,4 +178,92 @@ test("describeUnreadableDocuments drops the reassurance for multiple unreadable 
 
   assert.match(message, /A\.jpg and B\.jpg have no readable text/);
   assert.doesNotMatch(message, /still available to chat with/);
+});
+
+// ---------------------------------------------------------------------
+// Milestone 3 Phase 1: Study 2.0 readiness tests
+// ---------------------------------------------------------------------
+
+test("isReadableStudyDocument returns true only for ready docs with character_count > 0", () => {
+  assert.equal(isReadableStudyDocument({ status: "ready", character_count: 500 }), true);
+  assert.equal(isReadableStudyDocument({ status: "ready", character_count: 0 }), false);
+  assert.equal(isReadableStudyDocument({ status: "processing", character_count: 500 }), false);
+  assert.equal(isReadableStudyDocument({ status: "failed", character_count: 500 }), false);
+  assert.equal(isReadableStudyDocument(null), false);
+});
+
+test("classifyStudyReadiness categorizes readable, unreadable, processing, and failed documents", () => {
+  const docReady1 = { id: 1, original_filename: "A.pdf", status: "ready", character_count: 100 };
+  const docReady2 = { id: 2, original_filename: "B.pdf", status: "ready", character_count: 200 };
+  const docScan = { id: 3, original_filename: "Scan.jpg", status: "ready", character_count: 0 };
+  const docProc = { id: 4, original_filename: "Proc.docx", status: "processing", character_count: 0 };
+  const docFail = { id: 5, original_filename: "Fail.pdf", status: "failed", character_count: 0 };
+
+  const categorized = classifyStudyReadiness([docReady1, docReady2, docScan, docProc, docFail]);
+
+  assert.deepEqual(categorized.readable.map((d) => d.id), [1, 2]);
+  assert.deepEqual(categorized.unreadable.map((d) => d.id), [3]);
+  assert.deepEqual(categorized.processing.map((d) => d.id), [4]);
+  assert.deepEqual(categorized.failed.map((d) => d.id), [5]);
+  assert.deepEqual(categorized.excluded.map((d) => d.id), [3, 4, 5]);
+  assert.equal(categorized.isAllReadable, false);
+  assert.equal(categorized.hasReadable, true);
+  assert.equal(categorized.isNoneReadable, false);
+});
+
+test("classifyStudyReadiness handles all-readable selection", () => {
+  const docReady1 = { id: 1, original_filename: "A.pdf", status: "ready", character_count: 100 };
+  const docReady2 = { id: 2, original_filename: "B.pdf", status: "ready", character_count: 200 };
+
+  const categorized = classifyStudyReadiness([docReady1, docReady2]);
+
+  assert.equal(categorized.isAllReadable, true);
+  assert.equal(categorized.hasReadable, true);
+  assert.equal(categorized.isNoneReadable, false);
+  assert.equal(categorized.excluded.length, 0);
+});
+
+test("classifyStudyReadiness handles zero-readable selection", () => {
+  const docScan = { id: 3, original_filename: "Scan.jpg", status: "ready", character_count: 0 };
+  const docProc = { id: 4, original_filename: "Proc.docx", status: "processing", character_count: 0 };
+
+  const categorized = classifyStudyReadiness([docScan, docProc]);
+
+  assert.equal(categorized.isAllReadable, false);
+  assert.equal(categorized.hasReadable, false);
+  assert.equal(categorized.isNoneReadable, true);
+  assert.equal(categorized.readable.length, 0);
+  assert.equal(categorized.excluded.length, 2);
+});
+
+test("describeStudyReadiness returns null when no exclusions exist", () => {
+  const categorized = classifyStudyReadiness([
+    { id: 1, original_filename: "A.pdf", status: "ready", character_count: 100 },
+  ]);
+  assert.equal(describeStudyReadiness(categorized), null);
+});
+
+test("describeStudyReadiness formats mixed exclusions with reassurance for remaining readable docs", () => {
+  const docReady = { id: 1, original_filename: "A.pdf", status: "ready", character_count: 100 };
+  const docScan = { id: 2, original_filename: "Scan.jpg", status: "ready", character_count: 0 };
+  const docProc = { id: 3, original_filename: "Notes.docx", status: "processing", character_count: 0 };
+
+  const categorized = classifyStudyReadiness([docReady, docScan, docProc]);
+  const msg = describeStudyReadiness(categorized);
+
+  assert.match(msg, /Scan\.jpg has no readable text/);
+  assert.match(msg, /Notes\.docx is still processing/);
+  assert.match(msg, /A\.pdf is ready and will participate in study/);
+});
+
+test("describeStudyReadiness provides blocking notice when zero readable documents remain", () => {
+  const docScan1 = { id: 1, original_filename: "Scan1.jpg", status: "ready", character_count: 0 };
+  const docScan2 = { id: 2, original_filename: "Scan2.jpg", status: "ready", character_count: 0 };
+
+  const categorized = classifyStudyReadiness([docScan1, docScan2]);
+  const msg = describeStudyReadiness(categorized);
+
+  assert.match(msg, /Scan1\.jpg and Scan2\.jpg have no readable text/);
+  assert.match(msg, /None of the selected documents are ready for study/);
+  assert.match(msg, /Please select at least one ready document with readable text/);
 });

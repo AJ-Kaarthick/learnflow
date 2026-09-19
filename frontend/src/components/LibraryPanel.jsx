@@ -53,12 +53,15 @@ function LibraryPanel({
   activeDocumentId,
   selectedDocumentIds = [],
   selectable = true,
+  selectionScope = "chat",
+  maxSelected = 10,
   onOpen,
   onRename,
   onDelete,
   onToggleSelect,
   onUploadComplete,
 }) {
+
   // Search and sort both restore from last session (V2.1 Milestone 2,
   // features 7 & 8) — read once via lazy initializers so the very
   // first fetch below (in the [search, sort, refreshSignal] effect)
@@ -187,7 +190,9 @@ function LibraryPanel({
 
         <p className="shrink-0 text-xs text-slate-400">
           {selectable
-            ? "Click a document to open it. Check its box to include it in the chat — check more than one to chat across several documents at once."
+            ? selectionScope === "study"
+              ? "Click a document to open it. Check its box to study across several documents at once (up to 10)."
+              : "Click a document to open it. Check its box to include it in the chat — check more than one to chat across several documents at once."
             : "Click a document to open it in your study workspace."}
         </p>
 
@@ -261,6 +266,8 @@ function LibraryPanel({
                 activeDocumentId={activeDocumentId}
                 selectedDocumentIds={selectedDocumentIds}
                 selectable={selectable}
+                selectionScope={selectionScope}
+                maxSelected={maxSelected}
                 onOpen={onOpen}
                 onRename={onRename}
                 onDelete={onDelete}
