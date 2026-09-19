@@ -11,6 +11,7 @@ from app.api.v1 import (
     routes_documents,
     routes_flashcards,
     routes_identity,
+    routes_learn,
     routes_mindmap,
     routes_quiz,
     routes_rag,
@@ -90,6 +91,7 @@ IDENTITY_AWARE_ROUTERS = (
     routes_chat.router,
     routes_conversations.router,
     routes_identity.router,
+    routes_learn.router,
 )
 
 for _router in IDENTITY_AWARE_ROUTERS:
