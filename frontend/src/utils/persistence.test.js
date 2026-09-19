@@ -222,6 +222,8 @@ test("saveActiveStudyTab round-trips learn tab setting", async () => {
   assert.equal(loadActiveStudyTab(), "summary");
   saveActiveStudyTab("learn");
   assert.equal(loadActiveStudyTab(), "learn");
+  saveActiveStudyTab("visualize");
+  assert.equal(loadActiveStudyTab(), "visualize");
   saveActiveStudyTab("summary");
   assert.equal(loadActiveStudyTab(), "summary");
 });

@@ -16,6 +16,7 @@ from app.api.v1 import (
     routes_quiz,
     routes_rag,
     routes_summary,
+    routes_visualize,
 )
 from app.core.config import settings
 from app.db.database import engine
@@ -92,6 +93,7 @@ IDENTITY_AWARE_ROUTERS = (
     routes_conversations.router,
     routes_identity.router,
     routes_learn.router,
+    routes_visualize.router,
 )
 
 for _router in IDENTITY_AWARE_ROUTERS:

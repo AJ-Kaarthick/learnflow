@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import EmptyWorkspaceState from "./EmptyWorkspaceState";
 import FlashcardsPanel from "./FlashcardsPanel";
 import LearnPanel from "./LearnPanel.jsx";
+import VisualizePanel from "./VisualizePanel.jsx";
 import MindMapPanel from "./MindMapPanel";
 import NoReadableTextState from "./NoReadableTextState";
 import QuizPanel from "./QuizPanel";
@@ -52,10 +53,11 @@ function formatPageCountOrFileType(document) {
   return document.original_filename.slice(lastDot + 1).toUpperCase();
 }
 
-// The five study tools, tabbed rather than stacked.
-// Order here also defines tab order in the UI (Learn is first per V3 M3 Phase 3).
+// The study tools, tabbed rather than stacked.
+// Order here also defines tab order in the UI: Learn | Visualize | Summary | Flashcards | Quiz | Mind Map.
 const STUDY_TABS = [
   { id: "learn", label: "Learn" },
+  { id: "visualize", label: "Visualize" },
   { id: "summary", label: "Summary" },
   { id: "flashcards", label: "Flashcards" },
   { id: "quiz", label: "Quiz" },
@@ -88,6 +90,9 @@ function StudyWorkspace({
 
   // In-memory Learn Mode session state preserved across tab switches in the workspace
   const [learnSession, setLearnSession] = useState(() => createInitialLearnSession());
+
+  // In-memory Visualize Mode session state preserved across tab switches in the workspace
+  const [visualizeSession, setVisualizeSession] = useState({ graph: null, depth: "standard" });
 
   // Which study tool is showing. Workspace-wide preference restored from localStorage.
   const [activeTab, setActiveTab] = useState(() => {
@@ -285,6 +290,11 @@ function StudyWorkspace({
                     {" "}Curriculum and topics synthesized across all{" "}
                     <span className="font-semibold text-slate-800">{effectiveSelected.length}</span> selected documents.
                   </>
+                ) : activeTab === "visualize" ? (
+                  <>
+                    {" "}Concept network synthesized across all{" "}
+                    <span className="font-semibold text-slate-800">{effectiveSelected.length}</span> selected documents.
+                  </>
                 ) : (
                   <>
                     {" "}Showing single-document tools for{" "}
@@ -386,6 +396,13 @@ function StudyWorkspace({
               selectedDocuments={effectiveSelected}
               session={learnSession}
               onUpdateSession={setLearnSession}
+              isNoneReadable={readiness.isNoneReadable}
+            />
+          ) : activeTab === "visualize" ? (
+            <VisualizePanel
+              selectedDocuments={effectiveSelected}
+              session={visualizeSession}
+              onUpdateSession={setVisualizeSession}
               isNoneReadable={readiness.isNoneReadable}
             />
           ) : contentLoading || !cachedContent ? (
