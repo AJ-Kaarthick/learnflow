@@ -544,9 +544,10 @@ Key architectural properties:
 - **Explicit Legacy Ownership:** Legacy V2.4 databases lack ownership fields (`owner_type`,
   `owner_id`). Migrating legacy application data requires an explicit target user identity
   (`--target-user-email` or `--target-user-id`). Migrated records are attributed as
-  `owner_type = "user", owner_id = target_user.id`. NULL ownership is prohibited.
 - **Modern V3 Preservation:** Modern V3 SQLite databases preserve their existing valid
-  user and guest ownership tags.
+  user and guest ownership tags, including full support for modern V3 revision tables
+  (`revision_sessions`, `revision_session_documents`, `revision_questions`, `revision_attempts`)
+  with composite primary key deduplication, timezone-aware UTC timestamps, and JSON/JSONB mapping.
 - **Physical File Validation:** Document binaries (`stored_filename`) in storage are
   validated for existence before database commit. When source and target storage locations
   differ, files are safely copied.
@@ -648,6 +649,50 @@ RevisionSession (owner_type, owner_id)
   scores, timestamps, answers, and evidence snippets). It does not compute or persist derived
   mastery metrics, spaced repetition intervals, or adaptive recommendation logic. Those belong
   to future milestones and will be derived dynamically from the persistent attempt history.
+
+### V3 — Integration, Isolation & Domain Decoupling (M2 Phase 4)
+
+V3 Milestone 2, Phase 4 completes Milestone 2 by establishing and verifying end-to-end data
+integrity, tenant isolation, and domain decoupling guarantees across the persistent database
+architecture on both SQLite and PostgreSQL 16:
+
+#### 1. End-to-End Guest-to-Account Lifecycle Guarantee
+Anonymous guest usage is an upgrade path rather than an isolated silo:
+- A guest session accumulates documents, conversations, and revision sessions.
+- Upon signup (`POST /api/v1/auth/signup`), `GuestMigrationService` atomically updates
+  ownership (`owner_type = "user"`, `owner_id = user.id`) across all documents, conversations,
+  and revision sessions in a single transaction.
+- Transitive children (messages, conversation-document joins, revision questions, revision attempts,
+  revision-document joins) are preserved in place without id changes or entity duplication.
+- The original guest session is revoked (`revoked_at` is set) to prevent replay or orphaned access.
+
+#### 2. Multi-Tenant Revision Data Isolation
+Revision data isolation is rooted strictly at the `RevisionSession` aggregate:
+- Database queries are scoped using `ownership_service.scope_to_owner(query, RevisionSession, identity)`.
+- Explicit authorization checks use `ownership_service.is_owned_by(session, identity)`.
+- Users and guests can only access revision sessions they own; cross-tenant session enumeration
+  or inspection is prevented at the database query level.
+- Child revision entities (questions, attempts, document links) inherit isolation through the
+  verified ownership of their parent session.
+
+#### 3. Multi-Document Partial Document Deletion Durability
+In multi-document study sessions, learners frequently manage their document library independently
+of their historical revision records:
+- When a document is deleted via the application service (`routes_documents.delete_document`),
+  its `RevisionSessionDocument` join row is removed, and any referencing `RevisionQuestion.source_document_id`
+  is set to `NULL` (`ondelete="SET NULL"`).
+- Other documents associated with the same revision session remain fully intact in storage and database.
+- The `RevisionSession` and all historical `RevisionAttempt` records remain completely unaffected.
+- Frozen evidence snapshots (`evidence_snippet` and `evidence_metadata`) in `RevisionQuestion` ensure
+  that the question remains completely legible and reviewable even when its original document is deleted.
+
+#### 4. Conversation ↔ Revision Domain Decoupling
+Conversations and Revision Sessions share underlying documents as independent consumers:
+- Deleting a conversation removes its messages and document associations, leaving revision sessions,
+  their questions, and their attempts completely untouched.
+- Deleting a revision session cascades only to its child questions, attempts, and session-document joins,
+  leaving conversations, messages, and the shared documents completely untouched.
+- Neither domain cascades to the other or shares mutable state beyond foreign keys to common documents.
 
 ### Future Milestone Boundaries
 

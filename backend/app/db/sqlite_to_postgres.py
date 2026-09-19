@@ -48,6 +48,10 @@ from app.db.models import (
     Message,
     MindMap,
     QuizQuestion,
+    RevisionAttempt,
+    RevisionQuestion,
+    RevisionSession,
+    RevisionSessionDocument,
     Summary,
     User,
     UserSession,
@@ -518,6 +522,10 @@ def migrate_sqlite_to_postgres(
             "conversations",
             "messages",
             "conversation_documents",
+            "revision_sessions",
+            "revision_session_documents",
+            "revision_questions",
+            "revision_attempts",
         ):
             if tbl in source_counts:
                 rows = src_conn.execute(text(f"SELECT * FROM {tbl}")).mappings().all()
@@ -528,6 +536,8 @@ def migrate_sqlite_to_postgres(
     # 6. Referential integrity checks on source data
     doc_ids = {d["id"] for d in extracted_data["documents"]}
     convo_ids = {c["id"] for c in extracted_data["conversations"]}
+    session_ids = {s["id"] for s in extracted_data["revision_sessions"]}
+    question_ids = {q["id"] for q in extracted_data["revision_questions"]}
 
     for s in extracted_data["summaries"]:
         if s["document_id"] not in doc_ids:
@@ -552,6 +562,21 @@ def migrate_sqlite_to_postgres(
             raise ReferentialIntegrityError(f"ConversationDocument references missing conversation '{cd.get('conversation_id')}'.")
         if cd["document_id"] not in doc_ids:
             raise ReferentialIntegrityError(f"ConversationDocument references missing document '{cd.get('document_id')}'.")
+    for rsd in extracted_data["revision_session_documents"]:
+        if rsd["session_id"] not in session_ids:
+            raise ReferentialIntegrityError(f"RevisionSessionDocument references missing session '{rsd.get('session_id')}'.")
+        if rsd["document_id"] not in doc_ids:
+            raise ReferentialIntegrityError(f"RevisionSessionDocument references missing document '{rsd.get('document_id')}'.")
+    for rq in extracted_data["revision_questions"]:
+        if rq["session_id"] not in session_ids:
+            raise ReferentialIntegrityError(f"RevisionQuestion '{rq.get('id')}' references missing session '{rq.get('session_id')}'.")
+        if rq.get("source_document_id") and rq["source_document_id"] not in doc_ids:
+            raise ReferentialIntegrityError(f"RevisionQuestion '{rq.get('id')}' references missing document '{rq.get('source_document_id')}'.")
+    for ra in extracted_data["revision_attempts"]:
+        if ra["question_id"] not in question_ids:
+            raise ReferentialIntegrityError(f"RevisionAttempt '{ra.get('id')}' references missing question '{ra.get('question_id')}'.")
+        if ra["session_id"] not in session_ids:
+            raise ReferentialIntegrityError(f"RevisionAttempt '{ra.get('id')}' references missing session '{ra.get('session_id')}'.")
 
     # 7. Physical files validation & copying
     files_validated, files_copied, newly_copied_files = validate_and_prepare_physical_files(
@@ -577,6 +602,10 @@ def migrate_sqlite_to_postgres(
         "conversations": [],
         "messages": [],
         "conversation_documents": [],
+        "revision_sessions": [],
+        "revision_session_documents": [],
+        "revision_questions": [],
+        "revision_attempts": [],
     }
 
     # Users
@@ -725,6 +754,62 @@ def migrate_sqlite_to_postgres(
             "added_at": normalize_datetime(cd.get("added_at")),
         })
 
+    # Revision Sessions
+    for rs in extracted_data["revision_sessions"]:
+        records_to_insert["revision_sessions"].append({
+            "id": rs["id"],
+            "title": rs.get("title", "Revision Session"),
+            "owner_type": rs["owner_type"],
+            "owner_id": rs["owner_id"],
+            "status": rs.get("status", "in_progress"),
+            "config": normalize_json(rs.get("config")),
+            "total_questions": int(rs.get("total_questions", 0)),
+            "score": float(rs["score"]) if rs.get("score") is not None else None,
+            "created_at": normalize_datetime(rs.get("created_at")),
+            "completed_at": normalize_datetime(rs.get("completed_at")),
+        })
+
+    # Revision Session Documents
+    for rsd in extracted_data["revision_session_documents"]:
+        records_to_insert["revision_session_documents"].append({
+            "session_id": rsd["session_id"],
+            "document_id": rsd["document_id"],
+            "added_at": normalize_datetime(rsd.get("added_at")),
+        })
+
+    # Revision Questions
+    for rq in extracted_data["revision_questions"]:
+        records_to_insert["revision_questions"].append({
+            "id": rq["id"],
+            "session_id": rq["session_id"],
+            "position": int(rq["position"]),
+            "question_type": rq.get("question_type", "multiple_choice"),
+            "question_text": rq["question_text"],
+            "options": normalize_json(rq.get("options")),
+            "correct_answer": rq["correct_answer"],
+            "explanation": rq.get("explanation"),
+            "source_document_id": rq.get("source_document_id"),
+            "source_chunk_id": rq.get("source_chunk_id"),
+            "evidence_snippet": rq.get("evidence_snippet"),
+            "evidence_metadata": normalize_json(rq.get("evidence_metadata")),
+            "created_at": normalize_datetime(rq.get("created_at")),
+        })
+
+    # Revision Attempts
+    for ra in extracted_data["revision_attempts"]:
+        records_to_insert["revision_attempts"].append({
+            "id": ra["id"],
+            "question_id": ra["question_id"],
+            "session_id": ra["session_id"],
+            "attempt_number": int(ra["attempt_number"]),
+            "submitted_answer": ra["submitted_answer"],
+            "is_correct": normalize_bool(ra["is_correct"]),
+            "score": float(ra["score"]) if ra.get("score") is not None else 0.0,
+            "feedback": ra.get("feedback"),
+            "evaluation_metadata": normalize_json(ra.get("evaluation_metadata")),
+            "created_at": normalize_datetime(ra.get("created_at")),
+        })
+
     # 9. Target Idempotency & Conflict Check
     with target_engine.connect() as target_conn:
         # Check users
@@ -772,6 +857,19 @@ def migrate_sqlite_to_postgres(
                             f"('{ec['title']}' vs '{c['title']}')."
                         )
 
+        # Check revision sessions
+        if records_to_insert["revision_sessions"]:
+            existing_revs = target_conn.execute(text("SELECT id, title, owner_type, owner_id FROM revision_sessions")).mappings().all()
+            existing_rev_map = {r["id"]: r for r in existing_revs}
+            for r in records_to_insert["revision_sessions"]:
+                if r["id"] in existing_rev_map:
+                    er = existing_rev_map[r["id"]]
+                    if er["title"] != r["title"]:
+                        raise MigrationConflictError(
+                            f"RevisionSession ID '{r['id']}' already exists in target with different title "
+                            f"('{er['title']}' vs '{r['title']}')."
+                        )
+
     # 10. Execute Transactional Write (or simulate if dry-run)
     insertion_order = (
         ("users", User),
@@ -786,6 +884,10 @@ def migrate_sqlite_to_postgres(
         ("conversations", Conversation),
         ("messages", Message),
         ("conversation_documents", ConversationDocument),
+        ("revision_sessions", RevisionSession),
+        ("revision_session_documents", RevisionSessionDocument),
+        ("revision_questions", RevisionQuestion),
+        ("revision_attempts", RevisionAttempt),
     )
 
     if dry_run:
@@ -800,6 +902,11 @@ def migrate_sqlite_to_postgres(
                         exists = target_conn.execute(
                             text("SELECT 1 FROM conversation_documents WHERE conversation_id = :cid AND document_id = :did"),
                             {"cid": item["conversation_id"], "did": item["document_id"]},
+                        ).scalar()
+                    elif tbl == "revision_session_documents":
+                        exists = target_conn.execute(
+                            text("SELECT 1 FROM revision_session_documents WHERE session_id = :sid AND document_id = :did"),
+                            {"sid": item["session_id"], "did": item["document_id"]},
                         ).scalar()
                     else:
                         exists = target_conn.execute(
@@ -830,6 +937,11 @@ def migrate_sqlite_to_postgres(
                         exists = target_conn.execute(
                             text("SELECT 1 FROM conversation_documents WHERE conversation_id = :cid AND document_id = :did"),
                             {"cid": item["conversation_id"], "did": item["document_id"]},
+                        ).scalar()
+                    elif tbl == "revision_session_documents":
+                        exists = target_conn.execute(
+                            text("SELECT 1 FROM revision_session_documents WHERE session_id = :sid AND document_id = :did"),
+                            {"sid": item["session_id"], "did": item["document_id"]},
                         ).scalar()
                     else:
                         exists = target_conn.execute(

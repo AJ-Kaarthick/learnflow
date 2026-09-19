@@ -37,6 +37,10 @@ from app.db.models import (
     Message,
     MindMap,
     QuizQuestion,
+    RevisionAttempt,
+    RevisionQuestion,
+    RevisionSession,
+    RevisionSessionDocument,
     Summary,
     User,
     UserSession,
@@ -501,6 +505,152 @@ def test_modern_v3_sqlite_migration(tmp_path, target_db, storage_dirs):
     target_engine.dispose()
 
 
+def test_modern_v3_migration_with_revision_data(tmp_path, target_db, storage_dirs):
+    src_storage, dst_storage = storage_dirs
+    src_db_path = tmp_path / "v3_revision_source.db"
+    src_url = f"sqlite:///{src_db_path}"
+    _setup_target_database(src_url)
+
+    src_engine = build_engine(src_url)
+    stored_name_1 = "rev-doc-1.pdf"
+    stored_name_2 = "rev-doc-2.pdf"
+    (src_storage / stored_name_1).write_bytes(b"%PDF-1.4 Biology Chapter 1")
+    (src_storage / stored_name_2).write_bytes(b"%PDF-1.4 Chemistry Chapter 1")
+
+    with src_engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO users (id, email, password_hash, created_at) "
+                "VALUES ('user-rev-owner', 'revowner@example.com', 'hashed_pw', '2026-03-01 00:00:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO guest_sessions (id, created_at, last_seen_at, document_upload_count, ai_generation_count, chat_message_count) "
+                "VALUES ('guest-rev-token', '2026-03-01 01:00:00', '2026-03-01 01:30:00', 0, 0, 0)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO documents (id, original_filename, stored_filename, status, owner_type, owner_id, created_at) "
+                "VALUES ('doc-bio', 'biology.pdf', :sf1, 'ready', 'user', 'user-rev-owner', '2026-03-01 02:00:00'), "
+                "       ('doc-chem', 'chemistry.pdf', :sf2, 'ready', 'user', 'user-rev-owner', '2026-03-01 02:05:00')"
+            ),
+            {"sf1": stored_name_1, "sf2": stored_name_2},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO revision_sessions (id, title, owner_type, owner_id, status, config, total_questions, score, created_at) "
+                "VALUES ('session-user-1', 'Bio & Chem Review', 'user', 'user-rev-owner', 'completed', '{\"difficulty\": \"medium\"}', 2, 1.0, '2026-03-01 03:00:00'), "
+                "       ('session-guest-1', 'Guest Quick Quiz', 'guest', 'guest-rev-token', 'in_progress', NULL, 1, NULL, '2026-03-01 03:10:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO revision_session_documents (session_id, document_id, added_at) "
+                "VALUES ('session-user-1', 'doc-bio', '2026-03-01 03:01:00'), "
+                "       ('session-user-1', 'doc-chem', '2026-03-01 03:02:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO revision_questions (id, session_id, position, question_type, question_text, options, correct_answer, explanation, source_document_id, evidence_snippet, evidence_metadata, created_at) "
+                "VALUES ('q-1', 'session-user-1', 0, 'multiple_choice', 'What is mitosis?', '[\"Cell division\", \"Respiration\"]', 'Cell division', 'Mitosis divides cells.', 'doc-bio', 'Cells divide by mitosis.', '{\"page\": 1}', '2026-03-01 03:05:00'), "
+                "       ('q-2', 'session-user-1', 1, 'multiple_choice', 'What is H2O?', '[\"Water\", \"Oxygen\"]', 'Water', 'H2O is water.', NULL, NULL, NULL, '2026-03-01 03:06:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO revision_attempts (id, question_id, session_id, attempt_number, submitted_answer, is_correct, score, feedback, created_at) "
+                "VALUES ('att-1', 'q-1', 'session-user-1', 1, 'Respiration', 0, 0.0, 'Incorrect', '2026-03-01 03:07:00'), "
+                "       ('att-2', 'q-1', 'session-user-1', 2, 'Cell division', 1, 1.0, 'Correct!', '2026-03-01 03:08:00')"
+            )
+        )
+    src_engine.dispose()
+
+    summary = migrate_sqlite_to_postgres(
+        sqlite_path=src_db_path,
+        postgres_url=target_db,
+        source_storage_dir=src_storage,
+        target_storage_dir=dst_storage,
+    )
+
+    assert summary.success is True
+    assert summary.source_type == SourceSchemaType.MODERN_V3
+    assert summary.records_migrated["users"] == 1
+    assert summary.records_migrated["guest_sessions"] == 1
+    assert summary.records_migrated["documents"] == 2
+    assert summary.records_migrated["revision_sessions"] == 2
+    assert summary.records_migrated["revision_session_documents"] == 2
+    assert summary.records_migrated["revision_questions"] == 2
+    assert summary.records_migrated["revision_attempts"] == 2
+
+    # Verify target records and relationships
+    target_engine = build_engine(target_db)
+    with target_engine.connect() as conn:
+        # Check sessions & ownership
+        s1 = conn.execute(text("SELECT id, title, owner_type, owner_id, status, config, total_questions, score FROM revision_sessions WHERE id = 'session-user-1'")).mappings().one()
+        assert s1["owner_type"] == "user"
+        assert s1["owner_id"] == "user-rev-owner"
+        assert s1["total_questions"] == 2
+        cfg = json.loads(s1["config"]) if isinstance(s1["config"], str) else s1["config"]
+        assert cfg["difficulty"] == "medium"
+
+        s2 = conn.execute(text("SELECT id, owner_type, owner_id, status FROM revision_sessions WHERE id = 'session-guest-1'")).mappings().one()
+        assert s2["owner_type"] == "guest"
+        assert s2["owner_id"] == "guest-rev-token"
+
+        # Check document associations
+        assocs = conn.execute(text("SELECT session_id, document_id FROM revision_session_documents WHERE session_id = 'session-user-1' ORDER BY document_id")).mappings().all()
+        assert len(assocs) == 2
+        assert {a["document_id"] for a in assocs} == {"doc-bio", "doc-chem"}
+
+        # Check questions, ordering, evidence snapshot, and nullable source_document_id
+        questions = conn.execute(text("SELECT id, session_id, position, question_text, options, correct_answer, source_document_id, evidence_snippet, evidence_metadata FROM revision_questions WHERE session_id = 'session-user-1' ORDER BY position")).mappings().all()
+        assert len(questions) == 2
+        assert questions[0]["id"] == "q-1"
+        assert questions[0]["position"] == 0
+        assert questions[0]["source_document_id"] == "doc-bio"
+        assert questions[0]["evidence_snippet"] == "Cells divide by mitosis."
+        meta0 = json.loads(questions[0]["evidence_metadata"]) if isinstance(questions[0]["evidence_metadata"], str) else questions[0]["evidence_metadata"]
+        assert meta0["page"] == 1
+        opts0 = json.loads(questions[0]["options"]) if isinstance(questions[0]["options"], str) else questions[0]["options"]
+        assert opts0 == ["Cell division", "Respiration"]
+
+        assert questions[1]["id"] == "q-2"
+        assert questions[1]["position"] == 1
+        assert questions[1]["source_document_id"] is None
+        assert questions[1]["evidence_snippet"] is None
+
+        # Check attempts, attempt_number order, score, boolean is_correct
+        attempts = conn.execute(text("SELECT id, question_id, attempt_number, submitted_answer, is_correct, score, feedback FROM revision_attempts WHERE question_id = 'q-1' ORDER BY attempt_number")).mappings().all()
+        assert len(attempts) == 2
+        assert attempts[0]["attempt_number"] == 1
+        assert bool(attempts[0]["is_correct"]) is False
+        assert attempts[0]["score"] == 0.0
+        assert attempts[1]["attempt_number"] == 2
+        assert bool(attempts[1]["is_correct"]) is True
+        assert attempts[1]["score"] == 1.0
+
+    # Idempotent rerun verification
+    rerun_summary = migrate_sqlite_to_postgres(
+        sqlite_path=src_db_path,
+        postgres_url=target_db,
+        source_storage_dir=src_storage,
+        target_storage_dir=dst_storage,
+    )
+    assert rerun_summary.success is True
+    assert rerun_summary.records_migrated["revision_sessions"] == 0
+    assert rerun_summary.records_skipped["revision_sessions"] == 2
+    assert rerun_summary.records_migrated["revision_questions"] == 0
+    assert rerun_summary.records_skipped["revision_questions"] == 2
+    assert rerun_summary.records_migrated["revision_attempts"] == 0
+    assert rerun_summary.records_skipped["revision_attempts"] == 2
+    assert rerun_summary.records_migrated["revision_session_documents"] == 0
+    assert rerun_summary.records_skipped["revision_session_documents"] == 2
+    target_engine.dispose()
+
+
 # ---------------------------------------------------------------------------
 # Tests: D. Type Normalization
 # ---------------------------------------------------------------------------
@@ -806,6 +956,30 @@ def test_real_postgres_modern_v3_integration(tmp_path, storage_dirs):
                 "VALUES ('convo-v3-pg', 'Guest PG Chat', 0, 'guest', 'guest-pg-session', '2026-03-01 02:10:00', '2026-03-01 02:20:00')"
             )
         )
+        conn.execute(
+            text(
+                "INSERT INTO revision_sessions (id, title, owner_type, owner_id, status, config, total_questions, score, created_at) "
+                "VALUES ('session-pg-1', 'PG Live Revision', 'user', 'v3-pg-author', 'completed', '{\"level\": \"advanced\"}', 1, 1.0, '2026-03-01 03:00:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO revision_session_documents (session_id, document_id, added_at) "
+                "VALUES ('session-pg-1', 'doc-v3-pg', '2026-03-01 03:01:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO revision_questions (id, session_id, position, question_type, question_text, options, correct_answer, explanation, source_document_id, evidence_snippet, evidence_metadata, created_at) "
+                "VALUES ('q-pg-1', 'session-pg-1', 0, 'multiple_choice', 'Is PG live?', '[\"Yes\", \"No\"]', 'Yes', 'It is live.', 'doc-v3-pg', 'Live PG evidence', '{\"section\": \"intro\"}', '2026-03-01 03:05:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO revision_attempts (id, question_id, session_id, attempt_number, submitted_answer, is_correct, score, feedback, created_at) "
+                "VALUES ('att-pg-1', 'q-pg-1', 'session-pg-1', 1, 'Yes', 1, 1.0, 'Correct!', '2026-03-01 03:06:00')"
+            )
+        )
     src_engine.dispose()
 
     # Clean and setup target PostgreSQL database
@@ -830,6 +1004,10 @@ def test_real_postgres_modern_v3_integration(tmp_path, storage_dirs):
     assert summary.records_migrated["guest_sessions"] == 1
     assert summary.records_migrated["documents"] == 1
     assert summary.records_migrated["conversations"] == 1
+    assert summary.records_migrated["revision_sessions"] == 1
+    assert summary.records_migrated["revision_session_documents"] == 1
+    assert summary.records_migrated["revision_questions"] == 1
+    assert summary.records_migrated["revision_attempts"] == 1
 
     # Verify preserved ownership in live PostgreSQL
     engine = build_engine(postgres_url)
@@ -847,6 +1025,25 @@ def test_real_postgres_modern_v3_integration(tmp_path, storage_dirs):
         convo = conn.execute(text("SELECT id, owner_type, owner_id FROM conversations WHERE id = 'convo-v3-pg'")).mappings().one()
         assert convo["owner_type"] == "guest"
         assert convo["owner_id"] == "guest-pg-session"
+
+        rev_s = conn.execute(text("SELECT id, owner_type, owner_id, status, config, score FROM revision_sessions WHERE id = 'session-pg-1'")).mappings().one()
+        assert rev_s["owner_type"] == "user"
+        assert rev_s["owner_id"] == "v3-pg-author"
+        assert rev_s["config"]["level"] == "advanced"
+        assert rev_s["score"] == 1.0
+
+        rev_doc = conn.execute(text("SELECT session_id, document_id FROM revision_session_documents WHERE session_id = 'session-pg-1'")).mappings().one()
+        assert rev_doc["document_id"] == "doc-v3-pg"
+
+        rev_q = conn.execute(text("SELECT id, source_document_id, evidence_snippet, evidence_metadata, options FROM revision_questions WHERE id = 'q-pg-1'")).mappings().one()
+        assert rev_q["source_document_id"] == "doc-v3-pg"
+        assert rev_q["evidence_snippet"] == "Live PG evidence"
+        assert rev_q["evidence_metadata"]["section"] == "intro"
+        assert rev_q["options"] == ["Yes", "No"]
+
+        rev_att = conn.execute(text("SELECT id, is_correct, score, feedback FROM revision_attempts WHERE id = 'att-pg-1'")).mappings().one()
+        assert rev_att["is_correct"] is True
+        assert rev_att["score"] == 1.0
     engine.dispose()
 
     # Verify physical file in target storage

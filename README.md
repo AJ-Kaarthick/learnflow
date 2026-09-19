@@ -423,7 +423,7 @@ LearnFlow currently supports:
 - Password visibility controls
 - Backend and frontend regression coverage
 
-#### Milestone 2 — Database & User Data Architecture 🚧
+#### Milestone 2 — Database & User Data Architecture ✅
 - PostgreSQL
 - User relationships and ownership
 - Conversation ownership
@@ -468,11 +468,15 @@ LearnFlow currently supports:
 - Guest-to-account revision session ownership transfer
 - Alembic migration `74eb271ec556` for SQLite and PostgreSQL
 
-##### Phase 4 — Integration, Isolation & Regression ⏳
+##### Phase 4 — Integration, Isolation & Regression ✅
 
-- End-to-end integration across guest sessions, user accounts, documents, conversations, and revision sessions
-- Multi-tenant data isolation verification
-- Final regression testing on SQLite and PostgreSQL 16
+- End-to-end guest-to-account lifecycle with Revision assets (`test_m2_integration.py`)
+- Multi-tenant Revision data isolation across users and guests (`ownership_service.scope_to_owner` and `is_owned_by`)
+- Multi-document partial document deletion durability (SET NULL on FK, preserved evidence snapshots & metadata, sister doc preservation)
+- Decoupled lifecycle between Conversations and RevisionSessions sharing documents
+- Upgraded `sqlite_to_postgres.py` data migration to support modern V3 Revision tables (`revision_sessions`, `revision_session_documents`, `revision_questions`, `revision_attempts`) with UTC timestamps, JSON/JSONB normalization, and composite key conflict handling
+- Live PostgreSQL 16 compatibility tests for Revision durability, guest migration, and ownership isolation (`test_postgres_compatibility.py` and `test_sqlite_to_postgres.py`)
+- Complete regression verification: 522 backend tests (0 skipped, 0 failed), 159 frontend tests (0 failed), single Alembic head `74eb271ec556`
 
 > **Development database note:** Existing SQLite databases created under the
 > pre-Phase-3 schema are not automatically migrated at application startup.

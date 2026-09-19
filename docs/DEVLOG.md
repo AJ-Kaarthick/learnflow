@@ -2329,3 +2329,77 @@ The revision domain separates raw historical learning evidence from derived inte
 
 V3 Milestone 2 Phase 3 is complete. LearnFlow has a robust, durable, and ownership-aware revision data model
 ready for integration and future revision milestone capabilities.
+
+## Phase 4 — Integration, Isolation & Regression
+
+### Goal
+
+Complete V3 Milestone 2 by establishing full end-to-end integration and isolation guarantees across
+guest sessions, user accounts, documents, conversations, and revision sessions; bridging modern V3
+Revision tables in the SQLite → PostgreSQL data migration; and performing comprehensive regression
+verification across both SQLite and live PostgreSQL 16.
+
+### Features Completed
+
+- Upgraded `sqlite_to_postgres.py` data migration tool to support modern V3 Revision tables:
+  - Added extraction, dependency ordering, and conflict detection for `revision_sessions`,
+    `revision_session_documents`, `revision_questions`, and `revision_attempts`
+  - Normalized SQLite datetimes to timezone-aware UTC `TIMESTAMPTZ`
+  - Normalized JSON fields (`config`, `options`, `evidence_metadata`) to valid Python dicts/lists for JSONB storage
+  - Handled composite primary key uniqueness and duplicate skipping for `revision_session_documents`
+  - Validated referential integrity across session, question, attempt, and document links
+- Extended `backend/tests/test_sqlite_to_postgres.py`:
+  - Added modern V3 revision data migration test asserting accurate target state, document join persistence,
+    nullable `source_document_id`, frozen evidence preservation, and idempotent reruns
+  - Added live PostgreSQL 16 integration test verifying modern V3 revision migration against real PostgreSQL
+- Created dedicated integration test suite `backend/tests/test_m2_integration.py` covering:
+  - `test_end_to_end_guest_to_account_lifecycle_with_revision`: Full HTTP and database lifecycle from anonymous
+    guest document upload, conversation creation, and revision session creation through user signup, verifying
+    atomic ownership transfer and guest session revocation
+  - `test_multi_tenant_revision_data_isolation`: Scoped query isolation and ownership predicate checks preventing
+    cross-tenant data leakage between users and guests
+  - `test_multi_document_revision_partial_document_deletion`: Verified that deleting one document out of multiple
+    in a revision session cleans up the document and join row, nullifies question `source_document_id`, and
+    preserves frozen evidence snippets, metadata, the sister document, and historical attempt records
+  - `test_conversation_revision_decoupled_lifecycle`: Verified mutual decoupling between Conversations and
+    RevisionSessions sharing underlying documents across independent deletion events
+- Extended `backend/tests/test_postgres_compatibility.py` with live PostgreSQL 16 tests:
+  - `test_revision_document_deletion_durability_on_postgres`: Verified ON DELETE SET NULL foreign key behavior,
+    JSONB metadata preservation, and session durability on live PostgreSQL
+  - `test_revision_guest_to_account_migration_on_postgres`: Verified atomic revision session ownership transfer
+    and guest revocation on live PostgreSQL
+  - `test_revision_ownership_isolation_on_postgres`: Verified scoped query isolation between distinct users and
+    guests on live PostgreSQL
+- Maintained strict architectural boundaries: Did not introduce Revision Mode UI, API endpoints (`/revision/*`),
+  AI generation, or spaced repetition/mastery intelligence. Preserved Study Quiz behavior without regressions.
+
+### Problems Faced
+
+- `sqlite_to_postgres.py` was implemented in Phase 2 prior to the introduction of Phase 3 Revision models and
+  did not extract or insert revision tables.
+- In SQLite, raw SQL mapping queries return JSON columns as text strings and booleans as integers (0/1),
+  requiring defensive deserialization and type casting in assertion logic.
+- Testing true database-level constraints on ephemeral SQLite test fixtures required distinct session bindings.
+
+### Solutions
+
+- Added modern V3 revision tables to `sqlite_to_postgres.py` extraction, validation, transformation, and
+  insertion pipelines in foreign-key dependency order.
+- Utilized robust JSON deserialization and boolean type normalization across migration and test assertions.
+- Verified all durability, isolation, and migration workflows on both SQLite and live PostgreSQL 16.
+
+### Verification
+
+- Backend tests: **522 passed, 0 skipped, 0 failed** in 61.60s (with live PostgreSQL 16 instance enabled)
+- Frontend tests: **159 passed, 0 failed** in 0.96s
+- Single Alembic head `74eb271ec556` verified
+- End-to-end guest-to-account lifecycle with revision assets verified
+- Multi-tenant Revision data isolation verified
+- Multi-document partial document deletion durability verified
+- Conversation ↔ Revision domain decoupling verified
+- SQLite → PostgreSQL modern V3 revision migration verified on SQLite and live PostgreSQL 16
+
+### Result
+
+V3 Milestone 2 is complete. LearnFlow has an integrated, multi-tenant, durable persistent database foundation
+supporting users, guests, documents, conversations, and revision sessions across SQLite and PostgreSQL 16.
