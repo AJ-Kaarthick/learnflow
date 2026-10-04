@@ -15,6 +15,7 @@ from app.api.v1 import (
     routes_mindmap,
     routes_quiz,
     routes_rag,
+    routes_revision,
     routes_summary,
     routes_visualize,
 )
@@ -94,6 +95,7 @@ IDENTITY_AWARE_ROUTERS = (
     routes_identity.router,
     routes_learn.router,
     routes_visualize.router,
+    routes_revision.router,
 )
 
 for _router in IDENTITY_AWARE_ROUTERS:
