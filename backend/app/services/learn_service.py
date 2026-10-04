@@ -1,6 +1,9 @@
+import logging
 from typing import Optional
 
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.db.models import Document, DocumentChunk
 from app.schemas.learn import (
@@ -259,6 +262,14 @@ def build_topic_prompt(
         excerpts_list.append(
             f"[Source: {doc_name} (Chunk {scored.chunk.chunk_index})]:\n{scored.chunk.content}"
         )
+
+    # If RAG chunks are not available, use document text snippets as fallback grounding
+    if not excerpts_list and documents_by_id:
+        for doc in documents_by_id.values():
+            snippet = (doc.extracted_text or "")[:1500].strip()
+            if snippet:
+                excerpts_list.append(f"[Source: {doc.original_filename}]:\n{snippet}")
+
     excerpts_str = "\n\n".join(excerpts_list) if excerpts_list else "No excerpts available."
 
     return (
@@ -311,16 +322,24 @@ async def generate_learn_topic(
             is not None
         )
         if not has_chunks:
-            await index_document(doc, db, embedding_provider)
+            try:
+                await index_document(doc, db, embedding_provider)
+            except Exception as idx_err:
+                logger.warning(f"Indexing document {doc.id} failed in learn topic: {idx_err}")
 
     # 2. Retrieve relevant chunks across readable documents
     search_query = f"{parent_topic_title}: {topic_title}" if parent_topic_title else topic_title
-    retrieval_result = await retrieve_relevant_chunks(
-        document_ids=[doc.id for doc in readable_documents],
-        query=search_query,
-        db=db,
-        embedding_provider=embedding_provider,
-    )
+    try:
+        retrieval_result = await retrieve_relevant_chunks(
+            document_ids=[doc.id for doc in readable_documents],
+            query=search_query,
+            db=db,
+            embedding_provider=embedding_provider,
+        )
+    except Exception as rag_err:
+        logger.warning(f"Retrieval failed for learn topic {topic_id}: {rag_err}")
+        from app.services.rag.retrieval_service import RetrievalResult
+        retrieval_result = RetrievalResult(chunks=[], per_document_summary=[])
 
     documents_by_id = {doc.id: doc for doc in readable_documents}
 
@@ -340,9 +359,15 @@ async def generate_learn_topic(
     try:
         data = extract_json(raw_text)
     except AIProviderError:
-        raise
+        if raw_text and len(raw_text.strip()) > 30 and "{" not in raw_text:
+            data = {"explanation": raw_text.strip(), "key_terms": [], "key_takeaways": []}
+        else:
+            raise
     except Exception as error:
-        raise AIProviderError(f"Could not parse topic JSON: {error}") from error
+        if raw_text and len(raw_text.strip()) > 30 and "{" not in raw_text:
+            data = {"explanation": raw_text.strip(), "key_terms": [], "key_takeaways": []}
+        else:
+            raise AIProviderError(f"Could not parse topic JSON: {error}") from error
 
     if isinstance(data, dict):
         explanation = str(data.get("explanation") or "").strip()

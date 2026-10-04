@@ -116,14 +116,14 @@ function VisualizePanel({
         <GuestLimitNotice error={error} />
       ) : error ? (
         <div
-          className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 flex items-center justify-between"
+          className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800 flex items-center justify-between"
           role="alert"
         >
           <span>{error.message || "Visualization failed"}</span>
           <button
             type="button"
             onClick={() => setError(null)}
-            className="text-red-500 hover:text-red-700 font-bold"
+            className="text-red-600 hover:text-red-800 font-bold"
             aria-label="Dismiss error"
           >
             &times;
@@ -160,9 +160,9 @@ function VisualizePanel({
 
       {/* Initial Hero / Empty State */}
       {!graph && !isLoading && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
+        <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-xs sm:p-8">
           <div className="mx-auto max-w-xl text-center space-y-4">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent-100 text-accent-700">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-6 w-6">
                 <circle cx="12" cy="12" r="3" />
                 <circle cx="4" cy="6" r="2" />
@@ -195,7 +195,7 @@ function VisualizePanel({
                     onClick={() => setActiveDepth(depth.id)}
                     className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
                       activeDepth === depth.id
-                        ? "bg-white text-slate-900 shadow-xs"
+                        ? "bg-surface text-slate-900 shadow-xs"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
@@ -210,7 +210,7 @@ function VisualizePanel({
                 type="button"
                 disabled={isLoading || isNoneReadable}
                 onClick={handleGenerateGraph}
-                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-2 rounded-lg bg-accent-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Generate Concept Graph
               </button>
@@ -221,8 +221,8 @@ function VisualizePanel({
 
       {/* Loading Skeleton */}
       {isLoading && (
-        <div className="flex flex-1 min-h-[450px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-8 shadow-xs">
-          <div className="h-10 w-10 animate-spin rounded-full border-3 border-indigo-200 border-t-indigo-600 mb-3" />
+        <div className="flex flex-1 min-h-[450px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-surface p-8 shadow-xs">
+          <div className="h-10 w-10 animate-spin rounded-full border-3 border-accent-200 border-t-accent-600 mb-3" />
           <p className="text-sm font-semibold text-slate-800">Synthesizing Concept Network...</p>
           <p className="mt-1 text-xs text-slate-500 max-w-sm text-center">
             Extracting core concepts, cross-document relations, and grounded citations across your study material.
@@ -234,7 +234,7 @@ function VisualizePanel({
       {graph && !isLoading && (
         <div className="flex flex-1 flex-col space-y-3 min-h-[500px]">
           {/* Top Control Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-surface px-4 py-3 shadow-xs">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-bold text-slate-900 truncate">
@@ -260,9 +260,9 @@ function VisualizePanel({
                     onClick={() => {
                       setActiveDepth(depth.id);
                     }}
-                    className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
                       activeDepth === depth.id
-                        ? "bg-white text-slate-900 shadow-xs"
+                        ? "bg-surface text-slate-900 shadow-xs"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
@@ -275,7 +275,7 @@ function VisualizePanel({
                 type="button"
                 disabled={isLoading || isNoneReadable}
                 onClick={handleGenerateGraph}
-                className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition"
+                className="rounded-lg bg-accent-50 px-2.5 py-1 text-xs font-semibold text-accent-700 hover:bg-accent-100 transition"
               >
                 Regenerate
               </button>
@@ -291,8 +291,8 @@ function VisualizePanel({
                 onClick={() => setActiveCategory("all")}
                 className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition shrink-0 ${
                   activeCategory === "all"
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    ? "bg-accent-600 text-white"
+                    : "border border-slate-200 bg-surface text-slate-700 hover:bg-slate-100"
                 }`}
               >
                 All ({layoutNodes.length})
@@ -306,8 +306,8 @@ function VisualizePanel({
                     onClick={() => setActiveCategory(cat)}
                     className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition shrink-0 ${
                       activeCategory === cat
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        ? "bg-accent-600 text-white"
+                        : "border border-slate-200 bg-surface text-slate-700 hover:bg-slate-100"
                     }`}
                   >
                     {cat} ({count})
@@ -330,7 +330,7 @@ function VisualizePanel({
             </div>
 
             {/* Concept Node Inspector Column */}
-            <div className="lg:col-span-4 flex flex-col h-full min-h-[420px] rounded-xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+            <div className="lg:col-span-4 flex flex-col h-full min-h-[420px] rounded-xl border border-slate-200 bg-surface overflow-hidden shadow-xs">
               <ConceptNodeInspector
                 selectedNode={selectedNode}
                 connectedEdges={connectedEdges}

@@ -337,7 +337,7 @@ function ConceptGraphCanvas({
       </svg>
 
       {/* Floating Canvas Navigation Toolbar */}
-      <div className="absolute top-3 right-3 flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur-xs">
+      <div className="absolute top-3 right-3 flex items-center gap-1 rounded-lg border border-slate-200 bg-surface/95 p-1 shadow-sm backdrop-blur-xs">
         <button
           type="button"
           onClick={handleZoomIn}
@@ -380,7 +380,7 @@ function ConceptGraphCanvas({
       </div>
 
       {/* Floating Canvas Legend */}
-      <div className="absolute bottom-3 left-3 hidden sm:flex items-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-3 py-1.5 text-[11px] text-slate-600 shadow-xs backdrop-blur-xs">
+      <div className="absolute bottom-3 left-3 hidden sm:flex items-center gap-2 rounded-lg border border-slate-200 bg-surface/90 px-3 py-1.5 text-[11px] text-slate-600 shadow-xs backdrop-blur-xs">
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
           Single-Doc

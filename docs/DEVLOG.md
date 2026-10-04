@@ -2403,3 +2403,91 @@ verification across both SQLite and live PostgreSQL 16.
 
 V3 Milestone 2 is complete. LearnFlow has an integrated, multi-tenant, durable persistent database foundation
 supporting users, guests, documents, conversations, and revision sessions across SQLite and PostgreSQL 16.
+
+---
+
+# V3 — Milestone 3: Study Experience 2.0
+
+## Goal
+
+Transform LearnFlow's Study workspace from a single-document utility into an intelligent, multi-document learning experience featuring top-down curriculum design (Learn Mode), conceptual relationship mapping (Visualize Mode), and grounded source citations across 1 to 10 study documents.
+
+## Features Completed
+
+### Phase 1 — Multi-Document Selection & Study Foundation
+- Multi-document selection supporting 1 to 10 documents in the Study workspace
+- Interactive document chip row with active focus, remove, and add document controls
+- Document readiness classification (`readable`, `unreadable`, `processing`, `failed`)
+- Explanatory advisory notices for mixed readiness without blocking readable documents
+- Workspace persistence for `selectedStudyDocumentIds`, `activeDocumentId`, and `activeStudyTab`
+- 100% backward compatibility for single-document study tools (Summary, Flashcards, Quiz, Mind Map)
+
+### Phase 2 — Learn Mode Backend Foundation & RAG Grounding
+- Curriculum outline endpoint (`POST /api/v1/study/learn/outline`) synthesizing coherent topics and subtopics
+- Authoritative backend readiness and ownership partitioning returning explicit provenance metadata
+- Topic deep-dive endpoint (`POST /api/v1/study/learn/topic`) with RAG vector search across selected document chunks
+- Contextual learning actions (`explain`, `simplify`, `elaborate`, `example`)
+- Pedagogical depth controls (`overview`, `standard`, `in-depth`)
+- Grounded source citations, key terms definitions, and key takeaways
+- Guest quota enforcement before generation and atomic accounting after success
+
+### Phase 3 — Learn Mode Frontend Experience & Contextual Actions
+- Positioned Learn as the primary first Study tab
+- Dual-column curriculum layout with collapsible topic units, subtopics, and progress tracking
+- Interactive topic viewer with Markdown rendering, key terms definitions, and key takeaways
+- Contextual action bar enabling one-click simplification, deep dive, and concrete examples
+- Pedagogical depth selector adjusting explanation detail on the fly
+- In-memory ephemeral session caching preserving variations per topic without heavy localStorage bloat
+- Stale curriculum detection prompting regeneration when study document selection changes
+
+### Phase 4 — Visualize Mode & Concept Network Graph
+- Positioned Visualize as the 6th Study tab alongside Mind Map
+- Backend concept graph endpoint (`POST /api/v1/study/visualize/graph`) extracting concepts and semantic relationships
+- Bounded graph complexity per depth: Overview (10 nodes/15 edges), Standard (16/26), In-depth (22/36)
+- Interactive D3 force-directed canvas with pan, zoom, fit-to-view, and reset controls
+- Concept node inspector displaying definitions, importance ratings, incident edges, and grounded chunk citations
+- Category filtering and concept search
+- Stale graph detection on selection changes
+
+### Phase 5 — Final Integration, Regression, QA & Polish
+- Dedicated cross-phase integration test suite (`backend/tests/test_m3_integration.py`) covering end-to-end guest lifecycle, mixed readiness, quota limits, and Revision isolation
+- Standardized `AIProvider.generate_text` contract across all study features
+- Resilient multi-strategy JSON parser in `extract_json` supporting conversational preambles and control characters
+- Fallback grounding from raw document snippets when vector chunks are unavailable
+- Clean Unicode rendering for JSX list markers, chevrons, and checkmark icons
+- Decoupled Study tab strip from single-document readiness
+- High-contrast semantic design tokens across Light/Dark modes and all 4 accent color themes
+
+## Learned
+
+- Context-window bounding: Distributing character budgets proportionally across up to 10 documents prevents LLM context overflow while ensuring balanced representation.
+- Ephemeral vs. persistent state boundaries: Heavy AI-generated artifacts (curricula, graphs) are best kept in memory during active study sessions, avoiding localStorage quota overflow and stale cache bugs, while lightweight IDs and tab choices should be persisted.
+- Resilient structured output extraction: LLMs occasionally produce markdown preambles or literal unescaped newlines in JSON strings; multi-strategy boundary extraction with `strict=False` parsing eliminates brittle 502 failures.
+- Dual-mode workspace ergonomics: Decoupling multi-document synthesized modes (Learn, Visualize) from single-document focused modes (Summary, Flashcards, Quiz, Mind Map) allows users to explore cross-document insights without losing single-document precision.
+
+## Problems Faced
+
+- `visualize_service.py` called `ai_provider.generate_content`, which did not exist on `GeminiProvider`, causing 502 errors in production while masked in unit tests.
+- Learn topic generation intermittently failed with 502 when LLMs included commentary outside code fences or unescaped newlines in markdown explanation fields.
+- Non-standard XML entities (`&check;`, `&bull;`, `&rsaquo;`) rendered as literal strings in React JSX.
+- Selecting an unready document in a multi-document selection unmounted the entire study tab bar.
+
+## Solutions
+
+- Aligned all services to the minimal `AIProvider.generate_text` contract and updated test mocks to enforce it.
+- Upgraded `extract_json` to extract embedded code fences, isolate outermost JSON structures, and parse with `strict=False`.
+- Replaced JSX HTML entities with inline SVG icons and explicit Unicode characters (`✓`, `•`, `›`).
+- Updated `StudyWorkspace.jsx` so tabs and multi-doc panels render whenever readable documents exist, with focused advisories for unready single-document tools.
+
+## Verification
+
+- Backend tests: **558 passed, 5 skipped** in 66.28s
+- Frontend tests: **221 passed, 0 failed** in 1.08s
+- Production frontend build: successful with 0 errors
+- Single Alembic head `74eb271ec556` verified
+- Formatting check `git diff --check` clean
+- Manual browser QA: verified across all themes, depths, contextual actions, and multi-document selections
+
+## Result
+
+V3 Milestone 3 is complete. LearnFlow provides an integrated, multi-document Study Experience 2.0 with curriculum-driven Learn Mode and interactive Visualize Mode knowledge graphs.

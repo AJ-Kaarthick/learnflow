@@ -37,11 +37,6 @@ class FakeAIProvider(AIProvider):
         self.call_count += 1
         return self._get_graph_response()
 
-    async def generate_content(self, system_prompt: str, prompt: str) -> str:
-        self.last_prompt = f"{system_prompt}\n\n{prompt}"
-        self.call_count += 1
-        return self._get_graph_response()
-
     def _get_graph_response(self) -> str:
         if self.custom_graph_response is not None:
             return self.custom_graph_response

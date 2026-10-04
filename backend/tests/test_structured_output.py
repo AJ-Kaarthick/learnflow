@@ -46,3 +46,25 @@ def test_extract_json_raises_on_invalid_json():
 
     with pytest.raises(AIProviderError):
         extract_json("not json at all")
+
+
+def test_extract_json_handles_preamble_and_embedded_fence():
+    from app.services.ai.structured_output import extract_json
+
+    raw = "Here is the result:\n```json\n{\"title\": \"Root\", \"nodes\": []}\n```\nHope that helps!"
+    assert extract_json(raw) == {"title": "Root", "nodes": []}
+
+
+def test_extract_json_handles_unescaped_control_characters():
+    from app.services.ai.structured_output import extract_json
+
+    # String with literal unescaped newline inside JSON string literal
+    raw = '{\n  "explanation": "Line 1\nLine 2"\n}'
+    assert extract_json(raw) == {"explanation": "Line 1\nLine 2"}
+
+
+def test_extract_json_handles_conversational_text_without_fences():
+    from app.services.ai.structured_output import extract_json
+
+    raw = 'Sure! Here is the JSON: {"nodes": [1, 2, 3]} Best regards.'
+    assert extract_json(raw) == {"nodes": [1, 2, 3]}

@@ -1149,3 +1149,96 @@ Retrieved source references and grounding metadata are stored with the
 assistant message so previous responses remain interpretable even if
 document state changes later.
 
+
+## V3 — Milestone 3: Study Experience 2.0
+
+V3 Milestone 3 expands LearnFlow from a single-document study utility into an intelligent, multi-document learning workspace featuring structured curriculum design (Learn Mode) and conceptual knowledge visualization (Visualize Mode).
+
+### 1. Multi-Document Selection & Readiness Architecture
+
+The Study workspace supports concurrent selection of 1 to 10 documents while preserving 100% backward compatibility for single-document tools.
+
+```text
+Selected Documents (1–10)
+         ↓
+Readiness Classification (Frontend)
+   ├── Readable (ready + chars > 0)
+   ├── Unreadable (scanned/empty)
+   ├── Processing / Uploading
+   └── Failed
+         ↓
+Authoritative Backend Partitioning
+   ├── Contributing Documents → RAG Retrieval & Prompt Synthesis
+   └── Excluded Documents    → Preserved in Provenance with Exclusion Reasons
+```
+
+- **Readiness Classification**: Documents are classified into `readable`, `unreadable`, `processing`, and `failed`.
+- **Authoritative Backend Partitioning**: The frontend transmits the complete list of selected document IDs. The backend validates accessibility/ownership and authoritatively partitions documents into contributing vs. excluded subsets, returning explicit provenance metadata.
+- **Single-Document Tool Compatibility**: When multiple documents are selected, single-document tools (Summary, Flashcards, Quiz, Mind Map) operate on the currently focused active document. If the active document is unready, informative guidance is shown while leaving the tab strip and multi-document modes accessible.
+
+### 2. Study Workspace Tab Layout
+
+The Study workspace organizes features into a cohesive pedagogical sequence:
+
+`Learn` (1st) | `Summary` | `Flashcards` | `Quiz` | `Mind Map` | `Visualize` (6th)
+
+- **Learn Mode**: Positioned as the primary first tab for guided, top-down curriculum study.
+- **Visualize Mode**: Positioned alongside Mind Map as a complementary graphical tool for cross-document concept networks.
+
+### 3. Learn Mode Architecture
+
+Learn Mode provides an interactive, structured curriculum synthesized across all contributing documents.
+
+```text
+POST /api/v1/study/learn/outline
+   ↓
+Structured Curriculum Outline (Topics & Subtopics with Learning Objectives)
+   ↓
+User selects Topic / Subtopic & Action (Explain / Simplify / Deep Dive / Example)
+   ↓
+POST /api/v1/study/learn/topic
+   ↓
+Multi-Document Chunk Retrieval (RAG)
+   ↓
+Grounded Explanation + Key Terms + Key Takeaways + Source Citations
+```
+
+- **Curriculum Outline (`POST /api/v1/study/learn/outline`)**: Synthesizes a structured study outline across contributing documents, bounded to prevent context window overflow.
+- **Topic Explanation (`POST /api/v1/study/learn/topic`)**: Generates deep-dive explanations using semantic vector search over selected document chunks. Includes key term definitions, actionable takeaways, and chunk-level source citations.
+- **Contextual Actions**:
+  - `explain`: Standard grounded tutorial explanation.
+  - `simplify`: Plain-language explanation with analogies.
+  - `elaborate`: Technical deep-dive into mechanisms and nuances.
+  - `example`: Concrete realistic examples grounded in the text.
+- **Pedagogical Depths**: `overview`, `standard`, and `in-depth` calibrate detail level.
+
+### 4. Visualize Mode Architecture
+
+Visualize Mode constructs an interactive knowledge graph mapping conceptual relationships across documents.
+
+```text
+POST /api/v1/study/visualize/graph
+   ↓
+AI Provider: Concept Extraction & Relationship Mapping
+   ↓
+Bounded Graph Schema (Nodes: id, label, summary, category, importance; Edges: source, target, label)
+   ↓
+RAG Source Citation Retrieval for Central Concepts
+   ↓
+Frontend D3 Force-Directed Simulation & Interactive Canvas
+```
+
+- **Bounded Complexity**: Node and edge limits scale with requested depth:
+  - *Overview*: Max 10 nodes / 15 edges
+  - *Standard*: Max 16 nodes / 26 edges
+  - *In-depth*: Max 22 nodes / 36 edges
+- **Concept Node Inspector**: Selecting a node displays its summary, category, importance, incident relationship edges, and grounded chunk citations.
+- **Interactive Controls**: Canvas supports zoom, pan, category filtering, search, and reset.
+
+### 5. Ownership, Quotas & State Boundaries
+
+- **Ownership & Isolation**: All study requests validate that requested document IDs belong to the current authenticated user or active guest session (`ownership_service.scope_to_owner`).
+- **Guest Usage Accounting**: Guest AI limits are enforced *before* generation. Generation counts are incremented atomically *only after* successful generation.
+- **Ephemeral AI State**: Generated Learn curricula and Visualize graphs are retained in memory during the active session and discarded on page reload/document switch. Only lightweight navigation state (`selectedStudyDocumentIds`, `activeDocumentId`, `activeStudyTab`) is persisted in `localStorage`.
+- **Stale State Detection**: When the user adds or removes documents from an active study selection, Learn and Visualize modes detect the change and display an unobtrusive prompt offering to regenerate content for the updated selection.
+

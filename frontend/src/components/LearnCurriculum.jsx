@@ -22,7 +22,7 @@ function LearnCurriculum({
   return (
     <div className="space-y-4">
       {/* Course header */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+      <div className="rounded-xl border border-slate-200 bg-surface p-4 shadow-xs">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-accent-700">
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
             <path d="M10.75 16.82A7.462 7.462 0 0 1 15 15.5c.71 0 1.396.098 2.046.282A.75.75 0 0 0 18 15.06v-11a.75.75 0 0 0-.546-.721A9.006 9.006 0 0 0 15 3a8.963 8.963 0 0 0-4.25 1.065V16.82ZM9.25 4.065A8.963 8.963 0 0 0 5 3c-.85 0-1.673.118-2.454.339A.75.75 0 0 0 2 4.06v11a.75.75 0 0 0 .954.721A7.506 7.506 0 0 1 5 15.5c1.579 0 3.042.487 4.25 1.32V4.065Z" />
@@ -91,7 +91,7 @@ function LearnCurriculum({
               className={`rounded-lg border transition-all ${
                 isTopicActive
                   ? "border-accent-300 bg-accent-50/70 shadow-xs"
-                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60"
+                  : "border-slate-200 bg-surface hover:border-slate-300 hover:bg-slate-50/60"
               }`}
             >
               <button
@@ -103,7 +103,7 @@ function LearnCurriculum({
               >
                 <span
                   className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
-                    isTopicActive ? "bg-accent-600 text-white" : "bg-slate-100 text-slate-600"
+                    isTopicActive ? "bg-accent-600 text-white" : "bg-slate-200 text-slate-700"
                   }`}
                 >
                   {index + 1}
@@ -145,7 +145,7 @@ function LearnCurriculum({
                               : "text-slate-700 hover:bg-accent-100"
                           }`}
                         >
-                          <span className="text-accent-500">&bull;</span>
+                          <span className="text-accent-500">•</span>
                           <span className="truncate">{subtopic.title}</span>
                         </button>
                       );

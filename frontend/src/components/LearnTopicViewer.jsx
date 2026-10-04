@@ -23,7 +23,7 @@ function LearnTopicViewer({
         {parentTopicTitle && (
           <div className="mb-1 flex items-center gap-1 text-xs text-slate-500">
             <span>{parentTopicTitle}</span>
-            <span aria-hidden="true">&rsaquo;</span>
+            <span aria-hidden="true">›</span>
             <span className="font-medium text-slate-700">Subtopic</span>
           </div>
         )}
@@ -60,13 +60,13 @@ function LearnTopicViewer({
           </div>
           <div className="space-y-2.5 animate-pulse">
             <div className="h-4 w-3/4 rounded bg-slate-200" />
-            <div className="h-4 w-full rounded bg-slate-100" />
-            <div className="h-4 w-5/6 rounded bg-slate-100" />
-            <div className="h-4 w-2/3 rounded bg-slate-100" />
+            <div className="h-4 w-full rounded bg-slate-200/70" />
+            <div className="h-4 w-5/6 rounded bg-slate-200/70" />
+            <div className="h-4 w-2/3 rounded bg-slate-200/70" />
           </div>
-          <div className="mt-6 rounded-xl border border-slate-100 bg-slate-50/50 p-4 space-y-2 animate-pulse">
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-2 animate-pulse">
             <div className="h-3.5 w-1/4 rounded bg-slate-200" />
-            <div className="h-3 w-1/2 rounded bg-slate-100" />
+            <div className="h-3 w-1/2 rounded bg-slate-200/70" />
           </div>
         </div>
       ) : topicContent ? (
@@ -80,7 +80,7 @@ function LearnTopicViewer({
 
           {/* Key Terms */}
           {Array.isArray(topicContent.key_terms) && topicContent.key_terms.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div className="rounded-xl border border-slate-200 bg-surface p-4 shadow-xs">
               <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-700">
                 <svg
                   viewBox="0 0 20 20"
@@ -100,7 +100,7 @@ function LearnTopicViewer({
                 {topicContent.key_terms.map((item, index) => (
                   <div
                     key={index}
-                    className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 text-xs"
+                    className="rounded-lg border border-slate-200 bg-slate-50/70 p-2.5 text-xs"
                   >
                     <dt className="font-semibold text-slate-900">{item.term}</dt>
                     <dd className="mt-1 text-slate-600 leading-relaxed">{item.definition}</dd>
@@ -131,7 +131,19 @@ function LearnTopicViewer({
               <ul className="mt-2.5 space-y-2 text-xs text-slate-700">
                 {topicContent.key_takeaways.map((takeaway, index) => (
                   <li key={index} className="flex items-start gap-2">
-                    <span className="text-emerald-500 font-bold">&check;</span>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
                     <span className="leading-relaxed">{takeaway}</span>
                   </li>
                 ))}
@@ -143,7 +155,7 @@ function LearnTopicViewer({
           <LearnCitations sources={topicContent.sources || []} />
         </div>
       ) : (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-500">
+        <div className="rounded-xl border border-slate-200 bg-surface p-6 text-center text-xs text-slate-500">
           Select a topic or click an action above to view the explanation.
         </div>
       )}

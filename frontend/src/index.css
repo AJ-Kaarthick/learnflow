@@ -140,49 +140,62 @@
   --color-emerald-700: #6ee7b7;
   --color-red-50: color-mix(in oklch, var(--color-red-500) 18%, transparent);
   --color-red-200: color-mix(in oklch, var(--color-red-500) 35%, transparent);
+  --color-red-300: color-mix(in oklch, var(--color-red-500) 45%, transparent);
   --color-red-600: #f87171;
   --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+  --color-red-900: #fee2e2;
   --color-amber-50: color-mix(in oklch, var(--color-amber-500) 18%, transparent);
   --color-amber-200: color-mix(in oklch, var(--color-amber-500) 35%, transparent);
+  --color-amber-300: color-mix(in oklch, var(--color-amber-500) 40%, transparent);
   --color-amber-600: #fbbf24;
   --color-amber-700: #fcd34d;
-  /* V2.4 Milestone 1 UX polish: amber-800 is the "no readable text"
-     warning banner's text color (ChatPanel, and now every Study
-     panel's blocked state — see NoReadableTextState.jsx). Without an
-     override here it fell through to the un-re-themed light-mode
-     Tailwind default (a dark brownish-orange, #92400e), which reads
-     fine on the light-mode amber-50 background but is very low
-     contrast against dark mode's translucent amber-50 sitting on a
-     dark slate panel — the actual bug behind "difficult to read
-     against the dark UI". Every other status color already had its
-     darker text shade re-themed (red-700, emerald-700); amber-800 was
-     the one gap, not anything specific to how the banner itself was
-     built. */
   --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
+
+  /* Default dark accent overrides (matches blue default) */
+  --color-accent-50: color-mix(in oklch, var(--color-accent-500) 16%, var(--color-slate-100));
+  --color-accent-100: color-mix(in oklch, var(--color-accent-500) 26%, var(--color-slate-100));
+  --color-accent-200: color-mix(in oklch, var(--color-accent-500) 36%, var(--color-slate-100));
+  --color-accent-700: #93c5fd;
+  --color-accent-800: #bfdbfe;
+  --color-accent-900: #dbeafe;
 }
 
 .dark[data-accent="blue"] {
   --color-accent-50: color-mix(in oklch, var(--color-accent-500) 16%, var(--color-slate-100));
   --color-accent-100: color-mix(in oklch, var(--color-accent-500) 26%, var(--color-slate-100));
+  --color-accent-200: color-mix(in oklch, var(--color-accent-500) 36%, var(--color-slate-100));
+  --color-accent-700: #93c5fd;
   --color-accent-800: #bfdbfe;
+  --color-accent-900: #dbeafe;
 }
 
 .dark[data-accent="purple"] {
   --color-accent-50: color-mix(in oklch, var(--color-accent-500) 16%, var(--color-slate-100));
   --color-accent-100: color-mix(in oklch, var(--color-accent-500) 26%, var(--color-slate-100));
+  --color-accent-200: color-mix(in oklch, var(--color-accent-500) 36%, var(--color-slate-100));
+  --color-accent-700: #c4b5fd;
   --color-accent-800: #ddd6fe;
+  --color-accent-900: #ede9fe;
 }
 
 .dark[data-accent="green"] {
   --color-accent-50: color-mix(in oklch, var(--color-accent-500) 16%, var(--color-slate-100));
   --color-accent-100: color-mix(in oklch, var(--color-accent-500) 26%, var(--color-slate-100));
+  --color-accent-200: color-mix(in oklch, var(--color-accent-500) 36%, var(--color-slate-100));
+  --color-accent-700: #86efac;
   --color-accent-800: #bbf7d0;
+  --color-accent-900: #dcfce7;
 }
 
 .dark[data-accent="orange"] {
   --color-accent-50: color-mix(in oklch, var(--color-accent-500) 16%, var(--color-slate-100));
   --color-accent-100: color-mix(in oklch, var(--color-accent-500) 26%, var(--color-slate-100));
+  --color-accent-200: color-mix(in oklch, var(--color-accent-500) 36%, var(--color-slate-100));
+  --color-accent-700: #fdba74;
   --color-accent-800: #fed7aa;
+  --color-accent-900: #ffedd5;
 }
 
 /* -----------------------------------------------------------------
@@ -374,6 +387,7 @@ body {
    above) instead of Tailwind's default gray/blue, and tightens the
    default spacing/font-size for a chat bubble rather than an article.
    Scoped to `.chat-markdown` so it can't affect anything else. */
+.prose,
 .chat-markdown {
   --tw-prose-body: var(--color-slate-800);
   --tw-prose-headings: var(--color-slate-900);
@@ -390,16 +404,20 @@ body {
   --tw-prose-pre-bg: #0f172a;
   --tw-prose-pre-code: #e2e8f0;
 }
+.prose :where(code):not(:where(pre code)),
 .chat-markdown :where(code):not(:where(pre code)) {
   background-color: var(--color-accent-50);
   border-radius: 0.25rem;
   padding: 0.125rem 0.375rem;
   font-weight: 500;
 }
+.prose :where(code):not(:where(pre code))::before,
+.prose :where(code):not(:where(pre code))::after,
 .chat-markdown :where(code):not(:where(pre code))::before,
 .chat-markdown :where(code):not(:where(pre code))::after {
   content: none;
 }
+.prose pre,
 .chat-markdown pre {
   border-radius: 0.5rem;
 }

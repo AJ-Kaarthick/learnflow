@@ -28,7 +28,7 @@ MAX_VISUALIZE_TOTAL_CHARS = 16000
 def build_visualize_prompt(
     contributing_documents: list[Document],
     depth: VisualizeDepth = "standard",
-) -> tuple[str, str]:
+) -> str:
     """
     Constructs bounded system and user prompts to generate a structured concept graph.
     Caps total document excerpt length across 1 to 10 documents.
@@ -91,7 +91,7 @@ def build_visualize_prompt(
         "}\n"
     )
 
-    return system_prompt, user_prompt
+    return f"{system_prompt}\n\n{user_prompt}"
 
 
 async def generate_visualize_graph(
@@ -107,13 +107,10 @@ async def generate_visualize_graph(
     Generates a validated concept graph across 1 to 10 documents with bounded node/edge counts
     and grounded source citations from document chunks.
     """
-    system_prompt, user_prompt = build_visualize_prompt(contributing_documents, depth)
+    prompt = build_visualize_prompt(contributing_documents, depth)
 
     try:
-        raw_response = await ai_provider.generate_content(
-            system_prompt=system_prompt,
-            prompt=user_prompt,
-        )
+        raw_response = await ai_provider.generate_text(prompt)
     except Exception as exc:
         logger.error(f"Visualize graph generation failed at provider: {exc}")
         raise AIProviderError(f"Concept graph generation failed: {exc}") from exc

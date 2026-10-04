@@ -33,6 +33,10 @@ LearnFlow is an AI-powered study workspace that transforms PDF, DOCX, PPTX, and 
 - Accessible UI with persistent appearance preferences
 - OCR support for image documents and scanned PDFs
 - OCR-based text extraction from supported image documents
+- Multi-document Study workspace (1–10 documents with readiness handling)
+- Learn Mode with AI-generated curriculum outlines and RAG-grounded topic deep-dives
+- Contextual learning controls (Explain, Simplify, Deep Dive, Example; Overview, Standard, In-depth)
+- Visualize Mode with interactive concept network knowledge graphs and source citations
 
 ---
 
@@ -483,16 +487,73 @@ LearnFlow currently supports:
 > Legacy V2.4 databases can be migrated to PostgreSQL using the administrative CLI:
 > `python -m app.db.cli migrate --sqlite-path ./learnflow.db --postgres-url <url> --target-user-email <email>`.
 
-#### Milestone 3 — Study Experience 2.0
-- AI-generated structured learning content
-- Learn mode
-- Visualize mode
-- Topic-focused study
-- Adaptive learning structure
-- Contextual learning actions
-- Learning-style controls
-- Multi-document study
-- Grounded study content
+#### Milestone 3 — Study Experience 2.0 ✅
+
+- Multi-document Study workspace (1–10 documents)
+- Document readiness classification and authoritative backend partitioning
+- Learn Mode: AI-generated structured curriculum outline
+- Learn Mode: RAG-grounded topic explanations with key terms and key takeaways
+- Contextual learning actions (Explain, Simplify, Deep Dive, Example)
+- Pedagogical depth controls (Overview, Standard, In-depth)
+- Grounded source citations and provenance tracking
+- Visualize Mode: Interactive concept network knowledge graphs
+- Concept nodes, semantic relationship edges, and node inspector
+- Bounded graph complexity per depth
+- Guest usage tracking and quota enforcement before expensive generation
+- Cross-phase integration and full regression coverage
+
+##### Phase 1 — Multi-Document Selection & Study Foundation ✅
+
+- Multi-document Study selection supporting 1 to 10 documents
+- Interactive document chip strip with active focus, remove, and add controls
+- Readiness classification (readable, unreadable, processing, failed)
+- Graceful mixed-readiness handling with explanatory advisory notices
+- Persistent study document selection and active tab restoration
+- 100% backward compatibility for single-document study tools
+
+##### Phase 2 — Learn Mode Backend Foundation & RAG Grounding ✅
+
+- Curriculum outline endpoint (`POST /api/v1/study/learn/outline`)
+- Authoritative backend readiness and ownership partitioning
+- RAG-grounded topic endpoint (`POST /api/v1/study/learn/topic`)
+- Vector indexing and cross-document chunk retrieval
+- Contextual learning actions (Explain, Simplify, Elaborate, Example)
+- Pedagogical depth instructions (Overview, Standard, In-depth)
+- Guest quota pre-check and post-generation accounting
+- Comprehensive backend test coverage (27 tests)
+
+##### Phase 3 — Learn Mode Frontend Experience & Contextual Actions ✅
+
+- Learn tab positioned as the primary Study mode
+- Dual-column curriculum layout with collapsible topic units and subtopics
+- Topic viewer with Markdown explanation, key terms, takeaways, and citations
+- Contextual action bar (Explain, Simplify, Deep Dive, Example, Reset)
+- Pedagogical depth selector (Overview, Standard, In-depth)
+- Ephemeral session caching preserving variations per topic
+- Stale curriculum detection when document selections change
+- Responsive layout and theme-aware contrast styling
+
+##### Phase 4 — Visualize Mode & Concept Network Graph ✅
+
+- Visualize tab as the 6th Study mode (`Learn | Summary | Flashcards | Quiz | Mind Map | Visualize`)
+- Backend concept graph endpoint (`POST /api/v1/study/visualize/graph`)
+- Bounded graph complexity: Overview (10 nodes/15 edges), Standard (16/26), In-depth (22/36)
+- D3 force-directed layout computation with pan, zoom, and fit-to-view controls
+- Concept node inspector displaying definitions, importance, and connected concepts
+- Grounded source citations for central concept nodes
+- Category filtering and concept search
+- Stale graph detection on selection changes
+
+##### Phase 5 — Final Integration, Regression, QA & Polish ✅
+
+- Cross-phase end-to-end integration test suite (`test_m3_integration.py`)
+- Standardized `AIProvider.generate_text` contract across all study features
+- Resilient multi-strategy JSON extraction supporting preambles and control characters
+- Safe fallback grounding from document snippets when vector chunks are unavailable
+- Clean Unicode rendering for list markers, chevrons, and checkmark icons
+- Decoupled tab bar from active single-document readiness
+- High-contrast semantic tokens across Light/Dark modes and all 4 accent themes
+- Complete test suite passing: 558 backend tests, 221 frontend tests, 0 build errors
 
 #### Milestone 4 — Revision Mode
 - Dedicated Revision environment

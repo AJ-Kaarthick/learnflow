@@ -43,7 +43,7 @@ function LearnCitations({ sources = [] }) {
             return (
               <div
                 key={source.chunk_id || `source-${index}`}
-                className="rounded-lg border border-slate-200/80 bg-white p-3 text-xs shadow-xs"
+                className="rounded-lg border border-slate-200/80 bg-surface p-3 text-xs shadow-xs"
               >
                 <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1.5">
                   <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-800">
@@ -71,7 +71,7 @@ function LearnCitations({ sources = [] }) {
                 <ExpandableText
                   text={source.content}
                   textClassName="text-slate-600 text-xs italic leading-relaxed"
-                  fadeFromClassName="from-white"
+                  fadeFromClassName="from-surface"
                 />
               </div>
             );

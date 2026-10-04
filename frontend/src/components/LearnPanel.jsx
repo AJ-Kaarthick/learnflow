@@ -271,7 +271,7 @@ function LearnPanel({
         <GuestLimitNotice error={session.generationError} />
       ) : session.errorMessage ? (
         <div
-          className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700"
+          className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800"
           role="alert"
         >
           <div className="flex items-center justify-between gap-2">
@@ -279,7 +279,7 @@ function LearnPanel({
             <button
               type="button"
               onClick={() => onUpdateSession((prev) => ({ ...prev, errorMessage: "", generationError: null }))}
-              className="text-red-500 hover:text-red-700 font-bold"
+              className="text-red-600 hover:text-red-800 font-bold"
               aria-label="Dismiss error"
             >
               &times;
@@ -315,7 +315,7 @@ function LearnPanel({
 
       {/* Initial Hero / Uncut State */}
       {!hasOutline && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
+        <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-xs sm:p-8">
           <div className="mx-auto max-w-xl text-center space-y-4">
             <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent-100 text-accent-700">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-6 w-6" aria-hidden="true">
@@ -345,7 +345,7 @@ function LearnPanel({
                     onClick={() => setOutlineDepth(depth.id)}
                     className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
                       outlineDepth === depth.id
-                        ? "bg-white text-slate-900 shadow-xs"
+                        ? "bg-surface text-slate-900 shadow-xs"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
@@ -377,12 +377,12 @@ function LearnPanel({
 
       {/* Generating Outline Loading Skeleton */}
       {isOutlineLoading && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4 animate-pulse">
+        <div className="rounded-xl border border-slate-200 bg-surface p-6 space-y-4 animate-pulse">
           <div className="h-5 w-1/3 rounded bg-slate-200" />
-          <div className="h-3.5 w-2/3 rounded bg-slate-100" />
+          <div className="h-3.5 w-2/3 rounded bg-slate-200/70" />
           <div className="pt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="h-16 rounded-lg bg-slate-100" />
-            <div className="h-16 rounded-lg bg-slate-100" />
+            <div className="h-16 rounded-lg bg-slate-200/70" />
+            <div className="h-16 rounded-lg bg-slate-200/70" />
           </div>
         </div>
       )}
@@ -404,7 +404,7 @@ function LearnPanel({
 
           {/* Right Column: Topic Deep Dive Viewer */}
           <div className="lg:col-span-8 xl:col-span-8">
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+            <div className="rounded-xl border border-slate-200 bg-surface p-5 shadow-xs">
               <LearnTopicViewer
                 topicTitle={currentTopicTitle}
                 parentTopicTitle={parentTopicTitle}

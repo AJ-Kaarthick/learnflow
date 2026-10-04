@@ -34,7 +34,7 @@ function LearnActionBar({
               className={`${BUTTON_BASE_CLASSES} ${
                 isActive
                   ? "bg-accent-600 text-white shadow-sm hover:bg-accent-700"
-                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  : "border border-slate-200 bg-surface text-slate-700 hover:bg-slate-100"
               }`}
             >
               {isLoadingThis && (
@@ -78,7 +78,7 @@ function LearnActionBar({
                 title={depth.description}
                 className={`rounded px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
                   isSelected
-                    ? "bg-white text-slate-900 shadow-sm"
+                    ? "bg-surface text-slate-900 shadow-sm"
                     : "text-slate-600 hover:text-slate-900"
                 } disabled:cursor-not-allowed disabled:opacity-50`}
               >
