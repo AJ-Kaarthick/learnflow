@@ -3,9 +3,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_identity
 from app.db.database import get_db
-from app.db.models import Document, RevisionSession
+from app.db.models import Document, RevisionQuestion, RevisionSession
 from app.schemas.identity import Identity
 from app.schemas.revision import (
+    RevisionAttemptResponse,
+    RevisionAttemptSubmitRequest,
     RevisionQuestionResponse,
     RevisionSessionCreateRequest,
     RevisionSessionDetailResponse,
@@ -15,6 +17,12 @@ from app.schemas.revision import (
 from app.services import guest_limit_service, ownership_service
 from app.services.ai.base_provider import AIProvider, AIProviderError
 from app.services.ai.provider_factory import get_ai_provider
+from app.services.evaluation_service import (
+    complete_revision_session,
+    evaluate_mcq_answer,
+    evaluate_open_ended_answer,
+    record_question_attempt,
+)
 from app.services.guest_limit_service import GuestLimitExceededError, GuestLimitType
 from app.services.revision_service import generate_revision_session
 
@@ -99,6 +107,23 @@ def _serialize_session_detail(session: RevisionSession) -> RevisionSessionDetail
     question_responses: list[RevisionQuestionResponse] = []
     for q in session.questions:
         doc_title = q.source_document.original_filename if q.source_document else None
+        attempt_responses = [
+            RevisionAttemptResponse(
+                id=att.id,
+                question_id=att.question_id,
+                session_id=att.session_id,
+                attempt_number=att.attempt_number,
+                submitted_answer=att.submitted_answer,
+                is_correct=att.is_correct,
+                score=att.score,
+                feedback=att.feedback,
+                explanation=q.explanation,
+                correct_answer=q.correct_answer,
+                evaluation_metadata=att.evaluation_metadata,
+                created_at=att.created_at,
+            )
+            for att in (q.attempts or [])
+        ]
         question_responses.append(
             RevisionQuestionResponse(
                 id=q.id,
@@ -115,6 +140,7 @@ def _serialize_session_detail(session: RevisionSession) -> RevisionSessionDetail
                 evidence_snippet=q.evidence_snippet,
                 evidence_metadata=q.evidence_metadata,
                 created_at=q.created_at,
+                attempts=attempt_responses,
             )
         )
 
@@ -222,3 +248,137 @@ def get_revision_session(
         raise HTTPException(status_code=404, detail="Revision session not found.")
 
     return _serialize_session_detail(session)
+
+
+@router.post(
+    "/sessions/{session_id}/questions/{question_id}/attempts",
+    response_model=RevisionAttemptResponse,
+    status_code=201,
+)
+async def submit_question_attempt(
+    session_id: str,
+    question_id: str,
+    payload: RevisionAttemptSubmitRequest,
+    db: Session = Depends(get_db),
+    ai_provider: AIProvider = Depends(get_ai_provider),
+    identity: Identity = Depends(get_current_identity),
+) -> RevisionAttemptResponse:
+    """
+    Submits a learner answer for a question in a revision session.
+    Evaluates deterministically for MCQs or via AI for open-ended questions.
+    Persists a new RevisionAttempt with sequential attempt_number and updates session history.
+    """
+    # 1. Validate session existence and ownership
+    session = db.query(RevisionSession).filter(RevisionSession.id == session_id).first()
+    if session is None or not ownership_service.is_owned_by(session, identity):
+        raise HTTPException(status_code=404, detail="Revision session not found.")
+
+    # 2. Validate question belongs to this session
+    question = db.query(RevisionQuestion).filter(RevisionQuestion.id == question_id).first()
+    if question is None or question.session_id != session.id:
+        raise HTTPException(status_code=404, detail="Question not found in this revision session.")
+
+    # 3. Reject submissions on completed sessions
+    if session.status == "completed":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot submit attempts to an already completed revision session.",
+        )
+
+    # 4. Evaluation and quota branching
+    submitted_text = (payload.submitted_answer or "").strip()
+
+    if question.question_type == "multiple_choice":
+        # Deterministic MCQ evaluation (NO AI provider invocation, NO guest quota consumed)
+        is_correct, score, feedback, metadata = evaluate_mcq_answer(
+            question=question,
+            submitted_answer=payload.submitted_answer,
+        )
+        consumed_quota = False
+    else:
+        # Open-ended question evaluation
+        if not submitted_text:
+            # Deterministic evaluation for empty submissions (NO AI call, NO quota consumed)
+            is_correct, score, feedback, metadata = (
+                False,
+                0.0,
+                "No answer was provided. Please write an explanation or response to receive feedback.",
+                {"evaluation_type": "deterministic_empty", "reasoning": "Empty submission"},
+            )
+            consumed_quota = False
+        else:
+            # Enforce guest quota before invoking AI
+            try:
+                guest_limit_service.enforce_limit(db, identity, GuestLimitType.AI_GENERATION)
+            except GuestLimitExceededError as error:
+                raise guest_limit_service.to_http_exception(error)
+
+            try:
+                is_correct, score, feedback, metadata = await evaluate_open_ended_answer(
+                    question=question,
+                    submitted_answer=payload.submitted_answer,
+                    ai_provider=ai_provider,
+                )
+            except AIProviderError as error:
+                raise HTTPException(status_code=502, detail=str(error))
+
+            consumed_quota = True
+
+    # 5. Persist attempt atomically
+    attempt = record_question_attempt(
+        db=db,
+        session=session,
+        question=question,
+        submitted_answer=payload.submitted_answer,
+        is_correct=is_correct,
+        score=score,
+        feedback=feedback,
+        evaluation_metadata=metadata,
+    )
+
+    # 6. Record guest quota only after successful AI evaluation and persistence
+    if consumed_quota:
+        guest_limit_service.record_usage(db, identity, GuestLimitType.AI_GENERATION)
+
+    return RevisionAttemptResponse(
+        id=attempt.id,
+        question_id=attempt.question_id,
+        session_id=attempt.session_id,
+        attempt_number=attempt.attempt_number,
+        submitted_answer=attempt.submitted_answer,
+        is_correct=attempt.is_correct,
+        score=attempt.score,
+        feedback=attempt.feedback,
+        explanation=question.explanation,
+        correct_answer=question.correct_answer,
+        evaluation_metadata=attempt.evaluation_metadata,
+        created_at=attempt.created_at,
+    )
+
+
+@router.post("/sessions/{session_id}/complete", response_model=RevisionSessionDetailResponse)
+def complete_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
+) -> RevisionSessionDetailResponse:
+    """
+    Finalizes an in-progress revision session, computes the cumulative session score
+    from the latest attempts on each question, and transitions status to 'completed'.
+    """
+    session = db.query(RevisionSession).filter(RevisionSession.id == session_id).first()
+    if session is None or not ownership_service.is_owned_by(session, identity):
+        raise HTTPException(status_code=404, detail="Revision session not found.")
+
+    if session.status == "completed":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot complete a revision session that is already completed.",
+        )
+
+    try:
+        updated_session = complete_revision_session(session, db)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+
+    return _serialize_session_detail(updated_session)

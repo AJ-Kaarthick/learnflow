@@ -67,6 +67,40 @@ class RevisionSessionCreateRequest(BaseModel):
         return cleaned or None
 
 
+class RevisionAttemptSubmitRequest(BaseModel):
+    """
+    Request body for submitting an answer attempt to a RevisionQuestion.
+    """
+
+    submitted_answer: str = Field(default="", max_length=10000)
+
+
+class RevisionAttemptResponse(BaseModel):
+    """
+    Evaluated response for a single attempt on a RevisionQuestion.
+    """
+
+    id: str
+    question_id: str
+    session_id: str
+    attempt_number: int
+    submitted_answer: str
+    is_correct: bool
+    score: float
+    feedback: Optional[str] = None
+    explanation: Optional[str] = None
+    correct_answer: Optional[str] = None
+    evaluation_metadata: Optional[dict[str, Any]] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _created_at_is_utc(cls, value: object) -> object:
+        return _assume_utc(value)
+
+
 class RevisionQuestionResponse(BaseModel):
     """
     Schema representing one persistent revision question.
@@ -87,6 +121,7 @@ class RevisionQuestionResponse(BaseModel):
     evidence_snippet: Optional[str] = None
     evidence_metadata: Optional[dict[str, Any]] = None
     created_at: datetime
+    attempts: list[RevisionAttemptResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
