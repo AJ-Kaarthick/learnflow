@@ -4,15 +4,12 @@ const NAV_ITEMS = [
   { route: ROUTES.HOME, label: "Home" },
   { route: ROUTES.STUDY, label: "Study" },
   { route: ROUTES.CHAT, label: "Chat" },
+  { route: ROUTES.REVISION, label: "Revision" },
 ];
 
-// Recall and Revision aren't implemented in this milestone (see the
-// V2.4 Milestone 1 brief), but showing them here, disabled, makes the
-// eventual five-item nav (Home | Study | Chat | Recall | Revision)
-// visible as the direction the app is heading. Turning one "on" later
-// is moving its label from this list into NAV_ITEMS above with a real
-// route and a page component — not a nav redesign.
-const UPCOMING_ITEMS = ["Recall", "Revision"];
+// Recall is not yet implemented, but showing it here, disabled, makes
+// the eventual five-item nav visible as the direction the app is heading.
+const UPCOMING_ITEMS = ["Recall"];
 
 const NAV_LINK_CLASSES =
   "rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset";

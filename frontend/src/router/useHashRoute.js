@@ -22,6 +22,7 @@ export const ROUTES = {
   HOME: "home",
   STUDY: "study",
   CHAT: "chat",
+  REVISION: "revision",
 };
 
 const VALID_ROUTES = new Set(Object.values(ROUTES));
