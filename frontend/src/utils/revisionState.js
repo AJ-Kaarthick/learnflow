@@ -149,7 +149,19 @@ export function buildCreateSessionPayload(setupState, selectedDocuments) {
 }
 
 /**
+ * Finds the index of the first unattempted question for resuming in-progress sessions.
+ * If all questions have attempts, returns the last question index.
+ */
+export function findResumeQuestionIndex(session, latestAttempts = {}) {
+  const questions = session?.questions || [];
+  if (questions.length === 0) return 0;
+  const firstUnattempted = questions.findIndex((q) => !latestAttempts[q.id]);
+  return firstUnattempted !== -1 ? firstUnattempted : questions.length - 1;
+}
+
+/**
  * Creates the initial active runner state from a RevisionSessionDetailResponse.
+ * For in-progress sessions, deterministically starts at the first unattempted question.
  *
  * @param {Object} session - RevisionSessionDetailResponse
  * @returns {Object} Runner state
@@ -175,10 +187,16 @@ export function createInitialRunnerState(session) {
     }
   }
 
+  // Resume at first unattempted question if in progress
+  let startIndex = 0;
+  if (session?.status !== "completed" && questions.length > 0) {
+    startIndex = findResumeQuestionIndex(session, latestAttempts);
+  }
+
   return {
     session,
     questions,
-    currentIndex: 0,
+    currentIndex: startIndex,
     answers,
     latestAttempts,
     attemptsHistory,
@@ -348,4 +366,66 @@ export function formatPercentageScore(score) {
     return "--";
   }
   return `${Math.round(score * 100)}%`;
+}
+
+/**
+ * Returns the source document title or a graceful fallback for archived/deleted documents.
+ */
+export function getQuestionDocumentTitle(question) {
+  if (!question || !question.source_document_title || !question.source_document_id) {
+    return "Archived Document";
+  }
+  return question.source_document_title;
+}
+
+/**
+ * Whether the question's source document has been deleted/archived.
+ */
+export function isDocumentArchived(question) {
+  return Boolean(!question?.source_document_id || !question?.source_document_title);
+}
+
+/**
+ * Formats an ISO datetime string into human-readable date.
+ */
+export function formatDate(isoString) {
+  if (!isoString) return "--";
+  try {
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return "--";
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "--";
+  }
+}
+
+/**
+ * Extracts configuration from a completed session to pre-populate setup for a retake.
+ * Does not mutate the original session.
+ */
+export function prepareRetakeSetup(session) {
+  if (!session) return createInitialSetupState();
+  const config = session.config || {};
+  return {
+    title: session.title ? `${session.title} (Retake)` : "",
+    difficulty: config.difficulty || "intermediate",
+    mode: config.mode || "practice",
+    questionType: config.question_type || "multiple_choice",
+    questionCount: session.total_questions || DEFAULT_REVISION_QUESTION_COUNT,
+    documentIds: Array.isArray(session.document_ids) ? [...session.document_ids] : [],
+  };
+}
+
+/**
+ * Returns Tailwind class names for a session status pill.
+ */
+export function getStatusBadgeClasses(status) {
+  if (status === "completed") {
+    return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  }
+  return "bg-amber-50 text-amber-700 border-amber-200";
 }

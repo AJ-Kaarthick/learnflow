@@ -10,13 +10,15 @@ import {
   createInitialRunnerState,
   formatPercentageScore,
   getCurrentQuestion,
+  getQuestionDocumentTitle,
   goToQuestionIndex,
   isAtLastQuestion,
+  isDocumentArchived,
   recordAttemptInState,
   updateAnswerInState,
 } from "../utils/revisionState.js";
 
-function RevisionActiveRunner({ session, onExit }) {
+function RevisionActiveRunner({ session, onExit, onReview }) {
   const [runnerState, setRunnerState] = useState(() => createInitialRunnerState(session));
   const [showEvidence, setShowEvidence] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -127,7 +129,16 @@ function RevisionActiveRunner({ session, onExit }) {
             </div>
           </div>
 
-          <div className="mt-8 flex justify-center gap-3">
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            {onReview && (
+              <button
+                type="button"
+                onClick={() => onReview(runnerState.session)}
+                className="rounded-lg border border-slate-300 bg-surface px-6 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+              >
+                Review Full Results
+              </button>
+            )}
             <button
               type="button"
               onClick={onExit}
@@ -264,14 +275,22 @@ function RevisionActiveRunner({ session, onExit }) {
             )}
           </div>
 
-          {currentQuestion.source_document_title && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span>Source:</span>
             <span
-              className="text-xs text-slate-500 truncate max-w-[250px]"
-              title={currentQuestion.source_document_title}
+              className={`font-medium truncate max-w-[220px] ${
+                isDocumentArchived(currentQuestion) ? "text-amber-700" : "text-slate-700"
+              }`}
+              title={getQuestionDocumentTitle(currentQuestion)}
             >
-              Source: <span className="font-medium text-slate-700">{currentQuestion.source_document_title}</span>
+              {getQuestionDocumentTitle(currentQuestion)}
             </span>
-          )}
+            {isDocumentArchived(currentQuestion) && (
+              <span className="rounded bg-amber-100 px-1.5 py-0.2 text-[10px] text-amber-800">
+                Archived
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Question Text */}

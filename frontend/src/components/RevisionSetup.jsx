@@ -16,9 +16,15 @@ import {
   validateSetupState,
 } from "../utils/revisionState.js";
 
-function RevisionSetup({ onStartSession, isCreating = false, creationError = null }) {
-  const [setupState, setSetupState] = useState(createInitialSetupState);
-  const [selectedDocuments, setSelectedDocuments] = useState([]);
+function RevisionSetup({
+  onStartSession,
+  isCreating = false,
+  creationError = null,
+  initialSetupState = null,
+  initialSelectedDocuments = [],
+}) {
+  const [setupState, setSetupState] = useState(() => initialSetupState || createInitialSetupState());
+  const [selectedDocuments, setSelectedDocuments] = useState(() => initialSelectedDocuments || []);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [refreshSignal, setRefreshSignal] = useState(0);
 
