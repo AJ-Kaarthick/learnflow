@@ -90,6 +90,35 @@ test("createRevisionSession omits empty title and applies defaults", async () =>
   assert.equal(sentBody.title, undefined);
 });
 
+test("createRevisionSession accepts snake_case options from buildCreateSessionPayload without omitting document_ids", async () => {
+  stubFetchOnce(201, { id: "rev-sess-snake" });
+
+  await createRevisionSession({
+    document_ids: ["doc-a", "doc-b"],
+    difficulty: "advanced",
+    mode: "quiz",
+    question_type: "open_ended",
+    question_count: 8,
+    title: "Exam Prep",
+  });
+
+  assert.equal(calls.length, 1);
+  const sentBody = JSON.parse(calls[0].options.body);
+  assert.deepEqual(sentBody, {
+    document_ids: ["doc-a", "doc-b"],
+    difficulty: "advanced",
+    mode: "quiz",
+    question_type: "open_ended",
+    question_count: 8,
+    title: "Exam Prep",
+  });
+
+  // Verify that document_ids is an array with items, never undefined/missing
+  assert.ok(Array.isArray(sentBody.document_ids));
+  assert.equal(sentBody.document_ids.length, 2);
+  assert.equal(Object.prototype.hasOwnProperty.call(sentBody, "document_ids"), true);
+});
+
 test("createRevisionSession throws GuestLimitError on 403 guest limit response", async () => {
   stubFetchOnce(403, {
     detail: {

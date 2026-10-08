@@ -2491,3 +2491,94 @@ Transform LearnFlow's Study workspace from a single-document utility into an int
 ## Result
 
 V3 Milestone 3 is complete. LearnFlow provides an integrated, multi-document Study Experience 2.0 with curriculum-driven Learn Mode and interactive Visualize Mode knowledge graphs.
+
+---
+
+# V3 — Milestone 4: Revision Experience 2.0
+
+## Goal
+
+Build a dedicated, persistent learning evaluation system for active recall, practice, and test preparation across 1 to 10 documents, featuring grounded question generation (MCQ, open-ended, mixed), deterministic zero-quota MCQ scoring, rubric-guided AI evaluation for open-ended answers, immutable attempt history (`Question != Attempt`), session resume, and provenance citations.
+
+## Features Completed
+
+### Phase 1 — Revision Session Creation & Question Generation Backend
+- Dedicated Revision REST API router (`POST /api/v1/revision/sessions`, `GET /api/v1/revision/sessions`, `GET /api/v1/revision/sessions/{id}`)
+- Proportional character budgeting across 1 to 10 contributing documents (`max(1000, 30000 // len(documents))`)
+- Grounded prompt construction and resilient JSON question extraction for `multiple_choice`, `open_ended`, and `mixed` modes
+- Atomic persistence of `RevisionSession`, `RevisionSessionDocument`, and `RevisionQuestion` rows with strict user/guest ownership scoping
+- Guest AI quota pre-check and post-generation accounting
+- Comprehensive Phase 1 test suite (24 tests)
+
+### Phase 2 — Answer Evaluation Engine & Attempt Tracking Backend
+- Question attempt submission endpoint (`POST /api/v1/revision/sessions/{session_id}/questions/{question_id}/attempts`)
+- Deterministic Python MCQ evaluator with case-insensitive option matching, letter prefixes ('A', 'B'), and zero AI quota consumption
+- Rubric-guided AI evaluator for open-ended answers with structured JSON schema scoring (0.0–1.0) and constructive feedback
+- Deterministic rejection for empty/trivial open-ended submissions (0 quota consumed)
+- Immutable `RevisionAttempt` persistence with 1-indexed attempt numbers per question, leaving question prompts unaltered
+- Authoritative session completion endpoint (`POST /api/v1/revision/sessions/{session_id}/complete`) calculating official score from latest attempts
+- Comprehensive Phase 2 test suite (23 tests)
+
+### Phase 3 — Frontend Revision Workspace & Active Session Runner
+- Dedicated Revision top-level route and navigation bar link (`#/revision`)
+- Interactive setup launcher supporting multi-document selection (1–10 documents), modes (`practice`, `quiz`, `flashcards`), difficulty, and question count
+- Active session runner with keyboard shortcuts, timer, and question navigation dots
+- Interactive MCQ option cards and open-ended textarea answer composer
+- Immediate post-submission feedback cards displaying score, correct answer, explanation, and frozen evidence quotes
+- Attempt retry mechanism with immutable history accumulation
+
+### Phase 4 — Session History, Results Review, Resume & Multi-Document Polish
+- Revision history list with session cards displaying score, completion badges, dates, and document chips
+- In-progress session resume jumping directly to the first unattempted question without question regeneration
+- Completed results review mode displaying official backend score and question-by-question outcomes
+- Per-question attempt timeline showing all historical attempts sequentially
+- Provenance viewer with source document attribution and frozen evidence citations
+- Graceful rendering of deleted source documents as "Archived Document"
+- "Retake Revision" action pre-filling setup configuration for a fresh session
+
+### Phase 5 — Cross-Phase Integration, Guest Migration, QA & Documentation
+- Dedicated cross-phase integration test suite (`backend/tests/test_m4_integration.py`, 7 comprehensive tests)
+- End-to-end verification of guest-to-account migration preserving revision sessions, questions, and attempts
+- Document deletion durability verification ensuring questions, attempts, and frozen evidence survive source document deletion (`ON DELETE SET NULL`)
+- Multi-document provenance isolation ensuring per-question citations do not collapse across documents
+- Cross-identity access control and attempt isolation across users and guests
+- Guest AI quota lifecycle verification: MCQ consumes 0 quota, open-ended consumes 1 on success, 0 on failure, 403 on exhaustion while allowing MCQ practice
+- Full regression verification across frontend and backend test suites
+
+## Learned
+
+- **Question != Attempt Separation**: Decoupling the immutable question prompt from student submissions enables clean attempt histories, retries, and accurate auditability without data corruption.
+- **Dual Evaluation Pathways**: Making MCQ evaluation deterministic in Python avoids unnecessary LLM latency, eliminates quota drain, and ensures 100% reliable scoring.
+- **Durable Evidence Citations**: Persisting verbatim `evidence_snippet` text and metadata directly on the question row decouples study history from the lifecycle of the underlying document files.
+- **Authoritative Backend Scoring**: Computing the official session score exclusively on the backend upon completion guarantees consistency between summary lists, detail views, and attempt histories.
+
+## Problems Faced
+
+- TestClient cookie retention across requests caused cross-identity test requests to inadvertently inherit previous session cookies.
+- Open-ended evaluation prompt contained template words "incorrect" and "irrelevant" which triggered false-positive evaluation matches in test mock providers when checking the whole prompt.
+- Manual QA identified that the Revision setup page extended below the viewport without vertical scrolling due to flex constraints.
+- Switching between "New Revision" and "Session History" caused in-progress setup configuration (document selection, mode, count) to reset.
+- Frontend session creation dispatched camelCase fields (`documentIds`, `questionCount`, `questionType`) which failed Pydantic validation when not normalized.
+- Retake button and result status banners (Correct/Needs Improvement) had poor contrast in dark mode due to inverted slate-900 CSS tokens.
+
+## Solutions
+
+- Explicitly cleared and set client cookies (`client.cookies.clear()`, `client.cookies.set(...)`) between identities in tests.
+- Isolated the student's submission section in the mock AI provider by extracting text between `"Student's Submitted Answer:"` and `"Evaluation Guidelines:"`.
+- Added `min-h-0 overflow-y-auto` to the Revision page `<main>` element, enabling smooth, standard vertical scrolling across all viewports.
+- Lifted `setupState` and `selectedDocuments` state to `RevisionPage` to preserve user configuration during tab switching.
+- Updated `api/revision.js` to normalize both snake_case and camelCase parameters (`document_ids ?? documentIds`, etc.) prior to backend dispatch.
+- Re-styled Retake button with standard secondary action styling (`border-slate-300 bg-surface text-slate-700 hover:bg-slate-50`), added full dark mode `--color-emerald-*` and `--color-rose-*` tokens in `index.css`, and presented the official backend score alongside a secondary informational "Best Attempt" metric when multiple attempts exist.
+
+## Verification
+
+- Focused M4 integration tests: **7 passed** in 3.67s (`test_m4_integration.py`)
+- Full backend test suite: **612 passed, 5 skipped** in 75.55s
+- Full frontend test suite: **288 passed, 0 failed** in 2.65s (`npm test`)
+- Production frontend build: **successful** (`npm run build`, 0 errors)
+- Database schema: single Alembic head **`74eb271ec556`**, 0 new migrations, 0 new dependencies
+- Repository status: `git diff --check` clean, zero blockers
+
+## Result
+
+V3 Milestone 4 is complete. LearnFlow provides a robust, multi-document Revision Experience 2.0 with persistent revision sessions, deterministic MCQ scoring, rubric-guided AI evaluation, attempt tracking, and document deletion durability.

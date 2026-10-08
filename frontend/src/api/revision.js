@@ -14,14 +14,14 @@ import { parseErrorResponse } from "./errors.js";
  * @param {number} [params.questionCount=5] - Number of questions (1-20)
  * @returns {Promise<Object>} Created RevisionSessionDetailResponse
  */
-export async function createRevisionSession({
-  documentIds,
-  title,
-  difficulty = "intermediate",
-  mode = "practice",
-  questionType = "multiple_choice",
-  questionCount = 5,
-}) {
+export async function createRevisionSession(options = {}) {
+  const documentIds = options.document_ids ?? options.documentIds;
+  const questionType = options.question_type ?? options.questionType ?? "multiple_choice";
+  const questionCount = options.question_count ?? options.questionCount ?? 5;
+  const difficulty = options.difficulty ?? "intermediate";
+  const mode = options.mode ?? "practice";
+  const title = options.title;
+
   const payload = {
     document_ids: documentIds,
     difficulty,
@@ -30,7 +30,7 @@ export async function createRevisionSession({
     question_count: questionCount,
   };
 
-  if (title && title.trim()) {
+  if (title && typeof title === "string" && title.trim()) {
     payload.title = title.trim();
   }
 

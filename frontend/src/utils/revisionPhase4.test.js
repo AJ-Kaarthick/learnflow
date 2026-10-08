@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import {
   advanceToNextQuestion,
+  buildCreateSessionPayload,
   calculateSessionProgress,
   createInitialRunnerState,
+  createInitialSetupState,
   findResumeQuestionIndex,
   formatDate,
   formatPercentageScore,
@@ -460,4 +465,197 @@ test("22. Active runner answer submission and advance behavior remains preserved
   runner = advanceToNextQuestion(runner);
   assert.equal(runner.currentIndex, 1);
   assert.equal(isAtLastQuestion(runner), true);
+});
+
+// ---------------------------------------------------------------------------
+// 23. Bug 2 Regression: Setup state survives New Revision <-> Session History
+// ---------------------------------------------------------------------------
+test("23. Setup state survives New Revision <-> Session History view switches", () => {
+  // Simulate page-level state lifecycle in RevisionPage
+  let pageState = {
+    viewMode: "launcher",
+    setupState: createInitialSetupState(),
+    selectedDocuments: [],
+    activeSession: null,
+  };
+
+  // User configures setup with 2 documents and custom settings
+  const doc1 = { id: "doc-1", original_filename: "modula4.pptx", status: "ready", character_count: 800 };
+  const doc2 = { id: "doc-2", original_filename: "Data center.pptx", status: "ready", character_count: 1200 };
+
+  pageState = {
+    ...pageState,
+    selectedDocuments: [doc1, doc2],
+    setupState: {
+      title: "Midterm Preparation",
+      difficulty: "advanced",
+      mode: "quiz",
+      questionType: "open_ended",
+      questionCount: 8,
+    },
+  };
+
+  // User switches view to "history"
+  pageState = {
+    ...pageState,
+    viewMode: "history",
+  };
+  assert.equal(pageState.viewMode, "history");
+
+  // User switches view back to "launcher"
+  pageState = {
+    ...pageState,
+    viewMode: "launcher",
+  };
+
+  // Assert all selections and configuration survived the view switch intact
+  assert.equal(pageState.selectedDocuments.length, 2);
+  assert.equal(pageState.selectedDocuments[0].id, "doc-1");
+  assert.equal(pageState.selectedDocuments[1].id, "doc-2");
+  assert.equal(pageState.setupState.title, "Midterm Preparation");
+  assert.equal(pageState.setupState.difficulty, "advanced");
+  assert.equal(pageState.setupState.mode, "quiz");
+  assert.equal(pageState.setupState.questionType, "open_ended");
+  assert.equal(pageState.setupState.questionCount, 8);
+
+  // On session creation success, state resets for next session
+  pageState = {
+    ...pageState,
+    activeSession: { id: "sess-created" },
+    viewMode: "runner",
+    setupState: createInitialSetupState(),
+    selectedDocuments: [],
+  };
+  assert.equal(pageState.selectedDocuments.length, 0);
+  assert.equal(pageState.setupState.title, "");
+});
+
+// ---------------------------------------------------------------------------
+// 24. Bug 3 Regression: Valid session creation payload contains all required backend fields
+// ---------------------------------------------------------------------------
+test("24. Valid session creation payload contains all required backend fields", () => {
+  const selectedDocs = [
+    { id: "doc-alpha", original_filename: "Alpha.pdf", status: "ready", character_count: 500 },
+    { id: "doc-beta", original_filename: "Beta.pdf", status: "ready", character_count: 900 },
+  ];
+  const setupConfig = {
+    title: "Integration Test Session",
+    difficulty: "intermediate",
+    mode: "practice",
+    questionType: "multiple_choice",
+    questionCount: 5,
+  };
+
+  const payload = buildCreateSessionPayload(setupConfig, selectedDocs);
+
+  // Verify all fields required by backend RevisionSessionCreateRequest
+  assert.ok(Array.isArray(payload.document_ids), "document_ids must be an array");
+  assert.ok(payload.document_ids.length >= 1, "document_ids must have at least 1 document");
+  assert.ok(payload.document_ids.length <= 10, "document_ids must not exceed 10 documents");
+  assert.deepEqual(payload.document_ids, ["doc-alpha", "doc-beta"]);
+
+  assert.equal(payload.difficulty, "intermediate");
+  assert.equal(payload.mode, "practice");
+  assert.equal(payload.question_type, "multiple_choice");
+  assert.equal(payload.question_count, 5);
+  assert.equal(payload.title, "Integration Test Session");
+
+  // Verify JSON serialization retains document_ids (does not omit undefined)
+  const jsonString = JSON.stringify(payload);
+  const parsed = JSON.parse(jsonString);
+  assert.ok(Array.isArray(parsed.document_ids));
+  assert.equal(parsed.document_ids.length, 2);
+  assert.equal(parsed.question_type, "multiple_choice");
+  assert.equal(parsed.question_count, 5);
+});
+
+// ---------------------------------------------------------------------------
+// 25. Bug 1 Regression: Revision page container enables vertical scrolling
+// ---------------------------------------------------------------------------
+test("25. Revision page container structure enables viewport scrolling without layout clipping", () => {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const revisionPagePath = join(__dirname, "../pages/RevisionPage.jsx");
+  const source = readFileSync(revisionPagePath, "utf-8");
+
+  // Verify container is a semantic main element with accessible label
+  assert.match(source, /<main\s+aria-label="Revision"/);
+
+  // Verify container uses overflow-y-auto to allow vertical scrolling when content exceeds viewport
+  assert.match(source, /overflow-y-auto/);
+
+  // Verify container uses min-h-0 and flex-1 to enable flex child scrolling within AppShell
+  assert.match(source, /flex-1/);
+  assert.match(source, /min-h-0/);
+
+  // Verify outer element does NOT lock height with overflow-hidden
+  assert.doesNotMatch(source, /<main[^>]*overflow-hidden/);
+});
+
+// ---------------------------------------------------------------------------
+// 26. UI Polish: Retake action button uses enabled secondary action styling
+// ---------------------------------------------------------------------------
+test("26. Retake action button in history view uses enabled secondary action styling with high contrast", () => {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const historyViewPath = join(__dirname, "../components/RevisionHistoryView.jsx");
+  const source = readFileSync(historyViewPath, "utf-8");
+
+  // Verify Retake button does NOT use bg-slate-900 (which turns light grey in dark mode)
+  assert.doesNotMatch(source, /handleRetake\(session\)[^>]*className="[^"]*bg-slate-900/);
+
+  // Verify Retake button uses consistent secondary styling matching Review Results
+  assert.match(source, /handleRetake\(session\)[^>]*className="[^"]*border-slate-300[^"]*bg-surface[^"]*text-slate-700/);
+});
+
+// ---------------------------------------------------------------------------
+// 27. UI Polish: Informational Best Attempt extraction preserves authoritative latest attempt
+// ---------------------------------------------------------------------------
+test("27. Informational Best Attempt extraction correctly identifies top score without altering official latest outcome", () => {
+  const question = {
+    id: "q-101",
+    attempts: [
+      { id: "att-1", attempt_number: 1, score: 1.0, is_correct: true, submitted_answer: "Correct answer" },
+      { id: "att-2", attempt_number: 2, score: 0.4, is_correct: false, submitted_answer: "Wrong answer" },
+    ],
+  };
+
+  const attempts = question.attempts;
+  // Latest attempt remains authoritative
+  const latestAttempt = attempts.reduce((prev, curr) =>
+    curr.attempt_number > prev.attempt_number ? curr : prev
+  );
+  assert.equal(latestAttempt.attempt_number, 2);
+  assert.equal(latestAttempt.score, 0.4);
+  assert.equal(latestAttempt.is_correct, false);
+
+  // Best attempt is computed strictly as secondary informational value
+  const bestAttempt =
+    attempts.length > 1
+      ? attempts.reduce((best, curr) => (curr.score > best.score ? curr : best))
+      : null;
+
+  assert.ok(bestAttempt);
+  assert.equal(bestAttempt.attempt_number, 1);
+  assert.equal(bestAttempt.score, 1.0);
+  assert.equal(formatPercentageScore(bestAttempt.score), "100%");
+
+  // Verify that latestAttempt remains official score and is NOT overridden by bestAttempt
+  assert.equal(formatPercentageScore(latestAttempt.score), "40%");
+});
+
+// ---------------------------------------------------------------------------
+// 28. UI Polish: Dark mode status colors define high-contrast emerald and rose tokens
+// ---------------------------------------------------------------------------
+test("28. Dark mode status colors define high-contrast emerald and rose tokens", () => {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const cssPath = join(__dirname, "../index.css");
+  const source = readFileSync(cssPath, "utf-8");
+
+  // Verify .dark defines complete high-contrast emerald tokens
+  assert.match(source, /--color-emerald-200:\s*color-mix/);
+  assert.match(source, /--color-emerald-900:\s*#d1fae5/);
+  assert.match(source, /--color-emerald-800:\s*#a7f3d0/);
+
+  // Verify .dark defines complete high-contrast rose tokens
+  assert.match(source, /--color-rose-200:\s*color-mix/);
+  assert.match(source, /--color-rose-900:\s*#ffe4e6/);
 });

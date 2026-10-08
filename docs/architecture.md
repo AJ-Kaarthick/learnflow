@@ -1242,3 +1242,89 @@ Frontend D3 Force-Directed Simulation & Interactive Canvas
 - **Ephemeral AI State**: Generated Learn curricula and Visualize graphs are retained in memory during the active session and discarded on page reload/document switch. Only lightweight navigation state (`selectedStudyDocumentIds`, `activeDocumentId`, `activeStudyTab`) is persisted in `localStorage`.
 - **Stale State Detection**: When the user adds or removes documents from an active study selection, Learn and Visualize modes detect the change and display an unobtrusive prompt offering to regenerate content for the updated selection.
 
+
+## V3 — Milestone 4: Revision Experience 2.0
+
+V3 Milestone 4 establishes a dedicated, persistent learning evaluation system for active recall, practice, and test readiness across 1 to 10 documents. It replaces ephemeral in-memory quiz states with persistent revision sessions, immutable attempt histories, deterministic MCQ scoring, and rubric-guided AI evaluation.
+
+### 1. Domain Model: Question != Attempt Separation
+
+Milestone 4 strictly separates generated learning prompts from student response attempts to preserve auditability, enable multiple attempts per question, and prevent prompt corruption.
+
+```text
+RevisionSession (1)
+    │
+    ├── RevisionSessionDocument (*) ── Join Table (session_id, document_id)
+    │
+    ├── RevisionQuestion (*) ───────── Immutable Generated Prompt
+    │       │                           (position, question_type, text, options,
+    │       │                            correct_answer, explanation, evidence_snippet)
+    │       │
+    │       └── RevisionAttempt (*) ── Immutable Learner Submission
+    │                                   (attempt_number, submitted_answer,
+    │                                    is_correct, score, feedback, metadata)
+```
+
+- **`RevisionSession`**: Represents a discrete learning event. Stores ownership (`owner_type`, `owner_id`), state (`in_progress` | `completed`), configuration (`difficulty`, `mode`, `question_type`), total questions, final score, and completion timestamp.
+- **`RevisionQuestion`**: Immutable generated question row. Stores question prompt, options (for MCQ), reference answer, rubric explanation, source document ID, and frozen evidence citation.
+- **`RevisionAttempt`**: Immutable learner answer submission. Stores attempt number (1-indexed per question), submitted answer, evaluation result (`is_correct`, `score`), feedback, and evaluation metadata. Enforced by unique constraint `(question_id, attempt_number)`.
+
+### 2. Dual Evaluation Engine
+
+Milestone 4 separates multiple-choice and open-ended evaluation pathways to optimize performance, prevent unnecessary LLM costs, and enforce strict quota conservation:
+
+```text
+Student Submits Answer
+          ↓
+Question Type Check
+    ├── Multiple Choice (`multiple_choice`)
+    │       ↓
+    │   Deterministic Python Evaluation (evaluate_mcq_answer)
+    │       ├── Case-insensitive string matching
+    │       ├── Option letter/number prefix matching ('A', 'B', '1', '2')
+    │       └── ZERO AI calls, ZERO guest quota consumed
+    │
+    └── Open-Ended (`open_ended`)
+            ↓
+        Empty / Trivial Check
+            ├── Empty / Sub-threshold → Deterministic 0.0 rejection (ZERO AI calls, ZERO quota)
+            └── Non-trivial Answer →
+                    ├── Check Guest Quota Pre-Call (403 if exhausted)
+                    ├── AI Evaluation via Structured Prompt Rubric
+                    │       (Score 0.0–1.0, is_correct >= 0.7, feedback, reasoning)
+                    └── Record 1 Guest AI Generation on Success
+```
+
+### 3. Authoritative Session Scoring & Completion
+
+- **Authoritative Backend Scoring**: The official session score is computed exclusively on the backend upon completion:
+  $$\text{Score} = \frac{\sum_{i=1}^{N} \text{score}(\text{latest\_attempt}(Q_i))}{N}$$
+  Unattempted questions contribute $0.0$ to the numerator, with $N$ representing `total_questions`.
+- **Completion Invariants**: Calling `POST /api/v1/revision/sessions/{session_id}/complete` transitions status to `completed`, records `completed_at`, and finalizes `score`. Completed sessions strictly reject subsequent attempt submissions (HTTP 400).
+
+### 4. Multi-Document Grounding & Provenance Isolation
+
+- **Character Budgeting**: Input text is proportionally budgeted across contributing documents (`max(1000, 30000 // len(documents))`) to ensure balanced representation without exceeding context windows.
+- **Per-Question Provenance**: Every generated question is explicitly attributed to a specific `source_document_id` and carries a verbatim `evidence_snippet`. Multi-document bindings in `RevisionSessionDocument` remain distinct from per-question grounding citations.
+
+### 5. Document Deletion Durability
+
+Revision history remains durable when source documents are deleted from the library:
+- Foreign key `RevisionQuestion.source_document_id` uses `ON DELETE SET NULL`.
+- Deleting a document removes its association from `RevisionSessionDocument` and clears `source_document_id` on affected questions, but leaves `RevisionSession`, `RevisionQuestion`, and `RevisionAttempt` rows fully intact.
+- The frozen `evidence_snippet` text and `evidence_metadata` survive document deletion.
+- Serialization layer gracefully represents deleted documents as `"Archived Document"` with `status="archived"`.
+
+### 6. Guest Lifecycle & Data Migration
+
+- **Guest Quota Rules**: Revision session creation consumes 1 AI generation. Deterministic MCQ attempts consume 0 quota. Open-ended evaluation consumes 1 AI generation only on successful evaluation. Quota exhaustion blocks new session creation and open-ended evaluation (HTTP 403 `guest_limit_reached`), while allowing deterministic MCQ practice to proceed unimpeded.
+- **Guest-to-Account Migration**: When a guest signs up via `POST /api/v1/auth/signup` with an active guest session cookie, `guest_migration_service.migrate_guest_data_to_user` atomically transfers all `RevisionSession` ownership rows (`owner_type="user"`, `owner_id=user.id`) alongside documents and conversations. Questions, attempts, and scores are preserved verbatim.
+
+### 7. Frontend Revision Workspace Architecture
+
+The frontend provides a dedicated workspace route (`#/revision`) structured into four coordinated states:
+- **Setup Launcher**: Multi-document selector (1–10 documents), mode picker (`practice`, `quiz`, `flashcards`), difficulty selector, question count slider, and question type selector (`multiple_choice`, `open_ended`, `mixed`).
+- **Active Runner**: Focused question presentation, option selector, open-ended textarea, instant submission feedback, retry mechanism, and keyboard navigation.
+- **Session History**: Owner-scoped list of past sessions displaying scores, completion badges, and document chips.
+- **Results Review & Resume**: In-progress sessions can be resumed directly at the first unattempted question without question regeneration. Completed sessions render official backend scores, attempt timelines, and source document provenance citations with archived document resilience.
+

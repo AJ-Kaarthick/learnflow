@@ -20,11 +20,21 @@ function RevisionSetup({
   onStartSession,
   isCreating = false,
   creationError = null,
+  setupState: controlledSetupState,
+  onSetupStateChange,
+  selectedDocuments: controlledSelectedDocuments,
+  onSelectedDocumentsChange,
   initialSetupState = null,
   initialSelectedDocuments = [],
 }) {
-  const [setupState, setSetupState] = useState(() => initialSetupState || createInitialSetupState());
-  const [selectedDocuments, setSelectedDocuments] = useState(() => initialSelectedDocuments || []);
+  const [internalSetupState, setInternalSetupState] = useState(() => initialSetupState || createInitialSetupState());
+  const [internalSelectedDocuments, setInternalSelectedDocuments] = useState(() => initialSelectedDocuments || []);
+
+  const setupState = controlledSetupState !== undefined ? controlledSetupState : internalSetupState;
+  const setSetupState = onSetupStateChange || setInternalSetupState;
+
+  const selectedDocuments = controlledSelectedDocuments !== undefined ? controlledSelectedDocuments : internalSelectedDocuments;
+  const setSelectedDocuments = onSelectedDocumentsChange || setInternalSelectedDocuments;
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [refreshSignal, setRefreshSignal] = useState(0);
 

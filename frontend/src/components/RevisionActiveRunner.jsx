@@ -451,12 +451,12 @@ function RevisionActiveRunner({ session, onExit, onReview }) {
                   <p className="text-sm font-bold">
                     {isCorrect ? "Correct!" : "Needs Improvement"}
                   </p>
-                  <p className="text-xs text-slate-600">
+                  <p className="text-xs opacity-80">
                     Attempt #{latestAttempt.attempt_number}
                   </p>
                 </div>
               </div>
-              <span className="rounded-md bg-white/80 px-2.5 py-1 text-xs font-bold shadow-2xs">
+              <span className="rounded-md border border-slate-200 bg-surface px-2.5 py-1 text-xs font-bold text-slate-800 shadow-2xs">
                 Score: {formatPercentageScore(latestAttempt.score)}
               </span>
             </div>

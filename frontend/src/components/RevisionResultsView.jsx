@@ -148,6 +148,13 @@ function RevisionResultsView({ session, onBackToHistory, onRetake }) {
                 )
               : null;
 
+          const bestAttempt =
+            attempts.length > 1
+              ? attempts.reduce((best, curr) =>
+                  curr.score > best.score ? curr : best
+                )
+              : null;
+
           const isMCQ = question.question_type === "multiple_choice";
           const isArchived = isDocumentArchived(question);
           const docTitle = getQuestionDocumentTitle(question);
@@ -181,6 +188,14 @@ function RevisionResultsView({ session, onBackToHistory, onRetake }) {
                   {attempts.length > 0 && (
                     <span className="text-xs text-slate-400">
                       {attempts.length} {attempts.length === 1 ? "attempt" : "attempts"}
+                    </span>
+                  )}
+                  {attempts.length > 1 && bestAttempt && (
+                    <span
+                      className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      title={`Best historical attempt: Attempt #${bestAttempt.attempt_number} with score ${formatPercentageScore(bestAttempt.score)}`}
+                    >
+                      Best Attempt: {formatPercentageScore(bestAttempt.score)}
                     </span>
                   )}
                 </div>
@@ -293,18 +308,25 @@ function RevisionResultsView({ session, onBackToHistory, onRetake }) {
                       <span className="text-xs font-bold uppercase tracking-wider">
                         {isCorrect ? "Correct" : "Needs Improvement"}
                       </span>
-                      <span className="text-xs text-slate-500 font-normal">
+                      <span className="text-xs opacity-80 font-normal">
                         (Latest Attempt #{latestAttempt.attempt_number})
                       </span>
                     </div>
-                    <span className="rounded-md bg-white/90 px-2 py-0.5 text-xs font-bold shadow-2xs">
-                      Score: {formatPercentageScore(latestAttempt.score)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {attempts.length > 1 && bestAttempt && bestAttempt.attempt_number !== latestAttempt.attempt_number && (
+                        <span className="text-xs font-medium opacity-85">
+                          Best: {formatPercentageScore(bestAttempt.score)}
+                        </span>
+                      )}
+                      <span className="rounded-md border border-slate-200 bg-surface px-2.5 py-0.5 text-xs font-bold text-slate-800 shadow-2xs">
+                        Score: {formatPercentageScore(latestAttempt.score)}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Open-Ended Learner Answer Display */}
                   {!isMCQ && latestAttempt.submitted_answer && (
-                    <div className="mt-3 rounded-md bg-white/80 p-3 text-xs text-slate-800">
+                    <div className="mt-3 rounded-md border border-slate-200/60 bg-surface/90 p-3 text-xs text-slate-800">
                       <p className="font-semibold text-slate-500 text-[11px] uppercase tracking-wider">
                         Your Submitted Response
                       </p>
@@ -315,15 +337,15 @@ function RevisionResultsView({ session, onBackToHistory, onRetake }) {
                   {/* Evaluator Feedback */}
                   {latestAttempt.feedback && (
                     <div className="mt-3 text-xs leading-relaxed text-slate-800">
-                      <strong className="font-semibold text-slate-700">Feedback: </strong>
+                      <strong className="font-semibold text-slate-900">Feedback: </strong>
                       {latestAttempt.feedback}
                     </div>
                   )}
 
                   {/* Model / Reference Answer */}
                   {(latestAttempt.correct_answer || question.correct_answer) && !isMCQ && (
-                    <div className="mt-3 rounded-md bg-emerald-100/60 p-3 text-xs text-emerald-950">
-                      <p className="font-semibold text-[11px] uppercase tracking-wider text-emerald-800">
+                    <div className="mt-3 rounded-md border border-emerald-300/40 bg-emerald-100/40 p-3 text-xs text-emerald-950 dark:text-emerald-100">
+                      <p className="font-semibold text-[11px] uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
                         Model Answer / Reference
                       </p>
                       <p className="mt-1 leading-relaxed">
@@ -335,7 +357,7 @@ function RevisionResultsView({ session, onBackToHistory, onRetake }) {
                   {/* Explanation */}
                   {(latestAttempt.explanation || question.explanation) && (
                     <div className="mt-3 text-xs leading-relaxed text-slate-700">
-                      <strong className="font-semibold text-slate-800">Explanation: </strong>
+                      <strong className="font-semibold text-slate-900">Explanation: </strong>
                       {latestAttempt.explanation || question.explanation}
                     </div>
                   )}
@@ -364,6 +386,8 @@ function RevisionResultsView({ session, onBackToHistory, onRetake }) {
                     <div className="mt-3 space-y-2.5">
                       {attempts.map((att) => {
                         const isLatest = att.attempt_number === latestAttempt?.attempt_number;
+                        const isBestNonLatest =
+                          !isLatest && bestAttempt && att.attempt_number === bestAttempt.attempt_number;
                         return (
                           <div
                             key={att.id || att.attempt_number}
@@ -377,8 +401,13 @@ function RevisionResultsView({ session, onBackToHistory, onRetake }) {
                               <span className="font-bold text-slate-700">
                                 Attempt #{att.attempt_number}
                                 {isLatest && (
-                                  <span className="ml-2 rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-semibold text-accent-700">
+                                  <span className="ml-2 rounded-full border border-accent-300/40 bg-accent-100 px-2 py-0.5 text-[10px] font-semibold text-accent-800 dark:text-accent-200">
                                     Latest (Official)
+                                  </span>
+                                )}
+                                {isBestNonLatest && (
+                                  <span className="ml-2 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                                    Best Attempt
                                   </span>
                                 )}
                               </span>

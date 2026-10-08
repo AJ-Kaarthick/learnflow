@@ -37,6 +37,9 @@ LearnFlow is an AI-powered study workspace that transforms PDF, DOCX, PPTX, and 
 - Learn Mode with AI-generated curriculum outlines and RAG-grounded topic deep-dives
 - Contextual learning controls (Explain, Simplify, Deep Dive, Example; Overview, Standard, In-depth)
 - Visualize Mode with interactive concept network knowledge graphs and source citations
+- Revision Experience 2.0 with persistent multi-document sessions, deterministic MCQ scoring, and AI open-ended evaluation
+- Question != Attempt separation supporting immutable learner response tracking
+- Revision session history, in-progress resume, and results review with source document provenance
 
 ---
 
@@ -87,6 +90,16 @@ LearnFlow currently supports:
 - ⚙️ Workspace personalization
 - 📐 Comfortable & Compact density modes
 - ♿ Accessibility improvements
+- 🎯 Revision Experience 2.0 with dedicated Revision workspace
+- 🗂️ Multi-document Revision covering 1 to 10 documents
+- 🤖 AI-generated grounded practice questions (MCQ, Open-ended, Mixed)
+- ⚡ Deterministic, zero-quota MCQ evaluation
+- 🧠 Rubric-guided AI evaluation for open-ended answers
+- 📊 Immutable attempt history and Question != Attempt separation
+- 🏆 Official backend session scoring and completion tracking
+- 🕒 Revision history list, in-progress session resume, and detailed results review
+- 🔍 Per-question source document attribution and frozen evidence snippet citations
+- 🛡️ Archived document durability when underlying files are deleted
 
 ---
 
@@ -555,15 +568,61 @@ LearnFlow currently supports:
 - High-contrast semantic tokens across Light/Dark modes and all 4 accent themes
 - Complete test suite passing: 558 backend tests, 221 frontend tests, 0 build errors
 
-#### Milestone 4 — Revision Mode
-- Dedicated Revision environment
-- Practice questions
-- Answer evaluation
-- Quiz sessions
-- Flashcards
-- Revision history
-- Difficulty-aware practice
-- Document/topic-based revision
+#### Milestone 4 — Revision Experience 2.0 ✅
+
+- Dedicated Revision workspace (`#/revision`)
+- Multi-document Revision covering 1 to 10 documents
+- Persistent Revision sessions (`RevisionSession`, `RevisionSessionDocument`, `RevisionQuestion`, `RevisionAttempt`)
+- Grounded question generation (MCQ, open-ended, and mixed)
+- Deterministic MCQ evaluation (zero AI quota consumed)
+- AI-assisted open-ended answer evaluation with rubric criteria
+- Immutable attempt history (`Question != Attempt`)
+- Official backend session scoring and completion tracking
+- Revision history list, in-progress resume, and results review
+- Per-question source document provenance and frozen evidence citations
+- Document deletion durability with graceful archived document fallback
+- Guest lifecycle support, quota enforcement, and guest-to-account migration
+
+##### Phase 1 — Revision Session Creation & Question Generation Backend ✅
+- Revision REST API router (`POST /api/v1/revision/sessions`, `GET /api/v1/revision/sessions`, `GET /api/v1/revision/sessions/{id}`)
+- Multi-document readiness validation and proportional character budgeting
+- Grounded prompt construction and resilient JSON question extraction
+- Atomic session and question persistence with ownership scoping
+- Guest AI generation quota pre-check and post-generation accounting
+- Comprehensive Phase 1 test suite (24 tests)
+
+##### Phase 2 — Answer Evaluation Engine & Attempt Tracking Backend ✅
+- Question attempt endpoint (`POST /api/v1/revision/sessions/{session_id}/questions/{question_id}/attempts`)
+- Deterministic, zero-quota MCQ evaluator normalizing strings, indices, and letter labels
+- Rubric-guided AI evaluator for open-ended answers with structured JSON scoring
+- Atomic `RevisionAttempt` record persistence with attempt numbers and timestamps
+- Authoritative session completion endpoint (`POST /api/v1/revision/sessions/{session_id}/complete`)
+- Comprehensive Phase 2 test suite (23 tests)
+
+##### Phase 3 — Frontend Revision Workspace & Active Session Runner ✅
+- Dedicated Revision top-level route and navigation bar link (`#/revision`)
+- Interactive setup launcher with multi-document selection (1–10 docs), modes, and difficulties
+- Active session runner with keyboard shortcuts, timer, and question navigation dots
+- Interactive MCQ option selection and open-ended text answer composer
+- Immediate post-submission feedback cards with score, correct answer, explanation, and evidence
+- Attempt retries with immutable history accumulation
+
+##### Phase 4 — Session History, Results Review, Resume & Multi-Document Polish ✅
+- Revision history list with session cards displaying score, status, date, and document chips
+- In-progress session resume jumping directly to the first unattempted question
+- Completed results review mode displaying official score and question-by-question outcomes
+- Per-question attempt timeline showing all historical attempts
+- Provenance viewer with source document attribution and frozen evidence quotes
+- Graceful rendering of deleted source documents as "Archived Document"
+- "Retake Revision" action pre-filling setup configuration for a fresh session
+
+##### Phase 5 — Cross-Phase Integration, Guest Migration, QA & Documentation ✅
+- End-to-end cross-phase integration test suite (`test_m4_integration.py`)
+- Verified guest-to-account migration preserving revision sessions, questions, and attempts
+- Verified document deletion durability (`ON DELETE SET NULL` + frozen evidence citations)
+- Verified multi-document provenance isolation and cross-identity access control
+- Verified guest AI quota accounting (0 for MCQ, 1 for open-ended on success)
+- Full automated test suite passing: 612 backend tests, 288 frontend tests, clean production build
 
 #### Milestone 5 — Learning Intelligence & Progress
 - Topic-level performance tracking

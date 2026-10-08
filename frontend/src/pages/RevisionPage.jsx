@@ -5,7 +5,7 @@ import RevisionHistoryView from "../components/RevisionHistoryView.jsx";
 import RevisionResultsView from "../components/RevisionResultsView.jsx";
 import RevisionSetup from "../components/RevisionSetup.jsx";
 import { hydrateDocumentIds } from "../utils/documentHydration.js";
-import { prepareRetakeSetup } from "../utils/revisionState.js";
+import { createInitialSetupState, prepareRetakeSetup } from "../utils/revisionState.js";
 
 /**
  * Top-level page for Revision Experience 2.0 (V3 Milestone 4 Phase 4).
@@ -23,9 +23,9 @@ function RevisionPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [creationError, setCreationError] = useState(null);
 
-  // Retake configuration state
-  const [retakeSetupState, setRetakeSetupState] = useState(null);
-  const [retakeDocuments, setRetakeDocuments] = useState([]);
+  // Setup form state preserved at page level across launcher <-> history view switches
+  const [setupState, setSetupState] = useState(() => createInitialSetupState());
+  const [selectedDocuments, setSelectedDocuments] = useState([]);
 
   async function handleStartSession(payload) {
     setIsCreating(true);
@@ -35,9 +35,9 @@ function RevisionPage() {
       const session = await createRevisionSession(payload);
       setActiveSession(session);
       setViewMode("runner");
-      // Reset any retake state once session is created
-      setRetakeSetupState(null);
-      setRetakeDocuments([]);
+      // Reset setup state for subsequent new sessions
+      setSetupState(createInitialSetupState());
+      setSelectedDocuments([]);
     } catch (error) {
       setCreationError(error);
     } finally {
@@ -61,14 +61,14 @@ function RevisionPage() {
   async function handleRetakeSession(sessionDetail) {
     // Retake creates a brand new session using the original configuration without mutating the completed session
     const setupConfig = prepareRetakeSetup(sessionDetail);
-    setRetakeSetupState(setupConfig);
+    setSetupState(setupConfig);
 
     // Hydrate existing documents; deleted documents will be automatically omitted
     if (Array.isArray(sessionDetail.document_ids) && sessionDetail.document_ids.length > 0) {
       const docs = await hydrateDocumentIds(sessionDetail.document_ids);
-      setRetakeDocuments(docs);
+      setSelectedDocuments(docs);
     } else {
-      setRetakeDocuments([]);
+      setSelectedDocuments([]);
     }
 
     setActiveSession(null);
@@ -85,26 +85,20 @@ function RevisionPage() {
   function handleExitToLauncher() {
     setActiveSession(null);
     setReviewingSession(null);
-    setRetakeSetupState(null);
-    setRetakeDocuments([]);
     setViewMode("launcher");
   }
 
   const showSubNav = viewMode === "launcher" || viewMode === "history";
 
   return (
-    <div className="min-h-full bg-slate-50/50 py-6">
+    <main aria-label="Revision" className="min-w-0 flex-1 min-h-0 overflow-y-auto bg-slate-50/50 py-6">
       {/* Sub-Navigation between New Session and History */}
       {showSubNav && (
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mb-6">
           <div className="inline-flex rounded-lg border border-slate-200 bg-surface p-1 shadow-2xs">
             <button
               type="button"
-              onClick={() => {
-                setRetakeSetupState(null);
-                setRetakeDocuments([]);
-                setViewMode("launcher");
-              }}
+              onClick={() => setViewMode("launcher")}
               className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
                 viewMode === "launcher"
                   ? "bg-accent-600 text-white shadow-xs"
@@ -156,15 +150,16 @@ function RevisionPage() {
 
       {viewMode === "launcher" && (
         <RevisionSetup
-          key={retakeSetupState?.title || "fresh-setup"}
+          setupState={setupState}
+          onSetupStateChange={setSetupState}
+          selectedDocuments={selectedDocuments}
+          onSelectedDocumentsChange={setSelectedDocuments}
           onStartSession={handleStartSession}
           isCreating={isCreating}
           creationError={creationError}
-          initialSetupState={retakeSetupState}
-          initialSelectedDocuments={retakeDocuments}
         />
       )}
-    </div>
+    </main>
   );
 }
 

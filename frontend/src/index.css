@@ -137,7 +137,20 @@
      lighter text, darker/translucent backgrounds, so they read as
      tinted panels rather than paper-white blobs on a dark page. */
   --color-emerald-50: color-mix(in oklch, var(--color-emerald-500) 18%, transparent);
+  --color-emerald-200: color-mix(in oklch, var(--color-emerald-500) 35%, transparent);
+  --color-emerald-300: color-mix(in oklch, var(--color-emerald-500) 45%, transparent);
+  --color-emerald-600: #34d399;
   --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-emerald-900: #d1fae5;
+  --color-emerald-950: #ecfdf5;
+  --color-rose-50: color-mix(in oklch, var(--color-rose-500) 18%, transparent);
+  --color-rose-200: color-mix(in oklch, var(--color-rose-500) 35%, transparent);
+  --color-rose-300: color-mix(in oklch, var(--color-rose-500) 45%, transparent);
+  --color-rose-600: #f43f5e;
+  --color-rose-700: #fda4af;
+  --color-rose-800: #fecdd3;
+  --color-rose-900: #ffe4e6;
   --color-red-50: color-mix(in oklch, var(--color-red-500) 18%, transparent);
   --color-red-200: color-mix(in oklch, var(--color-red-500) 35%, transparent);
   --color-red-300: color-mix(in oklch, var(--color-red-500) 45%, transparent);

@@ -128,21 +128,32 @@ export function validateSetupState({
 /**
  * Builds the payload for POST /api/v1/revision/sessions.
  */
-export function buildCreateSessionPayload(setupState, selectedDocuments) {
-  const documentIds = selectedDocuments
-    .filter((doc) => doc && doc.status === "ready" && (doc.character_count ?? 0) > 0)
+export function buildCreateSessionPayload(setupState = {}, selectedDocuments = []) {
+  const documentIds = (selectedDocuments || [])
+    .filter((doc) => {
+      if (!doc || !doc.id) return false;
+      if (doc.status && doc.status !== "ready") return false;
+      if (typeof doc.character_count === "number" && doc.character_count <= 0) return false;
+      return true;
+    })
     .map((doc) => doc.id);
+
+  const difficulty = setupState.difficulty || "intermediate";
+  const mode = setupState.mode || "practice";
+  const questionType = setupState.questionType || setupState.question_type || "multiple_choice";
+  const questionCount = Number.parseInt(setupState.questionCount ?? setupState.question_count, 10) || DEFAULT_REVISION_QUESTION_COUNT;
 
   const payload = {
     document_ids: documentIds,
-    difficulty: setupState.difficulty || "intermediate",
-    mode: setupState.mode || "practice",
-    question_type: setupState.questionType || "multiple_choice",
-    question_count: Number.parseInt(setupState.questionCount, 10) || DEFAULT_REVISION_QUESTION_COUNT,
+    difficulty,
+    mode,
+    question_type: questionType,
+    question_count: questionCount,
   };
 
-  if (setupState.title && setupState.title.trim()) {
-    payload.title = setupState.title.trim();
+  const rawTitle = setupState.title;
+  if (rawTitle && typeof rawTitle === "string" && rawTitle.trim()) {
+    payload.title = rawTitle.trim();
   }
 
   return payload;
