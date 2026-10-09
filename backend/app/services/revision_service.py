@@ -1,4 +1,7 @@
+import json
 import logging
+import re
+import unicodedata
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
@@ -16,6 +19,49 @@ logger = logging.getLogger(__name__)
 # Guarantees the prompt stays safely within model context limits for 1-10 documents.
 MAX_REVISION_TOTAL_CHARS = 16000
 
+GENERIC_TOPIC_PLACEHOLDERS = {
+    "general",
+    "n/a",
+    "na",
+    "none",
+    "topic",
+    "document",
+    "introduction",
+    "overview",
+    "untitled",
+    "unknown",
+}
+
+
+class UnsupportedTopicError(Exception):
+    """
+    Raised when the selected document excerpts do not contain sufficient
+    substantive content for the requested topic focus.
+    """
+
+    pass
+
+
+def clean_and_normalize_topic(raw_value: Any) -> Optional[tuple[str, str]]:
+    """
+    Normalizes a topic string and returns (display_label, topic_key) if valid,
+    or None if missing, blank, generic, or invalid.
+    """
+    if not raw_value or not isinstance(raw_value, str):
+        return None
+    if any(unicodedata.category(c).startswith("C") for c in raw_value):
+        return None
+    normalized = unicodedata.normalize("NFKC", raw_value)
+    cleaned = re.sub(r"\s+", " ", normalized).strip()
+    cleaned = cleaned.strip("\"'`[]{}()")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if len(cleaned) < 2 or len(cleaned) > 100:
+        return None
+    key = cleaned.casefold()
+    if key in GENERIC_TOPIC_PLACEHOLDERS:
+        return None
+    return cleaned, key
+
 
 def build_revision_prompt(
     documents: list[Document],
@@ -23,10 +69,12 @@ def build_revision_prompt(
     difficulty: str = "intermediate",
     mode: str = "practice",
     question_type: str = "multiple_choice",
+    topic_focus: Optional[str] = None,
 ) -> str:
     """
     Builds the bounded-context prompt for generating grounded revision questions.
     Distributes available character budget proportionally across selected documents.
+    Safely encodes and delimits untrusted topic_focus input when present.
     """
     if not documents:
         raise ValueError("At least one document is required to build a revision prompt.")
@@ -101,9 +149,23 @@ def build_revision_prompt(
             "- Set 'correct_answer' to match one of the 4 options verbatim."
         )
 
+    # 4. Target topic focus instruction (if provided)
+    target_topic_instruction = ""
+    if topic_focus:
+        safe_topic_raw = re.sub(r"[\r\n\x00-\x1f\x7f-\x9f]", "", topic_focus).strip()
+        encoded_topic = json.dumps(safe_topic_raw)
+        target_topic_instruction = (
+            f"TARGET TOPIC FOCUS:\n"
+            f"The learner specifically requested questions assessing the topic/concept: {encoded_topic}\n\n"
+            f"GROUNDING & TARGETED PRACTICE CONSTRAINTS:\n"
+            f"- You MUST generate questions that assess the specific topic {encoded_topic} ONLY if that topic is directly substantiated by the provided document excerpts below.\n"
+            f"- If the provided document excerpts DO NOT contain sufficient information to generate questions on {encoded_topic}, DO NOT invent facts, hallucinate information, or generate questions about unrelated topics. In that case, you MUST return an empty questions list: []\n\n"
+        )
+
     return (
         "You are an expert tutor and exam creator. Based on the provided document excerpts below, "
         f"create exactly {question_count} high-quality revision questions for a student.\n\n"
+        f"{target_topic_instruction}"
         f"{difficulty_instruction}\n\n"
         f"{mode_instruction}\n\n"
         f"{type_instruction}\n\n"
@@ -111,7 +173,8 @@ def build_revision_prompt(
         "- Every question MUST be grounded strictly in the provided document excerpts.\n"
         "- In 'source_document_id', specify the exact Document ID where the supporting evidence appears.\n"
         "- In 'evidence_snippet', quote the exact sentence or passage from that document that proves the correct answer.\n"
-        "- In 'explanation', explain clearly why the correct answer is right and why distractors are wrong (if multiple-choice).\n\n"
+        "- In 'explanation', explain clearly why the correct answer is right and why distractors are wrong (if multiple-choice).\n"
+        "- In 'topic', provide a concise concept or subtopic name (e.g. 1 to 4 words) that this question tests, grounded in the excerpt.\n\n"
         "Respond with ONLY a JSON array of objects — no markdown code fences, no commentary before or after.\n"
         "Each JSON object must follow this exact shape:\n"
         "[\n"
@@ -122,7 +185,8 @@ def build_revision_prompt(
         '    "correct_answer": "Option A",\n'
         '    "explanation": "Option A is correct because...",\n'
         '    "source_document_id": "<document_id_from_above>",\n'
-        '    "evidence_snippet": "Verbatim quote from the document text proving this answer."\n'
+        '    "evidence_snippet": "Verbatim quote from the document text proving this answer.",\n'
+        '    "topic": "Photosynthesis Reactions"\n'
         "  }\n"
         "]\n\n"
         f"Source Documents:\n{context_str}"
@@ -136,12 +200,21 @@ def parse_and_validate_questions(
     requested_type: str,
     difficulty: str,
     mode: str,
+    topic_focus: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """
     Parses raw LLM text into a validated list of revision question dictionaries.
-    Ensures correct types, valid source document references, and evidence snippets.
+    Ensures correct types, valid source document references, evidence snippets,
+    and topic attribution.
     """
     data = extract_json(raw_text)
+
+    # If topic_focus was requested and the model returned an explicit unsupported/empty indicator
+    if topic_focus and isinstance(data, dict):
+        if data.get("unsupported") or data.get("error") == "unsupported_topic":
+            raise UnsupportedTopicError(
+                f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
+            )
 
     items: list[Any] = []
     if isinstance(data, list):
@@ -151,13 +224,23 @@ def parse_and_validate_questions(
             items = data["questions"]
         elif "items" in data and isinstance(data["items"], list):
             items = data["items"]
+        elif not data:
+            items = []
         else:
             # Single object fallback
             items = [data]
     else:
+        if topic_focus:
+            raise UnsupportedTopicError(
+                f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
+            )
         raise AIProviderError("AI did not return a valid list of questions.")
 
     if not items:
+        if topic_focus:
+            raise UnsupportedTopicError(
+                f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
+            )
         raise AIProviderError("AI response contained an empty questions list.")
 
     docs_by_id = {doc.id: doc for doc in documents}
@@ -247,11 +330,34 @@ def parse_and_validate_questions(
             doc_text = (matched_doc.extracted_text or "").strip()
             evidence = doc_text[:250] if doc_text else f"Excerpt from {matched_doc.original_filename}"
 
-        evidence_meta = {
+        # Resolve evidence metadata & topic attribution
+        evidence_meta: dict[str, Any] = {
+            "source_document_id": matched_doc.id,
             "document_title": matched_doc.original_filename,
             "difficulty": difficulty,
             "mode": mode,
         }
+
+        if topic_focus:
+            norm_focus = clean_and_normalize_topic(topic_focus)
+            if norm_focus:
+                evidence_meta["topic"] = norm_focus[0]
+                evidence_meta["topic_key"] = norm_focus[1]
+            else:
+                evidence_meta["topic"] = topic_focus.strip()
+                evidence_meta["topic_key"] = topic_focus.strip().casefold()
+
+            sub_item = item.get("subtopic") or item.get("topic")
+            sub_norm = clean_and_normalize_topic(sub_item)
+            if sub_norm and sub_norm[1] != evidence_meta["topic_key"]:
+                evidence_meta["subtopic"] = sub_norm[0]
+                evidence_meta["subtopic_key"] = sub_norm[1]
+        else:
+            item_topic = item.get("topic") or item.get("subtopic")
+            norm_topic = clean_and_normalize_topic(item_topic)
+            if norm_topic:
+                evidence_meta["topic"] = norm_topic[0]
+                evidence_meta["topic_key"] = norm_topic[1]
 
         valid_questions.append(
             {
@@ -271,6 +377,10 @@ def parse_and_validate_questions(
             break
 
     if not valid_questions:
+        if topic_focus:
+            raise UnsupportedTopicError(
+                f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
+            )
         raise AIProviderError("AI did not produce any valid revision questions.")
 
     return valid_questions
@@ -304,6 +414,7 @@ async def generate_revision_session(
         difficulty=payload.difficulty,
         mode=payload.mode,
         question_type=payload.question_type,
+        topic_focus=payload.topic_focus,
     )
 
     raw_text = await ai_provider.generate_text(prompt)
@@ -316,6 +427,7 @@ async def generate_revision_session(
         requested_type=payload.question_type,
         difficulty=payload.difficulty,
         mode=payload.mode,
+        topic_focus=payload.topic_focus,
     )
 
     # 4. Atomically persist session, associations, and questions
@@ -330,6 +442,7 @@ async def generate_revision_session(
                 "mode": payload.mode,
                 "question_type": payload.question_type,
                 "question_count": payload.question_count,
+                "topic_focus": payload.topic_focus,
             },
             total_questions=len(parsed_questions),
             score=None,
@@ -365,6 +478,9 @@ async def generate_revision_session(
         db.commit()
         db.refresh(session)
         return session
+    except (UnsupportedTopicError, AIProviderError):
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         logger.error(f"Failed to persist revision session: {exc}", exc_info=True)

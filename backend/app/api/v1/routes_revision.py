@@ -24,7 +24,7 @@ from app.services.evaluation_service import (
     record_question_attempt,
 )
 from app.services.guest_limit_service import GuestLimitExceededError, GuestLimitType
-from app.services.revision_service import generate_revision_session
+from app.services.revision_service import UnsupportedTopicError, generate_revision_session
 
 router = APIRouter(prefix="/revision", tags=["revision"])
 
@@ -191,6 +191,8 @@ async def create_revision_session(
             payload=payload,
             ai_provider=ai_provider,
         )
+    except UnsupportedTopicError as error:
+        raise HTTPException(status_code=422, detail=str(error))
     except AIProviderError as error:
         raise HTTPException(status_code=502, detail=str(error))
 

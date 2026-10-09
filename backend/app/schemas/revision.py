@@ -1,3 +1,5 @@
+import re
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
@@ -16,6 +18,32 @@ RevisionDifficulty = Literal["beginner", "intermediate", "advanced"]
 RevisionMode = Literal["practice", "quiz", "flashcards"]
 RevisionQuestionType = Literal["multiple_choice", "open_ended"]
 RevisionQuestionTypeFilter = Literal["multiple_choice", "open_ended", "mixed"]
+
+
+def normalize_topic_focus(value: Optional[str]) -> Optional[str]:
+    """
+    Validates and normalizes an untrusted topic_focus string:
+    - Rejects control characters (Unicode category C) and newlines.
+    - Applies Unicode NFKC normalization.
+    - Strips surrounding quotes, backticks, brackets, and whitespace.
+    - Collapses internal whitespace runs.
+    - Enforces length between 2 and 100 characters after normalization.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("topic_focus must be a string.")
+    if any(unicodedata.category(c).startswith("C") for c in value):
+        raise ValueError("topic_focus must not contain control characters or newlines.")
+    if "\r" in value or "\n" in value or "\x00" in value:
+        raise ValueError("topic_focus must not contain control characters or newlines.")
+    normalized = unicodedata.normalize("NFKC", value)
+    cleaned = re.sub(r"\s+", " ", normalized).strip()
+    cleaned = cleaned.strip("\"'`[]{}()")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if len(cleaned) < 2 or len(cleaned) > 100:
+        raise ValueError("topic_focus must be between 2 and 100 characters after normalization.")
+    return cleaned
 
 
 def _assume_utc(value: object) -> object:
@@ -43,6 +71,7 @@ class RevisionSessionCreateRequest(BaseModel):
         ge=MIN_QUESTION_COUNT,
         le=MAX_QUESTION_COUNT,
     )
+    topic_focus: Optional[str] = Field(default=None)
 
     @field_validator("document_ids")
     @classmethod
@@ -65,6 +94,11 @@ class RevisionSessionCreateRequest(BaseModel):
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("topic_focus")
+    @classmethod
+    def clean_topic_focus(cls, value: Optional[str]) -> Optional[str]:
+        return normalize_topic_focus(value)
 
 
 class RevisionAttemptSubmitRequest(BaseModel):
