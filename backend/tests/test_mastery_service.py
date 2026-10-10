@@ -1632,3 +1632,364 @@ def test_api_targeted_fewer_questions_than_requested_fails_entirely(
     db_session.refresh(guest)
     assert guest.ai_generation_count == 0
     assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+
+def test_api_targeted_mixed_mcq_missing_options_fails_entirely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a targeted revision request with mixed question type where an MCQ item
+    is missing options fails entirely with HTTP 502, consumes 0 quota, and persists no session.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-mix-no-opt-{uuid.uuid4().hex[:8]}",
+        original_filename="bio.pdf",
+        stored_filename="bio.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "Explain how mitochondria produce cellular energy.",
+                "question_type": "open_ended",
+                "options": None,
+                "correct_answer": "Mitochondria produce ATP through aerobic cellular respiration.",
+                "explanation": "ATP is the energy currency synthesized in mitochondria.",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+            {
+                "question_text": "Which organelle generates ATP?",
+                "question_type": "multiple_choice",
+                "options": None,  # Missing options for an MCQ in mixed mode!
+                "correct_answer": "Mitochondria",
+                "explanation": "Mitochondria are the powerhouses of the cell.",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+        ],
+    })
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Cellular Respiration",
+        "question_count": 2,
+        "question_type": "mixed",
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+
+def test_api_targeted_mixed_mcq_insufficient_options_fails_entirely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a targeted revision request with mixed question type where an MCQ item
+    has fewer than 2 valid options fails entirely with HTTP 502, consumes 0 quota, and persists no session.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-mix-ins-opt-{uuid.uuid4().hex[:8]}",
+        original_filename="bio.pdf",
+        stored_filename="bio.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "Explain how mitochondria produce cellular energy.",
+                "question_type": "open_ended",
+                "options": None,
+                "correct_answer": "Mitochondria produce ATP through aerobic cellular respiration.",
+                "explanation": "ATP is the energy currency synthesized in mitochondria.",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+            {
+                "question_text": "Which organelle generates ATP?",
+                "question_type": "multiple_choice",
+                "options": ["Mitochondria", "   "],  # Only 1 non-empty option
+                "correct_answer": "Mitochondria",
+                "explanation": "Mitochondria are the powerhouses of the cell.",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+        ],
+    })
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Cellular Respiration",
+        "question_count": 2,
+        "question_type": "mixed",
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+
+def test_api_targeted_excess_questions_rejected_fails_entirely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a targeted revision request where the AI returns more questions than requested
+    (excess questions) fails entirely with HTTP 502, consumes 0 quota, and persists no session.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-excess-{uuid.uuid4().hex[:8]}",
+        original_filename="bio.pdf",
+        stored_filename="bio.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    # Requested 2 questions, but AI returned 3 questions
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "Valid Q1?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+            {
+                "question_text": "Valid Q2?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+            {
+                "question_text": "Excess Q3?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+        ],
+    })
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Cellular Respiration",
+        "question_count": 2,
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+
+def test_api_targeted_valid_mixed_succeeds(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a valid targeted revision request with mixed question type succeeds (HTTP 201),
+    correctly sets up open-ended and multiple-choice questions, and attributes the target topic.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-mix-ok-{uuid.uuid4().hex[:8]}",
+        original_filename="bio.pdf",
+        stored_filename="bio.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "Explain how mitochondria produce cellular energy.",
+                "question_type": "open_ended",
+                "options": None,
+                "correct_answer": "Mitochondria produce ATP through aerobic cellular respiration.",
+                "explanation": "ATP is the energy currency synthesized in mitochondria.",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+            {
+                "question_text": "Which organelle generates ATP?",
+                "question_type": "multiple_choice",
+                "options": ["Mitochondria", "Ribosome", "Nucleus", "Vacuole"],
+                "correct_answer": "Mitochondria",
+                "explanation": "Mitochondria are the powerhouses of the cell.",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+        ],
+    })
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Cellular Respiration",
+        "question_count": 2,
+        "question_type": "mixed",
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 201
+
+    session_data = res.json()
+    assert session_data["status"] == "in_progress"
+    assert len(session_data["questions"]) == 2
+
+    # Verify questions in database
+    q1 = db_session.query(RevisionQuestion).filter(
+        RevisionQuestion.session_id == session_data["id"],
+        RevisionQuestion.position == 1,
+    ).first()
+    assert q1 is not None
+    assert q1.question_type == "open_ended"
+    assert q1.options is None
+    assert q1.evidence_metadata.get("topic") == "Cellular Respiration"
+
+    q2 = db_session.query(RevisionQuestion).filter(
+        RevisionQuestion.session_id == session_data["id"],
+        RevisionQuestion.position == 2,
+    ).first()
+    assert q2 is not None
+    assert q2.question_type == "multiple_choice"
+    assert len(q2.options) == 4
+    assert q2.evidence_metadata.get("topic") == "Cellular Respiration"
+
+
+def test_api_ordinary_mixed_mcq_missing_options_degrades_to_open_ended(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that for ordinary revision generation (without topic_focus) with mixed question type,
+    an MCQ item with missing options gracefully degrades to open_ended without failing (HTTP 201).
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-ord-deg-{uuid.uuid4().hex[:8]}",
+        original_filename="bio.pdf",
+        stored_filename="bio.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    mock_ai.response_text = json.dumps([
+        {
+            "question_text": "Which organelle generates ATP?",
+            "question_type": "multiple_choice",
+            "options": ["Mitochondria", "Ribosome", "Nucleus", "Vacuole"],
+            "correct_answer": "Mitochondria",
+            "explanation": "Mitochondria generate ATP.",
+            "source_document_id": doc.id,
+            "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            "topic": "Cell Biology",
+        },
+        {
+            "question_text": "What is the primary role of aerobic respiration?",
+            "question_type": "multiple_choice",
+            "options": None,  # Missing options in ordinary mixed mode
+            "correct_answer": "To generate cellular ATP efficiently.",
+            "explanation": "Aerobic respiration generates ATP.",
+            "source_document_id": doc.id,
+            "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            "topic": "Cell Biology",
+        },
+    ])
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "question_count": 2,
+        "question_type": "mixed",
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 201
+
+    session_data = res.json()
+    assert len(session_data["questions"]) == 2
+
+    q1 = db_session.query(RevisionQuestion).filter(
+        RevisionQuestion.session_id == session_data["id"],
+        RevisionQuestion.position == 1,
+    ).first()
+    assert q1 is not None
+    assert q1.question_type == "multiple_choice"
+
+    q2 = db_session.query(RevisionQuestion).filter(
+        RevisionQuestion.session_id == session_data["id"],
+        RevisionQuestion.position == 2,
+    ).first()
+    assert q2 is not None
+    assert q2.question_type == "open_ended"
+    assert q2.options is None

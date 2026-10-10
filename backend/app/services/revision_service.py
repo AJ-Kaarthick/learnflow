@@ -317,9 +317,9 @@ def parse_and_validate_questions(
                 "Targeted revision response indicated topic was supported but provided an empty questions list."
             )
 
-        if len(raw_items) < target_count:
+        if len(raw_items) != target_count:
             raise AIProviderError(
-                f"Targeted revision response provided fewer questions ({len(raw_items)}) than requested ({target_count})."
+                f"Targeted revision response must contain exactly {target_count} questions, but got {len(raw_items)}."
             )
 
         items = raw_items
@@ -359,7 +359,7 @@ def parse_and_validate_questions(
             continue
 
         # Resolve question type
-        raw_type = str(item.get("question_type") or "").strip().lower()
+        raw_type = str(item.get("question_type") or item.get("type") or "").strip().lower()
         if requested_type == "multiple_choice":
             q_type = "multiple_choice"
         elif requested_type == "open_ended":
@@ -368,6 +368,8 @@ def parse_and_validate_questions(
             q_type = "multiple_choice"
         elif raw_type in ("open_ended", "open", "free_response"):
             q_type = "open_ended"
+        elif topic_focus and isinstance(item.get("options"), list) and item.get("options"):
+            q_type = "multiple_choice"
         else:
             q_type = "multiple_choice" if isinstance(item.get("options"), list) and len(item.get("options")) >= 2 else "open_ended"
 
@@ -377,9 +379,9 @@ def parse_and_validate_questions(
 
         if q_type == "multiple_choice":
             if not isinstance(raw_options, list) or len(raw_options) < 2:
+                if topic_focus:
+                    raise AIProviderError("Targeted multiple-choice question must include at least two options.")
                 if requested_type == "multiple_choice":
-                    if topic_focus:
-                        raise AIProviderError("Targeted multiple-choice question must include at least two options.")
                     logger.warning("MCQ item missing options; attempting fallback.")
                     continue
                 q_type = "open_ended"
@@ -389,7 +391,10 @@ def parse_and_validate_questions(
                 if len(options) < 2:
                     if topic_focus:
                         raise AIProviderError("Targeted multiple-choice question must include at least two valid options.")
-                    continue
+                    if requested_type == "multiple_choice":
+                        continue
+                    q_type = "open_ended"
+                    options = None
 
                 raw_idx = item.get("correct_answer_index")
                 if raw_idx is not None and isinstance(raw_idx, int) and 0 <= raw_idx < len(options):
@@ -491,12 +496,12 @@ def parse_and_validate_questions(
             }
         )
 
-        if len(valid_questions) >= target_count:
+        if not topic_focus and len(valid_questions) >= target_count:
             break
 
-    if topic_focus and len(valid_questions) < target_count:
+    if topic_focus and len(valid_questions) != target_count:
         raise AIProviderError(
-            f"Targeted revision produced fewer valid grounded questions ({len(valid_questions)}) than requested ({target_count})."
+            f"Targeted revision produced {len(valid_questions)} valid grounded questions, but exactly {target_count} were requested."
         )
 
     if not valid_questions:
