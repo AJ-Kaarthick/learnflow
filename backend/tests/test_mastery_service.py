@@ -831,6 +831,33 @@ def test_archived_document_provenance_and_sorting(
 # 8. API Integration: Targeted Revision & Quota Safety
 # ---------------------------------------------------------------------------
 
+def test_verify_evidence_in_document():
+    from app.services.revision_service import verify_evidence_in_document
+    doc_text = "Mitochondria generate cellular ATP via aerobic respiration. Photosynthesis converts sunlight into chemical energy."
+
+    # Exact match
+    assert verify_evidence_in_document("Photosynthesis converts sunlight into chemical energy.", doc_text) is True
+
+    # Whitespace and newlines normalization
+    assert verify_evidence_in_document("Photosynthesis   converts\n  sunlight into chemical energy.", doc_text) is True
+
+    # Quoted string
+    assert verify_evidence_in_document('"Photosynthesis converts sunlight into chemical energy."', doc_text) is True
+    assert verify_evidence_in_document("“Photosynthesis converts sunlight into chemical energy.”", doc_text) is True
+
+    # Substring clause
+    assert verify_evidence_in_document("cellular ATP via aerobic respiration", doc_text) is True
+
+    # Fabricated content
+    assert verify_evidence_in_document("Mitochondria generate nuclear fission energy.", doc_text) is False
+    assert verify_evidence_in_document("Aliens built the pyramids.", doc_text) is False
+
+    # Empty, None, or too short
+    assert verify_evidence_in_document("", doc_text) is False
+    assert verify_evidence_in_document(None, doc_text) is False
+    assert verify_evidence_in_document("ATP", doc_text) is False
+
+
 def test_api_targeted_revision_with_topic_focus(
     test_client: TestClient,
     db_session: Session,
@@ -839,18 +866,22 @@ def test_api_targeted_revision_with_topic_focus(
     mock_ai: MockMasteryAIProvider,
 ):
     cookies = _auth_cookie_for_user(test_user, db_session)
-    mock_ai.response_text = json.dumps([
-        {
-            "question_text": "How do light-dependent reactions produce ATP?",
-            "question_type": "multiple_choice",
-            "options": ["Photophosphorylation", "Fermentation", "Glycolysis", "Krebs Cycle"],
-            "correct_answer": "Photophosphorylation",
-            "explanation": "Light energy drives ATP synthesis.",
-            "source_document_id": test_document.id,
-            "evidence_snippet": "Photosynthesis converts sunlight into chemical energy.",
-            "topic": "Light Reactions",
-        }
-    ])
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Photosynthesis",
+        "questions": [
+            {
+                "question_text": "How do light-dependent reactions produce ATP?",
+                "question_type": "multiple_choice",
+                "options": ["Photophosphorylation", "Fermentation", "Glycolysis", "Krebs Cycle"],
+                "correct_answer": "Photophosphorylation",
+                "explanation": "Light energy drives ATP synthesis.",
+                "source_document_id": test_document.id,
+                "evidence_snippet": "Photosynthesis converts sunlight into chemical energy.",
+                "subtopic": "Light Reactions",
+            }
+        ],
+    })
 
     payload = {
         "document_ids": [test_document.id],
@@ -915,6 +946,316 @@ def test_api_unsupported_topic_returns_422_and_consumes_no_quota(
     # Verify no session was persisted
     count_sessions = db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count()
     assert count_sessions == 0
+
+
+def test_api_non_empty_unsupported_topic_returns_422_and_consumes_no_quota(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a response with questions that explicitly flags topic_supported: false
+    (or unsupported: true) is rejected with HTTP 422 and does NOT persist a session or consume quota.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-unsupp-{uuid.uuid4().hex[:8]}",
+        original_filename="intro_mechanics.pdf",
+        stored_filename="m2.pdf",
+        status="ready",
+        extracted_text="Newton's laws of motion explain classical kinematics.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    # Non-empty questions but explicitly unsupported
+    mock_ai.response_text = json.dumps({
+        "topic_supported": False,
+        "reason": "Excerpts do not cover Quantum Electrodynamics.",
+        "questions": [
+            {
+                "question_text": "What is Coulomb's law?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Newton's laws of motion explain classical kinematics.",
+            }
+        ],
+    })
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Quantum Electrodynamics",
+        "question_count": 1,
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 422
+    assert "not contain sufficient content" in res.json()["detail"]
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+
+    count_sessions = db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count()
+    assert count_sessions == 0
+
+
+def test_api_targeted_invalid_source_document_id_fails_safely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that targeted questions citing an invalid source document ID are not
+    silently attributed to the first document, and fail safely with 502 consuming 0 quota.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-valid-{uuid.uuid4().hex[:8]}",
+        original_filename="notes.pdf",
+        stored_filename="notes.pdf",
+        status="ready",
+        extracted_text="Photosynthesis converts sunlight into chemical energy.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    # Model cites a fabricated document ID that was not provided
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Photosynthesis",
+        "questions": [
+            {
+                "question_text": "Explain light reactions.",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": "fabricated-external-doc-id-999",
+                "evidence_snippet": "Photosynthesis converts sunlight into chemical energy.",
+            }
+        ],
+    })
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Photosynthesis",
+        "question_count": 1,
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+
+    count_sessions = db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count()
+    assert count_sessions == 0
+
+
+def test_api_targeted_missing_or_fabricated_evidence_fails_safely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that missing or fabricated evidence in targeted questions is rejected
+    without substituting an arbitrary excerpt, failing safely with 502 and consuming 0 quota.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-ev-{uuid.uuid4().hex[:8]}",
+        original_filename="biology.pdf",
+        stored_filename="b.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+
+    # Case A: Missing evidence snippet
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "What do mitochondria produce?",
+                "question_type": "multiple_choice",
+                "options": ["ATP", "Lipids", "Sugars", "DNA"],
+                "correct_answer": "ATP",
+                "source_document_id": doc.id,
+                "evidence_snippet": "",  # missing evidence snippet
+            }
+        ],
+    })
+
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Cellular Respiration",
+        "question_count": 1,
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+    # Case B: Fabricated evidence snippet (not in document text)
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "What do mitochondria produce?",
+                "question_type": "multiple_choice",
+                "options": ["ATP", "Lipids", "Sugars", "DNA"],
+                "correct_answer": "ATP",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Martians established cellular factories to produce exotic matter.",
+            }
+        ],
+    })
+
+    res2 = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res2.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+
+def test_api_targeted_malformed_structures_fail_safely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that malformed structures (bare list, missing topic_supported, contradictory empty list)
+    fail safely with HTTP 502 and consume 0 quota.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-struct-{uuid.uuid4().hex[:8]}",
+        original_filename="bio.pdf",
+        stored_filename="bio.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Cellular Respiration",
+        "question_count": 1,
+    }
+
+    # Structure 1: Bare list of questions without topic_supported wrapper
+    mock_ai.response_text = json.dumps([
+        {
+            "question_text": "What do mitochondria produce?",
+            "question_type": "multiple_choice",
+            "options": ["ATP", "Lipids", "Sugars", "DNA"],
+            "correct_answer": "ATP",
+            "source_document_id": doc.id,
+            "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+        }
+    ])
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    # Structure 2: Dict missing topic_supported confirmation
+    mock_ai.response_text = json.dumps({
+        "questions": [
+            {
+                "question_text": "What do mitochondria produce?",
+                "question_type": "multiple_choice",
+                "options": ["ATP", "Lipids", "Sugars", "DNA"],
+                "correct_answer": "ATP",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            }
+        ]
+    })
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    # Structure 3: Contradictory topic_supported: true but empty questions array
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "questions": [],
+    })
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+
+def test_api_ordinary_revision_generation_intact(
+    test_client: TestClient,
+    db_session: Session,
+    test_user: User,
+    test_document: Document,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that ordinary revision generation (without topic_focus) preserves existing behavior:
+    - Accepts standard JSON array format
+    - Gracefully falls back to first document if source_document_id missing
+    - Gracefully falls back to excerpt if evidence_snippet missing
+    """
+    cookies = _auth_cookie_for_user(test_user, db_session)
+    mock_ai.response_text = json.dumps([
+        {
+            "question_text": "What do cells use ATP for?",
+            "question_type": "multiple_choice",
+            "options": ["Energy transfer", "Insulation", "Storage", "Filtration"],
+            "correct_answer": "Energy transfer",
+            "explanation": "ATP provides energy for biochemical work.",
+            "source_document_id": "unrecognized-legacy-id",  # falls back to test_document.id
+            "evidence_snippet": "",  # falls back to excerpt in ordinary mode
+            "topic": "Cell Biology",
+        }
+    ])
+
+    payload = {
+        "document_ids": [test_document.id],
+        "question_count": 1,
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 201
+    data = res.json()
+    assert len(data["questions"]) == 1
+    q = data["questions"][0]
+    assert q["source_document_id"] == test_document.id
+    assert q["evidence_snippet"] is not None
+    assert len(q["evidence_snippet"]) > 0
 
 
 def test_api_ai_failure_returns_502_and_consumes_no_quota(

@@ -63,6 +63,29 @@ def clean_and_normalize_topic(raw_value: Any) -> Optional[tuple[str, str]]:
     return cleaned, key
 
 
+def verify_evidence_in_document(evidence: Optional[str], document_text: Optional[str]) -> bool:
+    """
+    Verifies that an evidence snippet is non-empty and actually appears in the referenced
+    document text, allowing safe whitespace normalization, quote stripping, and casing tolerance.
+    """
+    if not evidence or not document_text:
+        return False
+
+    def _normalize(s: str) -> str:
+        s = unicodedata.normalize("NFKC", s)
+        s = " ".join(s.split())
+        s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+        return s.strip()
+
+    norm_evidence = _normalize(evidence).strip("\"'`")
+    norm_doc = _normalize(document_text)
+
+    if len(norm_evidence) < 5:
+        return False
+
+    return norm_evidence.casefold() in norm_doc.casefold()
+
+
 def build_revision_prompt(
     documents: list[Document],
     question_count: int,
@@ -149,8 +172,7 @@ def build_revision_prompt(
             "- Set 'correct_answer' to match one of the 4 options verbatim."
         )
 
-    # 4. Target topic focus instruction (if provided)
-    target_topic_instruction = ""
+    # 4. Target topic focus and format instructions
     if topic_focus:
         safe_topic_raw = re.sub(r"[\r\n\x00-\x1f\x7f-\x9f]", "", topic_focus).strip()
         encoded_topic = json.dumps(safe_topic_raw)
@@ -158,8 +180,53 @@ def build_revision_prompt(
             f"TARGET TOPIC FOCUS:\n"
             f"The learner specifically requested questions assessing the topic/concept: {encoded_topic}\n\n"
             f"GROUNDING & TARGETED PRACTICE CONSTRAINTS:\n"
-            f"- You MUST generate questions that assess the specific topic {encoded_topic} ONLY if that topic is directly substantiated by the provided document excerpts below.\n"
-            f"- If the provided document excerpts DO NOT contain sufficient information to generate questions on {encoded_topic}, DO NOT invent facts, hallucinate information, or generate questions about unrelated topics. In that case, you MUST return an empty questions list: []\n\n"
+            f"- Evaluate whether the provided document excerpts directly contain sufficient evidence to generate questions specifically assessing {encoded_topic} (or legitimate subtopics thereof).\n"
+            f"- If the provided document excerpts DO NOT contain sufficient evidence for {encoded_topic}, you MUST explicitly confirm the topic is unsupported by returning 'topic_supported': false and an empty 'questions': [] array. DO NOT invent facts, hallucinate evidence, or generate questions on unrelated topics.\n"
+            f"- If the excerpts DO contain sufficient evidence for {encoded_topic}, confirm 'topic_supported': true and create grounded questions.\n\n"
+        )
+        format_instruction = (
+            "Respond with ONLY a JSON object — no markdown code fences, no commentary before or after.\n"
+            "If the topic is supported by the excerpts, respond with this exact shape:\n"
+            "{\n"
+            '  "topic_supported": true,\n'
+            f'  "topic": {encoded_topic},\n'
+            '  "questions": [\n'
+            "    {\n"
+            '      "question_text": "What is the primary function of ...?",\n'
+            '      "question_type": "multiple_choice",\n'
+            '      "options": ["Option A", "Option B", "Option C", "Option D"],\n'
+            '      "correct_answer": "Option A",\n'
+            '      "explanation": "Option A is correct because...",\n'
+            '      "source_document_id": "<exact_document_id_from_below>",\n'
+            '      "evidence_snippet": "Verbatim quote from the document text proving this answer.",\n'
+            '      "subtopic": "Concise subtopic name if applicable (or omit/null)"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n\n"
+            "If the topic is NOT supported by the excerpts, respond with this exact shape:\n"
+            "{\n"
+            '  "topic_supported": false,\n'
+            f'  "reason": "The document excerpts do not contain sufficient content for {encoded_topic}.",\n'
+            '  "questions": []\n'
+            "}"
+        )
+    else:
+        target_topic_instruction = ""
+        format_instruction = (
+            "Respond with ONLY a JSON array of objects — no markdown code fences, no commentary before or after.\n"
+            "Each JSON object must follow this exact shape:\n"
+            "[\n"
+            "  {\n"
+            '    "question_text": "What is the primary function of ...?",\n'
+            '    "question_type": "multiple_choice",\n'
+            '    "options": ["Option A", "Option B", "Option C", "Option D"],\n'
+            '    "correct_answer": "Option A",\n'
+            '    "explanation": "Option A is correct because...",\n'
+            '    "source_document_id": "<document_id_from_above>",\n'
+            '    "evidence_snippet": "Verbatim quote from the document text proving this answer.",\n'
+            '    "topic": "Photosynthesis Reactions"\n'
+            "  }\n"
+            "]"
         )
 
     return (
@@ -174,21 +241,7 @@ def build_revision_prompt(
         "- In 'source_document_id', specify the exact Document ID where the supporting evidence appears.\n"
         "- In 'evidence_snippet', quote the exact sentence or passage from that document that proves the correct answer.\n"
         "- In 'explanation', explain clearly why the correct answer is right and why distractors are wrong (if multiple-choice).\n"
-        "- In 'topic', provide a concise concept or subtopic name (e.g. 1 to 4 words) that this question tests, grounded in the excerpt.\n\n"
-        "Respond with ONLY a JSON array of objects — no markdown code fences, no commentary before or after.\n"
-        "Each JSON object must follow this exact shape:\n"
-        "[\n"
-        "  {\n"
-        '    "question_text": "What is the primary function of ...?",\n'
-        '    "question_type": "multiple_choice",\n'
-        '    "options": ["Option A", "Option B", "Option C", "Option D"],\n'
-        '    "correct_answer": "Option A",\n'
-        '    "explanation": "Option A is correct because...",\n'
-        '    "source_document_id": "<document_id_from_above>",\n'
-        '    "evidence_snippet": "Verbatim quote from the document text proving this answer.",\n'
-        '    "topic": "Photosynthesis Reactions"\n'
-        "  }\n"
-        "]\n\n"
+        f"{format_instruction}\n\n"
         f"Source Documents:\n{context_str}"
     )
 
@@ -209,42 +262,82 @@ def parse_and_validate_questions(
     """
     data = extract_json(raw_text)
 
-    # If topic_focus was requested and the model returned an explicit unsupported/empty indicator
-    if topic_focus and isinstance(data, dict):
-        if data.get("unsupported") or data.get("error") == "unsupported_topic":
-            raise UnsupportedTopicError(
-                f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
-            )
-
-    items: list[Any] = []
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict):
-        if "questions" in data and isinstance(data["questions"], list):
-            items = data["questions"]
-        elif "items" in data and isinstance(data["items"], list):
-            items = data["items"]
-        elif not data:
-            items = []
-        else:
-            # Single object fallback
-            items = [data]
-    else:
-        if topic_focus:
-            raise UnsupportedTopicError(
-                f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
-            )
-        raise AIProviderError("AI did not return a valid list of questions.")
-
-    if not items:
-        if topic_focus:
-            raise UnsupportedTopicError(
-                f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
-            )
-        raise AIProviderError("AI response contained an empty questions list.")
-
     docs_by_id = {doc.id: doc for doc in documents}
     default_doc = documents[0]
+
+    if topic_focus:
+        # TARGETED GENERATION PATH
+        # 1. Reject malformed responses (must be a JSON dict, not bare list or primitive)
+        if not isinstance(data, dict):
+            if not data:
+                raise UnsupportedTopicError(
+                    f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
+                )
+            raise AIProviderError(
+                "Targeted revision response must be a JSON object with explicit topic support confirmation."
+            )
+
+        # 2. Check explicit unsupported indicators
+        # Even if questions array is non-empty, an explicit unsupported confirmation must be rejected
+        topic_supported = data.get("topic_supported")
+        if topic_supported is None and "supported" in data:
+            topic_supported = data.get("supported")
+
+        is_explicitly_unsupported = (
+            topic_supported is False
+            or (isinstance(topic_supported, str) and topic_supported.lower() == "false")
+            or data.get("unsupported") is True
+            or (isinstance(data.get("unsupported"), str) and data.get("unsupported").lower() == "true")
+            or data.get("error") == "unsupported_topic"
+        )
+        if is_explicitly_unsupported:
+            raise UnsupportedTopicError(
+                f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
+            )
+
+        # 3. For targeted generation to succeed, topic_supported must be explicitly true
+        is_explicitly_supported = (
+            topic_supported is True
+            or (isinstance(topic_supported, str) and topic_supported.lower() == "true")
+        )
+        if not is_explicitly_supported:
+            raise AIProviderError(
+                "Targeted revision response must explicitly confirm 'topic_supported': true."
+            )
+
+        # 4. Extract questions list and validate non-emptiness
+        raw_items = data.get("questions")
+        if not isinstance(raw_items, list):
+            raise AIProviderError(
+                "Targeted revision response must contain a 'questions' list."
+            )
+
+        if not raw_items:
+            raise AIProviderError(
+                "Targeted revision response indicated topic was supported but provided an empty questions list."
+            )
+
+        items = raw_items
+
+    else:
+        # ORDINARY GENERATION PATH (unchanged behavior)
+        items: list[Any] = []
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            if "questions" in data and isinstance(data["questions"], list):
+                items = data["questions"]
+            elif "items" in data and isinstance(data["items"], list):
+                items = data["items"]
+            elif not data:
+                items = []
+            else:
+                items = [data]
+        else:
+            raise AIProviderError("AI did not return a valid list of questions.")
+
+        if not items:
+            raise AIProviderError("AI response contained an empty questions list.")
 
     valid_questions: list[dict[str, Any]] = []
 
@@ -267,7 +360,6 @@ def parse_and_validate_questions(
         elif raw_type in ("open_ended", "open", "free_response"):
             q_type = "open_ended"
         else:
-            # Infer from options presence
             q_type = "multiple_choice" if isinstance(item.get("options"), list) and len(item.get("options")) >= 2 else "open_ended"
 
         # Resolve options and correct answer
@@ -276,7 +368,6 @@ def parse_and_validate_questions(
 
         if q_type == "multiple_choice":
             if not isinstance(raw_options, list) or len(raw_options) < 2:
-                # If requested MCQ but options missing, synthesize or treat as open
                 if requested_type == "multiple_choice":
                     logger.warning("MCQ item missing options; attempting fallback.")
                     continue
@@ -287,14 +378,12 @@ def parse_and_validate_questions(
                 if len(options) < 2:
                     continue
 
-                # Check if correct_answer is an integer index
                 raw_idx = item.get("correct_answer_index")
                 if raw_idx is not None and isinstance(raw_idx, int) and 0 <= raw_idx < len(options):
                     correct_answer = options[raw_idx]
                 elif correct_answer.isdigit() and 0 <= int(correct_answer) < len(options):
                     correct_answer = options[int(correct_answer)]
                 elif correct_answer not in options:
-                    # Match case-insensitively or prefix (e.g. "A) ...")
                     matched = False
                     for opt in options:
                         if opt.lower() == correct_answer.lower():
@@ -314,6 +403,11 @@ def parse_and_validate_questions(
         raw_doc_id = str(item.get("source_document_id") or "").strip()
         matched_doc = docs_by_id.get(raw_doc_id)
         if matched_doc is None:
+            if topic_focus:
+                logger.warning(
+                    f"Targeted question cited unrecognized source_document_id '{raw_doc_id}'; rejecting question."
+                )
+                continue
             matched_doc = default_doc
 
         source_doc_id = matched_doc.id
@@ -325,10 +419,22 @@ def parse_and_validate_questions(
             or item.get("source_quote")
             or ""
         ).strip()
-        if not evidence:
-            # Fallback to representative excerpt from matched document
-            doc_text = (matched_doc.extracted_text or "").strip()
-            evidence = doc_text[:250] if doc_text else f"Excerpt from {matched_doc.original_filename}"
+
+        if topic_focus:
+            # Targeted generation: strictly require non-empty verifiable evidence
+            if not evidence:
+                logger.warning("Targeted question missing evidence snippet; rejecting question.")
+                continue
+            if not verify_evidence_in_document(evidence, matched_doc.extracted_text):
+                logger.warning(
+                    "Targeted question evidence snippet could not be verified in referenced document; rejecting question."
+                )
+                continue
+        else:
+            # Ordinary generation: fallback to representative excerpt from matched document
+            if not evidence:
+                doc_text = (matched_doc.extracted_text or "").strip()
+                evidence = doc_text[:250] if doc_text else f"Excerpt from {matched_doc.original_filename}"
 
         # Resolve evidence metadata & topic attribution
         evidence_meta: dict[str, Any] = {
@@ -378,8 +484,8 @@ def parse_and_validate_questions(
 
     if not valid_questions:
         if topic_focus:
-            raise UnsupportedTopicError(
-                f"The selected document(s) do not contain sufficient content for the requested topic '{topic_focus}'."
+            raise AIProviderError(
+                f"AI did not produce valid, grounded questions for topic '{topic_focus}' with verifiable document evidence."
             )
         raise AIProviderError("AI did not produce any valid revision questions.")
 
