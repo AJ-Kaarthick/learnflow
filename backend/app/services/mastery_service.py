@@ -177,7 +177,7 @@ def get_completed_sessions_for_identity(
     )
 
 
-def _resolve_document_info(
+def resolve_document_info(
     question: RevisionQuestion,
     active_docs_by_id: dict[str, Document],
 ) -> tuple[Optional[str], str, bool]:
@@ -195,6 +195,9 @@ def _resolve_document_info(
     # Document is deleted or was created without foreign key
     title = meta.get("document_title") or "Archived Document"
     return doc_id, title, True
+
+
+_resolve_document_info = resolve_document_info
 
 
 def get_overall_mastery(
