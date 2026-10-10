@@ -1302,3 +1302,333 @@ def test_api_ai_failure_returns_502_and_consumes_no_quota(
         assert count_sessions == 0
     finally:
         app.dependency_overrides.clear()
+
+
+def test_api_targeted_complete_valid_response_exact_count(
+    test_client: TestClient,
+    db_session: Session,
+    test_user: User,
+    test_document: Document,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a complete valid targeted response succeeds and persists exactly
+    the requested number of questions.
+    """
+    cookies = _auth_cookie_for_user(test_user, db_session)
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Photosynthesis",
+        "questions": [
+            {
+                "question_text": "What do light reactions produce?",
+                "question_type": "multiple_choice",
+                "options": ["ATP", "Lipids", "Sugars", "DNA"],
+                "correct_answer": "ATP",
+                "explanation": "Light reactions generate ATP.",
+                "source_document_id": test_document.id,
+                "evidence_snippet": "Photosynthesis converts sunlight into chemical energy.",
+                "subtopic": "Light Reactions",
+            },
+            {
+                "question_text": "What energy source drives photosynthesis?",
+                "question_type": "multiple_choice",
+                "options": ["Sunlight", "Geothermal", "Wind", "Combustion"],
+                "correct_answer": "Sunlight",
+                "explanation": "Sunlight drives the photosynthetic reactions.",
+                "source_document_id": test_document.id,
+                "evidence_snippet": "Photosynthesis converts sunlight into chemical energy.",
+                "subtopic": "Solar Energy",
+            },
+        ],
+    })
+
+    payload = {
+        "document_ids": [test_document.id],
+        "topic_focus": "Photosynthesis",
+        "question_count": 2,
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 201
+    data = res.json()
+    assert len(data["questions"]) == 2
+    sess_db = db_session.query(RevisionSession).filter(RevisionSession.id == data["id"]).one()
+    assert sess_db.total_questions == 2
+
+
+def test_api_targeted_mixed_invalid_source_doc_id_fails_entirely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a mixed response with 1 valid question and 1 question with an invalid
+    source document ID fails entirely with HTTP 502, consumes 0 quota, and persists no session.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-mix1-{uuid.uuid4().hex[:8]}",
+        original_filename="notes.pdf",
+        stored_filename="notes.pdf",
+        status="ready",
+        extracted_text="Photosynthesis converts sunlight into chemical energy.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Photosynthesis",
+        "questions": [
+            {
+                "question_text": "Valid Q1?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Photosynthesis converts sunlight into chemical energy.",
+            },
+            {
+                "question_text": "Invalid doc Q2?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": "unrecognized-external-doc-id",
+                "evidence_snippet": "Photosynthesis converts sunlight into chemical energy.",
+            },
+        ],
+    })
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Photosynthesis",
+        "question_count": 2,
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+
+def test_api_targeted_mixed_missing_or_fabricated_evidence_fails_entirely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a mixed response with 1 valid question and 1 question with missing or
+    fabricated evidence fails entirely with HTTP 502, consumes 0 quota, and persists no session.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-mix2-{uuid.uuid4().hex[:8]}",
+        original_filename="bio.pdf",
+        stored_filename="bio.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Cellular Respiration",
+        "question_count": 2,
+    }
+
+    # Case A: Q1 valid, Q2 missing evidence snippet
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "Valid Q1?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+            {
+                "question_text": "Missing evidence Q2?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "",
+            },
+        ],
+    })
+    res_a = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res_a.status_code == 502
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+    # Case B: Q1 valid, Q2 fabricated evidence
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "Valid Q1?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+            {
+                "question_text": "Fabricated evidence Q2?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Extraterrestrial energy sources replace normal metabolism.",
+            },
+        ],
+    })
+    res_b = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res_b.status_code == 502
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+
+def test_api_targeted_mixed_malformed_question_fails_entirely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a mixed response with 1 valid question and 1 malformed question (e.g. empty text
+    or missing options) fails entirely with HTTP 502, consumes 0 quota, and persists no session.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-mix3-{uuid.uuid4().hex[:8]}",
+        original_filename="bio.pdf",
+        stored_filename="bio.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "Valid Q1?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+            {
+                "question_text": "",  # malformed empty question text
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+        ],
+    })
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Cellular Respiration",
+        "question_count": 2,
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0
+
+
+def test_api_targeted_fewer_questions_than_requested_fails_entirely(
+    test_client: TestClient,
+    db_session: Session,
+    mock_ai: MockMasteryAIProvider,
+):
+    """
+    Verifies that a targeted response providing fewer grounded questions than requested
+    fails entirely with HTTP 502, consumes 0 quota, and persists no session.
+    """
+    guest = create_guest_session(db_session)
+    guest.ai_generation_count = 0
+    db_session.commit()
+
+    doc = Document(
+        id=f"doc-g-few-{uuid.uuid4().hex[:8]}",
+        original_filename="bio.pdf",
+        stored_filename="bio.pdf",
+        status="ready",
+        extracted_text="Mitochondria generate cellular ATP via aerobic respiration.",
+        owner_type=IdentityType.GUEST.value,
+        owner_id=guest.id,
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    # Requested 3 questions, but AI returned only 2 questions
+    mock_ai.response_text = json.dumps({
+        "topic_supported": True,
+        "topic": "Cellular Respiration",
+        "questions": [
+            {
+                "question_text": "Valid Q1?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+            {
+                "question_text": "Valid Q2?",
+                "question_type": "multiple_choice",
+                "options": ["A", "B", "C", "D"],
+                "correct_answer": "A",
+                "source_document_id": doc.id,
+                "evidence_snippet": "Mitochondria generate cellular ATP via aerobic respiration.",
+            },
+        ],
+    })
+
+    cookies = {settings.guest_session_cookie_name: guest.id}
+    payload = {
+        "document_ids": [doc.id],
+        "topic_focus": "Cellular Respiration",
+        "question_count": 3,
+    }
+    res = test_client.post("/api/v1/revision/sessions", json=payload, cookies=cookies)
+    assert res.status_code == 502
+
+    db_session.refresh(guest)
+    assert guest.ai_generation_count == 0
+    assert db_session.query(RevisionSession).filter(RevisionSession.owner_id == guest.id).count() == 0

@@ -317,6 +317,11 @@ def parse_and_validate_questions(
                 "Targeted revision response indicated topic was supported but provided an empty questions list."
             )
 
+        if len(raw_items) < target_count:
+            raise AIProviderError(
+                f"Targeted revision response provided fewer questions ({len(raw_items)}) than requested ({target_count})."
+            )
+
         items = raw_items
 
     else:
@@ -343,10 +348,14 @@ def parse_and_validate_questions(
 
     for item in items:
         if not isinstance(item, dict):
+            if topic_focus:
+                raise AIProviderError("Targeted question item must be a JSON object.")
             continue
 
         q_text = str(item.get("question_text") or item.get("question") or "").strip()
         if not q_text:
+            if topic_focus:
+                raise AIProviderError("Targeted question must contain non-empty question text.")
             continue
 
         # Resolve question type
@@ -369,6 +378,8 @@ def parse_and_validate_questions(
         if q_type == "multiple_choice":
             if not isinstance(raw_options, list) or len(raw_options) < 2:
                 if requested_type == "multiple_choice":
+                    if topic_focus:
+                        raise AIProviderError("Targeted multiple-choice question must include at least two options.")
                     logger.warning("MCQ item missing options; attempting fallback.")
                     continue
                 q_type = "open_ended"
@@ -376,6 +387,8 @@ def parse_and_validate_questions(
             else:
                 options = [str(opt).strip() for opt in raw_options if str(opt).strip()]
                 if len(options) < 2:
+                    if topic_focus:
+                        raise AIProviderError("Targeted multiple-choice question must include at least two valid options.")
                     continue
 
                 raw_idx = item.get("correct_answer_index")
@@ -404,10 +417,9 @@ def parse_and_validate_questions(
         matched_doc = docs_by_id.get(raw_doc_id)
         if matched_doc is None:
             if topic_focus:
-                logger.warning(
-                    f"Targeted question cited unrecognized source_document_id '{raw_doc_id}'; rejecting question."
+                raise AIProviderError(
+                    f"Targeted question cited unrecognized source_document_id '{raw_doc_id}'."
                 )
-                continue
             matched_doc = default_doc
 
         source_doc_id = matched_doc.id
@@ -423,13 +435,13 @@ def parse_and_validate_questions(
         if topic_focus:
             # Targeted generation: strictly require non-empty verifiable evidence
             if not evidence:
-                logger.warning("Targeted question missing evidence snippet; rejecting question.")
-                continue
-            if not verify_evidence_in_document(evidence, matched_doc.extracted_text):
-                logger.warning(
-                    "Targeted question evidence snippet could not be verified in referenced document; rejecting question."
+                raise AIProviderError(
+                    "Targeted question must contain a non-empty evidence snippet."
                 )
-                continue
+            if not verify_evidence_in_document(evidence, matched_doc.extracted_text):
+                raise AIProviderError(
+                    "Targeted question evidence snippet could not be verified in referenced document."
+                )
         else:
             # Ordinary generation: fallback to representative excerpt from matched document
             if not evidence:
@@ -482,11 +494,12 @@ def parse_and_validate_questions(
         if len(valid_questions) >= target_count:
             break
 
+    if topic_focus and len(valid_questions) < target_count:
+        raise AIProviderError(
+            f"Targeted revision produced fewer valid grounded questions ({len(valid_questions)}) than requested ({target_count})."
+        )
+
     if not valid_questions:
-        if topic_focus:
-            raise AIProviderError(
-                f"AI did not produce valid, grounded questions for topic '{topic_focus}' with verifiable document evidence."
-            )
         raise AIProviderError("AI did not produce any valid revision questions.")
 
     return valid_questions
