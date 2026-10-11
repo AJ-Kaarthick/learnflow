@@ -216,13 +216,14 @@ test("9. ProgressPage.jsx immediately purges previous identity data and displays
   // Previous scope tracking ref
   assert.match(pageSource, /previousScopeRef\s*=\s*useRef\(null\)/);
 
-  // Scope change detection immediately resets all 5 resource states
+  // Scope change detection immediately resets all 5 resource states and isRefreshing
   assert.match(pageSource, /currentScope\s*!==\s*previousScopeRef\.current/);
   assert.match(pageSource, /setSummaryState\(\{\s*data:\s*null/);
   assert.match(pageSource, /setTopicsState\(\{\s*data:\s*null/);
   assert.match(pageSource, /setWeakTopicsState\(\{\s*data:\s*null/);
   assert.match(pageSource, /setSchedulesState\(\{\s*data:\s*null/);
   assert.match(pageSource, /setRecommendationsState\(\{\s*data:\s*null/);
+  assert.match(pageSource, /setIsRefreshing\(false\)/);
 
   // In-flight abort & generation increment on identity change
   assert.match(pageSource, /abortControllerRef\.current\.abort\(\)/);
@@ -328,4 +329,125 @@ test("10. Manual refresh reuses the 5 resource loaders without duplicate API cal
 
   // isRefreshing resets to false once all loaders settle
   assert.equal(isRefreshing, false);
+});
+
+// ---------------------------------------------------------------------------
+// 11. Identity Change Resets Refresh State & Prevents Stale Overwrite
+// ---------------------------------------------------------------------------
+test("11. Identity change interrupts in-flight manual refresh, resets refresh state, and prevents stale overwrite", async () => {
+  const pageSource = readFileSync(join(__dirname, "./ProgressPage.jsx"), "utf-8");
+
+  // Contract: identity change branch must call setIsRefreshing(false)
+  const identityEffectMatch = pageSource.match(
+    /if\s*\(\s*currentScope\s*!==\s*previousScopeRef\.current\s*\)\s*\{([\s\S]*?)\n\s*previousScopeRef\.current/
+  );
+  assert.ok(identityEffectMatch, "identity change block must be present");
+  assert.match(identityEffectMatch[1], /setIsRefreshing\(false\)/);
+
+  // Lifecycle simulation:
+  // State variables replicating ProgressPage component state
+  let isRefreshing = false;
+  let generation = 0;
+  let previousScope = "user:student-1";
+  let activeAbortController = null;
+  const resourceCalls = { summary: 0, topics: 0, weakTopics: 0, schedules: 0, recs: 0 };
+  let resolveOldSummary = null;
+
+  // Loader mocks
+  const mockLoaders = {
+    loadSummary: (signal, gen) => {
+      resourceCalls.summary += 1;
+      return new Promise((res) => {
+        resolveOldSummary = res;
+      });
+    },
+    loadTopics: async (signal, gen) => {
+      resourceCalls.topics += 1;
+    },
+    loadWeakTopics: async (signal, gen) => {
+      resourceCalls.weakTopics += 1;
+    },
+    loadSchedules: async (signal, gen) => {
+      resourceCalls.schedules += 1;
+    },
+    loadRecommendations: async (signal, gen) => {
+      resourceCalls.recs += 1;
+    },
+  };
+
+  const mockLoadAll = (signal, gen) => {
+    return Promise.allSettled([
+      mockLoaders.loadSummary(signal, gen),
+      mockLoaders.loadTopics(signal, gen),
+      mockLoaders.loadWeakTopics(signal, gen),
+      mockLoaders.loadSchedules(signal, gen),
+      mockLoaders.loadRecommendations(signal, gen),
+    ]);
+  };
+
+  const handleManualRefresh = () => {
+    if (activeAbortController) activeAbortController.abort();
+    const controller = new AbortController();
+    activeAbortController = controller;
+    const newGen = generation + 1;
+    generation = newGen;
+
+    isRefreshing = true;
+    return mockLoadAll(controller.signal, newGen).finally(() => {
+      if (generation === newGen) {
+        isRefreshing = false;
+      }
+    });
+  };
+
+  const handleIdentityChange = (newScope) => {
+    if (newScope !== previousScope) {
+      if (activeAbortController) activeAbortController.abort();
+      generation += 1;
+      isRefreshing = false; // Reset refresh state on identity change
+      previousScope = newScope;
+    }
+  };
+
+  // 1. A manual refresh starts and sets isRefreshing to true
+  const staleRefreshPromise = handleManualRefresh();
+  assert.equal(isRefreshing, true, "isRefreshing must be true after manual refresh triggers");
+  assert.equal(generation, 1, "generation is incremented for refresh");
+  // Exactly one request per resource dispatched
+  assert.equal(resourceCalls.summary, 1);
+  assert.equal(resourceCalls.topics, 1);
+  assert.equal(resourceCalls.weakTopics, 1);
+  assert.equal(resourceCalls.schedules, 1);
+  assert.equal(resourceCalls.recs, 1);
+
+  // 2. The identity changes before the refresh requests settle
+  handleIdentityChange("user:student-2");
+
+  // 3. The previous generation is invalidated and refresh state is reset immediately
+  assert.equal(generation, 2, "generation must be incremented on identity change");
+  assert.equal(isRefreshing, false, "isRefreshing must be immediately reset to false on identity change");
+
+  // 4. The old generation's eventual promise completion cannot overwrite the new identity's refresh state
+  resolveOldSummary();
+  await staleRefreshPromise;
+  assert.equal(isRefreshing, false, "stale promise finally handler must not alter isRefreshing");
+
+  // 5. Normal manual refresh under the new identity still settles and resets correctly
+  let resolveNewSummary = null;
+  mockLoaders.loadSummary = (signal, gen) => {
+    resourceCalls.summary += 1;
+    return new Promise((res) => {
+      resolveNewSummary = res;
+    });
+  };
+
+  const freshRefreshPromise = handleManualRefresh();
+  assert.equal(isRefreshing, true, "new identity refresh sets isRefreshing to true");
+  assert.equal(generation, 3, "new generation for fresh refresh");
+  assert.equal(resourceCalls.summary, 2, "exactly one more request dispatched per resource");
+
+  // Settle new refresh
+  resolveNewSummary();
+  await freshRefreshPromise;
+  assert.equal(isRefreshing, false, "new refresh resets isRefreshing cleanly once complete");
 });

@@ -193,6 +193,7 @@ function ProgressPage() {
       setWeakTopicsState({ data: null, loading: true, error: null });
       setSchedulesState({ data: null, loading: true, error: null });
       setRecommendationsState({ data: null, loading: true, error: null });
+      setIsRefreshing(false);
 
       previousScopeRef.current = currentScope;
     }
