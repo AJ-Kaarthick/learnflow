@@ -200,6 +200,22 @@ def resolve_document_info(
 _resolve_document_info = resolve_document_info
 
 
+def is_document_actionable(doc: Optional[Document]) -> bool:
+    """
+    Determines whether a document is currently actionable for Revision:
+    - Exists and is not None
+    - Status is exactly 'ready'
+    - Extracted text is non-empty after stripping surrounding whitespace
+    """
+    if doc is None:
+        return False
+    if doc.status != "ready":
+        return False
+    if not (doc.extracted_text or "").strip():
+        return False
+    return True
+
+
 def get_overall_mastery(
     db: Session,
     identity: Identity,

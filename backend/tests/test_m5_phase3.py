@@ -1434,3 +1434,265 @@ def test_read_only_calls_do_not_persist_state(
     assert db_session.query(RevisionSession).count() == c1
     assert db_session.query(RevisionQuestion).count() == c2
     assert db_session.query(RevisionAttempt).count() == c3
+
+
+# ---------------------------------------------------------------------------
+# Document Readiness Actionability Tests (Phase 3 Follow-up)
+# ---------------------------------------------------------------------------
+
+def test_actionability_ready_with_text_produces_recommendations(
+    client: TestClient, db_session: Session, user_a: User, ready_doc_user_a: Document
+):
+    now = datetime.now(timezone.utc)
+    # 1. Unrevised ready document with text produces unrevised_document recommendation
+    ident = Identity(type=IdentityType.USER, id=user_a.id)
+    recs = get_recommendations(db_session, ident, now=now)
+    assert len(recs) == 1
+    assert recs[0].type == "unrevised_document"
+    assert recs[0].document_id == ready_doc_user_a.id
+    assert recs[0].is_actionable is True
+
+    # 2. Add due session and weak topic
+    sess = create_completed_session(
+        db_session,
+        owner_type=IdentityType.USER.value,
+        owner_id=user_a.id,
+        doc=ready_doc_user_a,
+        completed_at=now - timedelta(days=3),
+        score=0.2,
+    )
+    for _ in range(3):
+        add_question_with_attempts(
+            db_session,
+            sess,
+            doc_id=ready_doc_user_a.id,
+            doc_title=ready_doc_user_a.original_filename,
+            topic="Enzyme Kinetics",
+            attempt_scores=[0.2],
+            created_at=now - timedelta(days=3),
+        )
+
+    # Check spaced repetition and weak topics report is_actionable=True
+    schedules = get_review_schedules(db_session, ident, now=now)
+    assert len(schedules) == 1
+    assert schedules[0].is_archived is False
+    assert schedules[0].is_actionable is True
+
+    wts = detect_weak_topics(db_session, ident, now=now)
+    assert len(wts) == 1
+    assert wts[0].is_archived is False
+    assert wts[0].is_actionable is True
+
+    # Both spaced_review and weak_topic_practice are recommended
+    recs_after = get_recommendations(db_session, ident, now=now)
+    types = [r.type for r in recs_after]
+    assert "spaced_review" in types
+    assert "weak_topic_practice" in types
+
+
+def test_actionability_failed_document_preserves_history_but_is_not_actionable(
+    client: TestClient, db_session: Session, user_a: User, ready_doc_user_a: Document
+):
+    now = datetime.now(timezone.utc)
+    sess = create_completed_session(
+        db_session,
+        owner_type=IdentityType.USER.value,
+        owner_id=user_a.id,
+        doc=ready_doc_user_a,
+        completed_at=now - timedelta(days=3),
+        score=0.2,
+    )
+    for _ in range(3):
+        add_question_with_attempts(
+            db_session,
+            sess,
+            doc_id=ready_doc_user_a.id,
+            doc_title=ready_doc_user_a.original_filename,
+            topic="Enzyme Kinetics",
+            attempt_scores=[0.2],
+            created_at=now - timedelta(days=3),
+        )
+
+    # Now document status changes to "failed"
+    ready_doc_user_a.status = "failed"
+    db_session.commit()
+
+    cookies = auth_cookie_for_user(user_a, db_session)
+
+    # 1. Topic mastery preserved, is_archived=False
+    res_top = client.get("/api/v1/progress/topics", cookies=cookies)
+    assert res_top.status_code == 200
+    top_data = res_top.json()
+    assert len(top_data) == 1
+    assert top_data[0]["is_archived"] is False
+    assert top_data[0]["topic_display"] == "Enzyme Kinetics"
+
+    # 2. Weak topics preserved, is_archived=False, but is_actionable=False
+    res_wt = client.get("/api/v1/progress/weak-topics", cookies=cookies)
+    assert res_wt.status_code == 200
+    wt_data = res_wt.json()
+    assert len(wt_data) == 1
+    assert wt_data[0]["is_archived"] is False
+    assert wt_data[0]["is_actionable"] is False
+
+    # 3. Spaced repetition preserved, is_archived=False, but is_actionable=False
+    res_sr = client.get("/api/v1/progress/spaced-repetition", cookies=cookies)
+    assert res_sr.status_code == 200
+    sr_data = res_sr.json()
+    assert len(sr_data) == 1
+    assert sr_data[0]["is_archived"] is False
+    assert sr_data[0]["is_actionable"] is False
+    assert sr_data[0]["has_history"] is True
+
+    # 4. Recommendations: ZERO recommendations produced for the failed document
+    res_rec = client.get("/api/v1/progress/recommendations", cookies=cookies)
+    assert res_rec.status_code == 200
+    rec_data = res_rec.json()
+    assert len(rec_data) == 0
+
+
+def test_actionability_processing_document_is_not_actionable(
+    client: TestClient, db_session: Session, user_a: User, ready_doc_user_a: Document
+):
+    now = datetime.now(timezone.utc)
+    sess = create_completed_session(
+        db_session,
+        owner_type=IdentityType.USER.value,
+        owner_id=user_a.id,
+        doc=ready_doc_user_a,
+        completed_at=now - timedelta(days=3),
+        score=0.2,
+    )
+    for _ in range(3):
+        add_question_with_attempts(
+            db_session,
+            sess,
+            doc_id=ready_doc_user_a.id,
+            doc_title=ready_doc_user_a.original_filename,
+            topic="Enzyme Kinetics",
+            attempt_scores=[0.2],
+            created_at=now - timedelta(days=3),
+        )
+
+    # Document is in "processing" state
+    ready_doc_user_a.status = "processing"
+    db_session.commit()
+
+    cookies = auth_cookie_for_user(user_a, db_session)
+
+    res_wt = client.get("/api/v1/progress/weak-topics", cookies=cookies)
+    assert res_wt.json()[0]["is_actionable"] is False
+
+    res_sr = client.get("/api/v1/progress/spaced-repetition", cookies=cookies)
+    assert res_sr.json()[0]["is_actionable"] is False
+
+    res_rec = client.get("/api/v1/progress/recommendations", cookies=cookies)
+    assert len(res_rec.json()) == 0
+
+
+def test_actionability_empty_or_whitespace_text_is_not_actionable(
+    client: TestClient, db_session: Session, user_a: User, ready_doc_user_a: Document
+):
+    now = datetime.now(timezone.utc)
+    sess = create_completed_session(
+        db_session,
+        owner_type=IdentityType.USER.value,
+        owner_id=user_a.id,
+        doc=ready_doc_user_a,
+        completed_at=now - timedelta(days=3),
+        score=0.2,
+    )
+    for _ in range(3):
+        add_question_with_attempts(
+            db_session,
+            sess,
+            doc_id=ready_doc_user_a.id,
+            doc_title=ready_doc_user_a.original_filename,
+            topic="Enzyme Kinetics",
+            attempt_scores=[0.2],
+            created_at=now - timedelta(days=3),
+        )
+
+    # Document is ready, but extracted_text is whitespace only
+    ready_doc_user_a.extracted_text = "   \n\t  "
+    db_session.commit()
+
+    cookies = auth_cookie_for_user(user_a, db_session)
+
+    res_wt = client.get("/api/v1/progress/weak-topics", cookies=cookies)
+    assert res_wt.json()[0]["is_actionable"] is False
+
+    res_sr = client.get("/api/v1/progress/spaced-repetition", cookies=cookies)
+    assert res_sr.json()[0]["is_actionable"] is False
+
+    res_rec = client.get("/api/v1/progress/recommendations", cookies=cookies)
+    assert len(res_rec.json()) == 0
+
+
+def test_document_becoming_ineligible_does_not_erase_history_or_streaks(
+    db_session: Session, user_a: User, ready_doc_user_a: Document
+):
+    now = datetime.now(timezone.utc)
+    # 2 successful sessions -> streak 2, interval 3
+    s1 = create_completed_session(
+        db_session,
+        owner_type=IdentityType.USER.value,
+        owner_id=user_a.id,
+        doc=ready_doc_user_a,
+        completed_at=now - timedelta(days=5),
+        score=0.9,
+    )
+    add_question_with_attempts(
+        db_session,
+        s1,
+        doc_id=ready_doc_user_a.id,
+        doc_title=ready_doc_user_a.original_filename,
+        attempt_scores=[0.9],
+        created_at=now - timedelta(days=5),
+    )
+
+    s2 = create_completed_session(
+        db_session,
+        owner_type=IdentityType.USER.value,
+        owner_id=user_a.id,
+        doc=ready_doc_user_a,
+        completed_at=now - timedelta(days=4),
+        score=0.95,
+    )
+    add_question_with_attempts(
+        db_session,
+        s2,
+        doc_id=ready_doc_user_a.id,
+        doc_title=ready_doc_user_a.original_filename,
+        attempt_scores=[0.95],
+        created_at=now - timedelta(days=4),
+    )
+
+    ident = Identity(type=IdentityType.USER, id=user_a.id)
+
+    # Verify initial streak 2
+    sched_init = get_review_schedules(db_session, ident, now=now)[0]
+    assert sched_init.current_streak == 2
+    assert sched_init.interval_days == 3
+    assert sched_init.is_actionable is True
+    assert sched_init.is_archived is False
+
+    # Document fails
+    ready_doc_user_a.status = "failed"
+    db_session.commit()
+
+    sched_failed = get_review_schedules(db_session, ident, now=now)[0]
+    assert sched_failed.current_streak == 2
+    assert sched_failed.interval_days == 3
+    assert sched_failed.is_actionable is False
+    assert sched_failed.is_archived is False
+
+    # Document reprocessed and becomes ready again
+    ready_doc_user_a.status = "ready"
+    db_session.commit()
+
+    sched_recovered = get_review_schedules(db_session, ident, now=now)[0]
+    assert sched_recovered.current_streak == 2
+    assert sched_recovered.interval_days == 3
+    assert sched_recovered.is_actionable is True
+    assert sched_recovered.is_archived is False

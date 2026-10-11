@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Document, RevisionQuestion, RevisionSession, RevisionSessionDocument
 from app.schemas.identity import Identity
 from app.schemas.progress import RecommendationActionPayload, RecommendationResponseItem
-from app.services.mastery_service import ensure_utc
+from app.services.mastery_service import ensure_utc, is_document_actionable
 from app.services.spaced_repetition_service import get_review_schedules
 from app.services.weak_topic_service import detect_weak_topics
 
@@ -203,6 +203,8 @@ def get_recommendations(
 
     for doc in active_ready_docs:
         if doc.id in revised_doc_ids:
+            continue
+        if not is_document_actionable(doc):
             continue
 
         rec = RecommendationResponseItem(

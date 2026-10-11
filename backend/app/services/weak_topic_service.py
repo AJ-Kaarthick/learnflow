@@ -11,6 +11,7 @@ from app.services.mastery_service import (
     calculate_mastery_for_attempts,
     ensure_utc,
     get_completed_sessions_for_identity,
+    is_document_actionable,
     resolve_document_info,
 )
 from app.services.revision_service import clean_and_normalize_topic
@@ -178,12 +179,15 @@ def detect_weak_topics(
 
         struggle_idx = calculate_struggle_index(mastery_score, total_attempts)
 
+        active_doc = active_docs_by_id.get(doc_id) if doc_id else None
+        is_actionable = is_document_actionable(active_doc)
+
         weak_topics.append(
             WeakTopicItem(
                 document_id=doc_id,
                 document_title=doc_title,
                 is_archived=is_archived,
-                is_actionable=not is_archived,
+                is_actionable=is_actionable,
                 topic_key=topic_key,
                 topic_display=topic_disp,
                 mastery_score=mastery_score,

@@ -9,6 +9,7 @@ from app.schemas.identity import Identity
 from app.services.mastery_service import (
     ensure_utc,
     get_completed_sessions_for_identity,
+    is_document_actionable,
     resolve_document_info,
 )
 
@@ -78,13 +79,15 @@ def calculate_schedule_for_events(
     document_title: str,
     is_archived: bool,
     now: Optional[datetime] = None,
+    is_actionable: Optional[bool] = None,
 ) -> DocumentScheduleItem:
     """
     Computes streak, interval, due date, and is_due from a chronologically sorted list of ReviewEvents.
     If events is empty, returns an explicit no-history result without fabricating a due-date anchor.
     """
     ref_now = ensure_utc(now) or datetime.now(timezone.utc)
-    is_actionable = not is_archived
+    if is_actionable is None:
+        is_actionable = not is_archived
 
     if not events:
         return DocumentScheduleItem(
@@ -235,12 +238,15 @@ def get_review_schedules(
     # Calculate schedule for documents with review history
     for doc_key, events in doc_events_map.items():
         doc_id, doc_title, is_archived = doc_meta_map[doc_key]
+        active_doc = active_docs_by_id.get(doc_id) if doc_id else None
+        is_actionable = is_document_actionable(active_doc)
         item = calculate_schedule_for_events(
             events=events,
             document_id=doc_id,
             document_title=doc_title,
             is_archived=is_archived,
             now=now,
+            is_actionable=is_actionable,
         )
         schedules.append(item)
 
@@ -249,21 +255,24 @@ def get_review_schedules(
         for active_doc in active_docs:
             doc_key = f"id:{active_doc.id}"
             if doc_key not in doc_events_map:
+                is_actionable = is_document_actionable(active_doc)
                 item = calculate_schedule_for_events(
                     events=[],
                     document_id=active_doc.id,
                     document_title=active_doc.original_filename,
                     is_archived=False,
                     now=now,
+                    is_actionable=is_actionable,
                 )
                 schedules.append(item)
 
     # Deterministic sorting:
     # 1. Actionable/Active before archived (item.is_archived: False before True)
-    # 2. Due reviews first (not item.is_due: False before True)
-    # 3. Next review due timestamp (earliest due first; None at the end)
-    # 4. Document title case-folded
-    # 5. Document ID
+    # 2. Actionable before non-actionable (not item.is_actionable: False before True)
+    # 3. Due reviews first (not item.is_due: False before True)
+    # 4. Next review due timestamp (earliest due first; None at the end)
+    # 5. Document title case-folded
+    # 6. Document ID
     def _sort_key(item: DocumentScheduleItem):
         due_val = (
             ensure_utc(item.next_review_due)
@@ -271,6 +280,7 @@ def get_review_schedules(
         )
         return (
             item.is_archived,
+            not item.is_actionable,
             not item.is_due,
             due_val,
             item.document_title.casefold(),
