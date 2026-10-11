@@ -20,6 +20,7 @@ import {
   formatStruggleIndex,
   formatUrgency,
   formatUtcDate,
+  getIdentityScope,
   savePendingRevisionLaunch,
 } from "../utils/progressState.js";
 
@@ -34,21 +35,26 @@ import {
  * 5. Weak-Topic Practice Spotlight with Struggle Index
  * 6. Spaced Repetition Document Review Schedules with Due Indicators
  * 7. Composite Topic Mastery Explorer with Document Provenance
+ *
+ * Architecture:
+ * - Independent resource states (summary, topics, weakTopics, schedules, recommendations)
+ * - Section-level failure resilience and retry
+ * - Immediate identity change isolation during auth loading
+ * - AbortController and generation guards against stale responses
  */
 function ProgressPage() {
   const { identity, status: authStatus } = useAuth();
+  const currentScope = getIdentityScope(identity);
 
-  // Multi-resource data states
-  const [summary, setSummary] = useState(null);
-  const [topics, setTopics] = useState(null);
-  const [weakTopics, setWeakTopics] = useState(null);
-  const [schedules, setSchedules] = useState(null);
-  const [recommendations, setRecommendations] = useState(null);
+  // Independent resource states for resilience
+  const [summaryState, setSummaryState] = useState({ data: null, loading: true, error: null });
+  const [topicsState, setTopicsState] = useState({ data: null, loading: true, error: null });
+  const [weakTopicsState, setWeakTopicsState] = useState({ data: null, loading: true, error: null });
+  const [schedulesState, setSchedulesState] = useState({ data: null, loading: true, error: null });
+  const [recommendationsState, setRecommendationsState] = useState({ data: null, loading: true, error: null });
 
-  // Status & error tracking
-  const [isLoading, setIsLoading] = useState(true);
+  // Global manual refresh indicator
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState(null);
 
   // Chart configuration
   const [activeWindowDays, setActiveWindowDays] = useState(7); // 7 | 14 | 30
@@ -57,87 +63,202 @@ function ProgressPage() {
   // Filter for recommendations
   const [recFilter, setRecFilter] = useState("all"); // "all" | "spaced_review" | "weak_topic_practice" | "unrevised_document"
 
-  // Generation guard: prevents late responses from a prior identity from overwriting current data
+  // Generation guard & abort controller refs
   const generationRef = useRef(0);
   const abortControllerRef = useRef(null);
+  const previousScopeRef = useRef(null);
 
-  const fetchAllProgressData = useCallback(
-    async (isManualRefresh = false) => {
-      // Abort any ongoing in-flight request
+  // Individual loaders
+  const loadSummary = useCallback(async (signal, gen) => {
+    setSummaryState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const data = await getProgressSummary({ signal });
+      if (generationRef.current === gen) {
+        setSummaryState({ data, loading: false, error: null });
+      }
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      if (generationRef.current === gen) {
+        setSummaryState((prev) => ({
+          ...prev,
+          loading: false,
+          error: err?.message || "Could not load progress summary.",
+        }));
+      }
+    }
+  }, []);
+
+  const loadTopics = useCallback(async (signal, gen) => {
+    setTopicsState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const data = await getProgressTopics({ signal });
+      if (generationRef.current === gen) {
+        setTopicsState({ data, loading: false, error: null });
+      }
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      if (generationRef.current === gen) {
+        setTopicsState((prev) => ({
+          ...prev,
+          loading: false,
+          error: err?.message || "Could not load topic mastery.",
+        }));
+      }
+    }
+  }, []);
+
+  const loadWeakTopics = useCallback(async (signal, gen) => {
+    setWeakTopicsState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const data = await getProgressWeakTopics({ signal });
+      if (generationRef.current === gen) {
+        setWeakTopicsState({ data, loading: false, error: null });
+      }
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      if (generationRef.current === gen) {
+        setWeakTopicsState((prev) => ({
+          ...prev,
+          loading: false,
+          error: err?.message || "Could not load weak topics.",
+        }));
+      }
+    }
+  }, []);
+
+  const loadSchedules = useCallback(async (signal, gen) => {
+    setSchedulesState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const data = await getSpacedRepetitionSchedules({ includeUnreviewedActive: true, signal });
+      if (generationRef.current === gen) {
+        setSchedulesState({ data, loading: false, error: null });
+      }
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      if (generationRef.current === gen) {
+        setSchedulesState((prev) => ({
+          ...prev,
+          loading: false,
+          error: err?.message || "Could not load review schedules.",
+        }));
+      }
+    }
+  }, []);
+
+  const loadRecommendations = useCallback(async (signal, gen) => {
+    setRecommendationsState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const data = await getProgressRecommendations({ signal });
+      if (generationRef.current === gen) {
+        setRecommendationsState({ data, loading: false, error: null });
+      }
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      if (generationRef.current === gen) {
+        setRecommendationsState((prev) => ({
+          ...prev,
+          loading: false,
+          error: err?.message || "Could not load recommendations.",
+        }));
+      }
+    }
+  }, []);
+
+  const loadAll = useCallback(
+    (signal, gen) => {
+      loadSummary(signal, gen);
+      loadTopics(signal, gen);
+      loadWeakTopics(signal, gen);
+      loadSchedules(signal, gen);
+      loadRecommendations(signal, gen);
+    },
+    [loadSummary, loadTopics, loadWeakTopics, loadSchedules, loadRecommendations]
+  );
+
+  // Identity change isolation:
+  // When the identity scope changes, immediately clear all old identity data
+  // so no stale metrics or recommendations remain visible while auth is loading!
+  useEffect(() => {
+    if (currentScope !== previousScopeRef.current) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      generationRef.current += 1;
 
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
+      // Immediately clear state for previous identity
+      setSummaryState({ data: null, loading: true, error: null });
+      setTopicsState({ data: null, loading: true, error: null });
+      setWeakTopicsState({ data: null, loading: true, error: null });
+      setSchedulesState({ data: null, loading: true, error: null });
+      setRecommendationsState({ data: null, loading: true, error: null });
 
-      const currentGen = generationRef.current + 1;
-      generationRef.current = currentGen;
+      previousScopeRef.current = currentScope;
+    }
 
-      if (isManualRefresh) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
-      setError(null);
-
-      try {
-        const [sumRes, topRes, weakRes, schedRes, recRes] = await Promise.all([
-          getProgressSummary({ signal: controller.signal }),
-          getProgressTopics({ signal: controller.signal }),
-          getProgressWeakTopics({ signal: controller.signal }),
-          getSpacedRepetitionSchedules({ includeUnreviewedActive: true, signal: controller.signal }),
-          getProgressRecommendations({ signal: controller.signal }),
-        ]);
-
-        // Guard against late responses
-        if (generationRef.current !== currentGen) {
-          return;
-        }
-
-        setSummary(sumRes);
-        setTopics(topRes);
-        setWeakTopics(weakRes);
-        setSchedules(schedRes);
-        setRecommendations(recRes);
-      } catch (err) {
-        if (err.name === "AbortError") {
-          return;
-        }
-        if (generationRef.current === currentGen) {
-          setError(err?.message || "Failed to load progress intelligence.");
-        }
-      } finally {
-        if (generationRef.current === currentGen) {
-          setIsLoading(false);
-          setIsRefreshing(false);
-        }
-      }
-    },
-    []
-  );
-
-  // Identity isolation effect: reset state and re-fetch when identity changes
-  useEffect(() => {
-    if (authStatus === "loading") {
+    if (authStatus === "loading" || !currentScope) {
+      // Do not initiate requests until identity is resolved
       return;
     }
 
-    // Reset progress state for the new identity
-    setSummary(null);
-    setTopics(null);
-    setWeakTopics(null);
-    setSchedules(null);
-    setRecommendations(null);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const currentGen = generationRef.current;
 
-    fetchAllProgressData(false);
+    loadAll(controller.signal, currentGen);
 
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      controller.abort();
     };
-  }, [identity?.type, identity?.id, authStatus, fetchAllProgressData]);
+  }, [currentScope, authStatus, loadAll]);
+
+  // Manual refresh of all resources
+  const handleManualRefresh = () => {
+    if (authStatus === "loading" || !currentScope) return;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const newGen = generationRef.current + 1;
+    generationRef.current = newGen;
+
+    setIsRefreshing(true);
+    loadAll(controller.signal, newGen);
+
+    Promise.allSettled([
+      getProgressSummary({ signal: controller.signal }),
+      getProgressTopics({ signal: controller.signal }),
+      getProgressWeakTopics({ signal: controller.signal }),
+      getSpacedRepetitionSchedules({ includeUnreviewedActive: true, signal: controller.signal }),
+      getProgressRecommendations({ signal: controller.signal }),
+    ]).finally(() => {
+      if (generationRef.current === newGen) {
+        setIsRefreshing(false);
+      }
+    });
+  };
+
+  // Section retry handlers
+  const retrySummary = () => {
+    if (authStatus === "loading" || !currentScope) return;
+    loadSummary(abortControllerRef.current?.signal, generationRef.current);
+  };
+  const retryTopics = () => {
+    if (authStatus === "loading" || !currentScope) return;
+    loadTopics(abortControllerRef.current?.signal, generationRef.current);
+  };
+  const retryWeakTopics = () => {
+    if (authStatus === "loading" || !currentScope) return;
+    loadWeakTopics(abortControllerRef.current?.signal, generationRef.current);
+  };
+  const retrySchedules = () => {
+    if (authStatus === "loading" || !currentScope) return;
+    loadSchedules(abortControllerRef.current?.signal, generationRef.current);
+  };
+  const retryRecommendations = () => {
+    if (authStatus === "loading" || !currentScope) return;
+    loadRecommendations(abortControllerRef.current?.signal, generationRef.current);
+  };
 
   // Handoff to Revision launcher
   function handleLaunchRecommendation(rec) {
@@ -172,6 +293,28 @@ function ProgressPage() {
       window.location.hash = "#/revision";
     }
   }
+
+  // Identity is still resolving: render loading shell without leaking prior identity data
+  if (authStatus === "loading" || !currentScope) {
+    return (
+      <main aria-label="Progress Workspace" className="min-w-0 flex-1 min-h-0 overflow-y-auto bg-slate-50/50 py-6">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-64 items-center justify-center rounded-xl border border-slate-200 bg-surface p-12 shadow-2xs">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-600 border-t-transparent" />
+              <p className="text-xs font-medium text-slate-500">Resolving identity...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const summary = summaryState.data;
+  const topics = topicsState.data;
+  const weakTopics = weakTopicsState.data;
+  const schedules = schedulesState.data;
+  const recommendations = recommendationsState.data;
 
   // Activity timeline computation
   const activeWindowSummary =
@@ -222,8 +365,8 @@ function ProgressPage() {
           <div>
             <button
               type="button"
-              onClick={() => fetchAllProgressData(true)}
-              disabled={isLoading || isRefreshing}
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-surface px-3.5 py-2 text-xs font-medium text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 disabled:opacity-50"
             >
               <svg
@@ -244,36 +387,29 @@ function ProgressPage() {
           </div>
         </div>
 
-        {/* Global Error Banner */}
-        {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-semibold">Unable to Load Progress Analytics</p>
-                <p className="mt-1 text-xs text-red-600">{error}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => fetchAllProgressData(true)}
-                className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-200"
-              >
-                Retry
-              </button>
+        {/* Overview KPIs & Activity Trends */}
+        {summaryState.error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="font-semibold">Unable to Load Summary Analytics</p>
+              <p className="mt-1 text-xs text-red-600">{summaryState.error}</p>
+            </div>
+            <button
+              type="button"
+              onClick={retrySummary}
+              className="self-start sm:self-center rounded bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-200"
+            >
+              Retry Summary
+            </button>
+          </div>
+        ) : summaryState.loading && !summary ? (
+          <div className="flex h-48 items-center justify-center rounded-xl border border-slate-200 bg-surface p-6 shadow-2xs">
+            <div className="flex flex-col items-center gap-2">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent-600 border-t-transparent" />
+              <p className="text-xs text-slate-500">Loading overview KPIs &amp; trends...</p>
             </div>
           </div>
-        )}
-
-        {/* Loading Spinner */}
-        {isLoading && !summary && (
-          <div className="flex h-64 items-center justify-center rounded-xl border border-slate-200 bg-surface p-12 shadow-2xs">
-            <div className="flex flex-col items-center gap-3">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-600 border-t-transparent" />
-              <p className="text-xs font-medium text-slate-500">Calculating on-demand mastery &amp; schedules...</p>
-            </div>
-          </div>
-        )}
-
-        {!isLoading && summary && (
+        ) : summary ? (
           <>
             {/* Overview KPI Cards */}
             <section aria-label="Key Performance Indicators" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -551,335 +687,399 @@ function ProgressPage() {
                 );
               })}
             </section>
+          </>
+        ) : null}
 
-            {/* Adaptive Recommendations (Canonical Revision Setup Handoff) */}
-            <section aria-label="Adaptive Recommendations" className="rounded-xl border border-slate-200 bg-surface p-5 shadow-2xs space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">Adaptive Practice Recommendations</h2>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    Deterministic suggestions strictly following M5 priority: Spaced Reviews → Weak Topics → Unrevised Documents.
-                  </p>
-                </div>
-                {/* Filter Pills */}
-                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
-                  {[
-                    { id: "all", label: "All" },
-                    { id: "spaced_review", label: "Due Reviews" },
-                    { id: "weak_topic_practice", label: "Weak Topics" },
-                    { id: "unrevised_document", label: "Unrevised" },
-                  ].map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setRecFilter(f.id)}
-                      className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                        recFilter === f.id
-                          ? "bg-surface text-slate-900 shadow-2xs"
-                          : "text-slate-600 hover:text-slate-900"
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+        {/* Adaptive Recommendations (Canonical Revision Setup Handoff) */}
+        <section aria-label="Adaptive Recommendations" className="rounded-xl border border-slate-200 bg-surface p-5 shadow-2xs space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Adaptive Practice Recommendations</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Deterministic suggestions strictly following M5 priority: Spaced Reviews → Weak Topics → Unrevised Documents.
+              </p>
+            </div>
+            {/* Filter Pills */}
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+              {[
+                { id: "all", label: "All" },
+                { id: "spaced_review", label: "Due Reviews" },
+                { id: "weak_topic_practice", label: "Weak Topics" },
+                { id: "unrevised_document", label: "Unrevised" },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setRecFilter(f.id)}
+                  className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                    recFilter === f.id
+                      ? "bg-surface text-slate-900 shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-              {filteredRecs.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
-                  No active recommendations in this category. You are up to date!
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {filteredRecs.map((rec) => {
-                    const urgencyInfo = formatUrgency(rec.urgency);
-                    const isActionable = rec.is_actionable && !rec.is_archived;
+          {recommendationsState.error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center justify-between">
+              <span>{recommendationsState.error}</span>
+              <button
+                type="button"
+                onClick={retryRecommendations}
+                className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-200"
+              >
+                Retry Recommendations
+              </button>
+            </div>
+          ) : recommendationsState.loading && !recommendations ? (
+            <div className="flex h-32 items-center justify-center text-xs text-slate-400">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent-600 border-t-transparent mr-2" />
+              Loading recommendations...
+            </div>
+          ) : filteredRecs.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
+              No active recommendations in this category. You are up to date!
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {filteredRecs.map((rec) => {
+                const urgencyInfo = formatUrgency(rec.urgency);
+                const isActionable = rec.is_actionable && !rec.is_archived;
 
-                    return (
-                      <div
-                        key={rec.id}
-                        className={`flex flex-col justify-between rounded-xl border p-4.5 transition-all ${
+                return (
+                  <div
+                    key={rec.id}
+                    className={`flex flex-col justify-between rounded-xl border p-4.5 transition-all ${
+                      isActionable
+                        ? "border-slate-200 bg-surface hover:border-slate-300 hover:shadow-xs"
+                        : "border-slate-200/60 bg-slate-50/50 opacity-75"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                            rec.type === "spaced_review"
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
+                              : rec.type === "weak_topic_practice"
+                              ? "bg-amber-50 text-amber-700 border border-amber-200"
+                              : "bg-blue-50 text-blue-700 border border-blue-200"
+                          }`}
+                        >
+                          {rec.type === "spaced_review"
+                            ? "Spaced Review"
+                            : rec.type === "weak_topic_practice"
+                            ? "Weak Topic Practice"
+                            : "Unrevised Document"}
+                        </span>
+                        {rec.urgency !== null && (
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${urgencyInfo.badgeClasses}`}>
+                            Urgency: {urgencyInfo.valueText}
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="mt-2.5 text-sm font-semibold text-slate-900">{rec.title}</h3>
+                      <p className="mt-1 text-xs text-slate-600 leading-relaxed">{rec.reason}</p>
+
+                      {/* Provenance & details */}
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                        <span className="font-medium text-slate-700 truncate max-w-[220px]" title={rec.document_title}>
+                          📄 {rec.document_title}
+                        </span>
+                        {rec.topic_focus && (
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
+                            Focus: {rec.topic_focus}
+                          </span>
+                        )}
+                        {rec.struggle_index !== null && (
+                          <span className="text-amber-700">
+                            Struggle: {formatStruggleIndex(rec.struggle_index)}
+                          </span>
+                        )}
+                        {rec.due_date && (
+                          <span>Due: {formatUtcDate(rec.due_date)}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-400">
+                        {rec.action_payload?.question_count ?? 5} questions · {rec.action_payload?.mode ?? "practice"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleLaunchRecommendation(rec)}
+                        disabled={!isActionable}
+                        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
                           isActionable
-                            ? "border-slate-200 bg-surface hover:border-slate-300 hover:shadow-xs"
-                            : "border-slate-200/60 bg-slate-50/50 opacity-75"
+                            ? "bg-accent-600 text-white hover:bg-accent-700"
+                            : "cursor-not-allowed bg-slate-200 text-slate-400"
                         }`}
                       >
-                        <div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span
-                              className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                rec.type === "spaced_review"
-                                  ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                  : rec.type === "weak_topic_practice"
-                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                  : "bg-blue-50 text-blue-700 border border-blue-200"
-                              }`}
-                            >
-                              {rec.type === "spaced_review"
-                                ? "Spaced Review"
-                                : rec.type === "weak_topic_practice"
-                                ? "Weak Topic Practice"
-                                : "Unrevised Document"}
-                            </span>
-                            {rec.urgency !== null && (
-                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${urgencyInfo.badgeClasses}`}>
-                                Urgency: {urgencyInfo.valueText}
-                              </span>
-                            )}
-                          </div>
+                        {!isActionable ? (rec.is_archived ? "Archived" : "Not Ready") : "Start Revision →"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-                          <h3 className="mt-2.5 text-sm font-semibold text-slate-900">{rec.title}</h3>
-                          <p className="mt-1 text-xs text-slate-600 leading-relaxed">{rec.reason}</p>
+        {/* Weak Topics Spotlight */}
+        <section aria-label="Weak Topics" className="rounded-xl border border-slate-200 bg-surface p-5 shadow-2xs space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Weak-Topic Detection</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Prioritized by struggle index and error ratio to help focus study on high-need areas.
+            </p>
+          </div>
 
-                          {/* Provenance & details */}
-                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                            <span className="font-medium text-slate-700 truncate max-w-[220px]" title={rec.document_title}>
-                              📄 {rec.document_title}
-                            </span>
-                            {rec.topic_focus && (
-                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
-                                Focus: {rec.topic_focus}
-                              </span>
-                            )}
-                            {rec.struggle_index !== null && (
-                              <span className="text-amber-700">
-                                Struggle: {formatStruggleIndex(rec.struggle_index)}
-                              </span>
-                            )}
-                            {rec.due_date && (
-                              <span>Due: {formatUtcDate(rec.due_date)}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                          <span className="text-[11px] text-slate-400">
-                            {rec.action_payload?.question_count ?? 5} questions · {rec.action_payload?.mode ?? "practice"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleLaunchRecommendation(rec)}
-                            disabled={!isActionable}
-                            className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
-                              isActionable
-                                ? "bg-accent-600 text-white hover:bg-accent-700"
-                                : "cursor-not-allowed bg-slate-200 text-slate-400"
+          {weakTopicsState.error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center justify-between">
+              <span>{weakTopicsState.error}</span>
+              <button
+                type="button"
+                onClick={retryWeakTopics}
+                className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-200"
+              >
+                Retry Weak Topics
+              </button>
+            </div>
+          ) : weakTopicsState.loading && !weakTopics ? (
+            <div className="flex h-32 items-center justify-center text-xs text-slate-400">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent-600 border-t-transparent mr-2" />
+              Loading weak topics...
+            </div>
+          ) : !weakTopics || weakTopics.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
+              No weak topics detected. Great progress across all assessed topics!
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-400">
+                    <th className="pb-2 font-medium">Topic</th>
+                    <th className="pb-2 font-medium">Document</th>
+                    <th className="pb-2 font-medium">Struggle Index</th>
+                    <th className="pb-2 font-medium">Incorrect Ratio</th>
+                    <th className="pb-2 font-medium">Mastery</th>
+                    <th className="pb-2 font-medium text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {weakTopics.map((wt, i) => {
+                    const isActionable = wt.is_actionable && !wt.is_archived;
+                    return (
+                      <tr key={`${wt.document_id}-${wt.topic_key}-${i}`} className="hover:bg-slate-50/50">
+                        <td className="py-3 font-medium text-slate-900">{wt.topic_display}</td>
+                        <td className="py-3 text-slate-600 truncate max-w-[200px]" title={wt.document_title}>
+                          {wt.document_title}
+                        </td>
+                        <td className="py-3 font-semibold text-amber-700">
+                          {formatStruggleIndex(wt.struggle_index)}
+                        </td>
+                        <td className="py-3 text-slate-600">
+                          {formatPercent(wt.incorrect_ratio)} ({wt.incorrect_questions_count}/{wt.distinct_attempted_questions})
+                        </td>
+                        <td className="py-3">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                              formatMasteryTier(wt.mastery_tier, true).badgeClasses
                             }`}
                           >
-                            {!isActionable ? (rec.is_archived ? "Archived" : "Not Ready") : "Start Revision →"}
+                            {formatMasteryTier(wt.mastery_tier, true).label}
+                          </span>
+                        </td>
+                        <td className="py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleLaunchWeakTopic(wt)}
+                            disabled={!isActionable}
+                            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                              isActionable
+                                ? "bg-accent-50 text-accent-700 border border-accent-200 hover:bg-accent-100"
+                                : "cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-200"
+                            }`}
+                          >
+                            {isActionable ? "Practice Topic" : wt.is_archived ? "Archived" : "Not Ready"}
                           </button>
-                        </div>
-                      </div>
+                        </td>
+                      </tr>
                     );
                   })}
-                </div>
-              )}
-            </section>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
-            {/* Weak Topics Spotlight */}
-            <section aria-label="Weak Topics" className="rounded-xl border border-slate-200 bg-surface p-5 shadow-2xs space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">Weak-Topic Detection</h2>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Prioritized by struggle index and error ratio to help focus study on high-need areas.
-                </p>
-              </div>
+        {/* Spaced Repetition Schedules */}
+        <section aria-label="Spaced Repetition" className="rounded-xl border border-slate-200 bg-surface p-5 shadow-2xs space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Spaced Repetition Schedule</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Document-level review intervals based on revision performance streaks.
+            </p>
+          </div>
 
-              {!weakTopics || weakTopics.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
-                  No weak topics detected. Great progress across all assessed topics!
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-400">
-                        <th className="pb-2 font-medium">Topic</th>
-                        <th className="pb-2 font-medium">Document</th>
-                        <th className="pb-2 font-medium">Struggle Index</th>
-                        <th className="pb-2 font-medium">Incorrect Ratio</th>
-                        <th className="pb-2 font-medium">Mastery</th>
-                        <th className="pb-2 font-medium text-right">Action</th>
+          {schedulesState.error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center justify-between">
+              <span>{schedulesState.error}</span>
+              <button
+                type="button"
+                onClick={retrySchedules}
+                className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-200"
+              >
+                Retry Schedules
+              </button>
+            </div>
+          ) : schedulesState.loading && !schedules ? (
+            <div className="flex h-32 items-center justify-center text-xs text-slate-400">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent-600 border-t-transparent mr-2" />
+              Loading review schedules...
+            </div>
+          ) : !schedules || schedules.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
+              No review schedules recorded yet. Complete revision sessions to establish review schedules.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-400">
+                    <th className="pb-2 font-medium">Document</th>
+                    <th className="pb-2 font-medium">Streak</th>
+                    <th className="pb-2 font-medium">Interval</th>
+                    <th className="pb-2 font-medium">Latest Score</th>
+                    <th className="pb-2 font-medium">Next Due</th>
+                    <th className="pb-2 font-medium">Status</th>
+                    <th className="pb-2 font-medium text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {schedules.map((sch, i) => {
+                    const isActionable = sch.is_actionable && !sch.is_archived;
+                    return (
+                      <tr key={`${sch.document_id}-${i}`} className="hover:bg-slate-50/50">
+                        <td className="py-3 font-medium text-slate-900 truncate max-w-[220px]" title={sch.document_title}>
+                          {sch.document_title}
+                        </td>
+                        <td className="py-3 text-slate-700 font-semibold">{sch.current_streak}</td>
+                        <td className="py-3 text-slate-600">{formatIntervalDays(sch.interval_days)}</td>
+                        <td className="py-3 text-slate-700">{formatScore(sch.latest_review_score)}</td>
+                        <td className="py-3 text-slate-600">{formatUtcDate(sch.next_review_due)}</td>
+                        <td className="py-3">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                              sch.is_due
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : "bg-slate-50 text-slate-600 border-slate-200"
+                            }`}
+                          >
+                            {sch.is_due ? "Review Due" : "Upcoming"}
+                          </span>
+                        </td>
+                        <td className="py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleLaunchSchedule(sch)}
+                            disabled={!isActionable}
+                            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                              isActionable
+                                ? "bg-accent-50 text-accent-700 border border-accent-200 hover:bg-accent-100"
+                                : "cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-200"
+                            }`}
+                          >
+                            {isActionable ? "Review Document" : sch.is_archived ? "Archived" : "Not Ready"}
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {weakTopics.map((wt, i) => {
-                        const isActionable = wt.is_actionable && !wt.is_archived;
-                        return (
-                          <tr key={`${wt.document_id}-${wt.topic_key}-${i}`} className="hover:bg-slate-50/50">
-                            <td className="py-3 font-medium text-slate-900">{wt.topic_display}</td>
-                            <td className="py-3 text-slate-600 truncate max-w-[200px]" title={wt.document_title}>
-                              {wt.document_title}
-                            </td>
-                            <td className="py-3 font-semibold text-amber-700">
-                              {formatStruggleIndex(wt.struggle_index)}
-                            </td>
-                            <td className="py-3 text-slate-600">
-                              {formatPercent(wt.incorrect_ratio)} ({wt.incorrect_questions_count}/{wt.distinct_attempted_questions})
-                            </td>
-                            <td className="py-3">
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                                  formatMasteryTier(wt.mastery_tier, true).badgeClasses
-                                }`}
-                              >
-                                {formatMasteryTier(wt.mastery_tier, true).label}
-                              </span>
-                            </td>
-                            <td className="py-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleLaunchWeakTopic(wt)}
-                                disabled={!isActionable}
-                                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-                                  isActionable
-                                    ? "bg-accent-50 text-accent-700 border border-accent-200 hover:bg-accent-100"
-                                    : "cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-200"
-                                }`}
-                              >
-                                {isActionable ? "Practice Topic" : wt.is_archived ? "Archived" : "Not Ready"}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
-            {/* Spaced Repetition Schedules */}
-            <section aria-label="Spaced Repetition" className="rounded-xl border border-slate-200 bg-surface p-5 shadow-2xs space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">Spaced Repetition Schedule</h2>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Document-level review intervals based on revision performance streaks.
-                </p>
-              </div>
+        {/* Topic Mastery Explorer */}
+        <section aria-label="Topic Mastery" className="rounded-xl border border-slate-200 bg-surface p-5 shadow-2xs space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Topic Mastery Explorer</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Comprehensive topic breakdown preserving composite document provenance.
+            </p>
+          </div>
 
-              {!schedules || schedules.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
-                  No review schedules recorded yet. Complete revision sessions to establish review schedules.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-400">
-                        <th className="pb-2 font-medium">Document</th>
-                        <th className="pb-2 font-medium">Streak</th>
-                        <th className="pb-2 font-medium">Interval</th>
-                        <th className="pb-2 font-medium">Latest Score</th>
-                        <th className="pb-2 font-medium">Next Due</th>
-                        <th className="pb-2 font-medium">Status</th>
-                        <th className="pb-2 font-medium text-right">Action</th>
+          {topicsState.error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center justify-between">
+              <span>{topicsState.error}</span>
+              <button
+                type="button"
+                onClick={retryTopics}
+                className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-200"
+              >
+                Retry Topics
+              </button>
+            </div>
+          ) : topicsState.loading && !topics ? (
+            <div className="flex h-32 items-center justify-center text-xs text-slate-400">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent-600 border-t-transparent mr-2" />
+              Loading topic mastery...
+            </div>
+          ) : !topics || topics.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
+              No topic mastery data found. Complete revision questions to populate topic mastery.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-400">
+                    <th className="pb-2 font-medium">Topic</th>
+                    <th className="pb-2 font-medium">Source Document</th>
+                    <th className="pb-2 font-medium">Mastery Score</th>
+                    <th className="pb-2 font-medium">Tier</th>
+                    <th className="pb-2 font-medium">Questions Attempted</th>
+                    <th className="pb-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {topics.map((t, i) => {
+                    const tierInfo = formatMasteryTier(t.mastery_tier, t.is_assessed);
+                    return (
+                      <tr key={`${t.document_id}-${t.topic_key}-${i}`} className="hover:bg-slate-50/50">
+                        <td className="py-3 font-medium text-slate-900">{t.topic_display}</td>
+                        <td className="py-3 text-slate-600 truncate max-w-[200px]" title={t.document_title}>
+                          {t.document_title}
+                          {t.is_archived && <span className="ml-1 text-[10px] text-amber-600">(archived)</span>}
+                        </td>
+                        <td className="py-3 font-semibold text-slate-900">
+                          {t.is_assessed ? formatPercent(t.mastery_score) : "--"}
+                        </td>
+                        <td className="py-3">
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tierInfo.badgeClasses}`}>
+                            {tierInfo.label}
+                          </span>
+                        </td>
+                        <td className="py-3 text-slate-600">{t.distinct_attempted_questions}</td>
+                        <td className="py-3 text-[11px] text-slate-400">
+                          {t.is_assessed ? "Assessed" : `${t.questions_needed} more needed`}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {schedules.map((sch, i) => {
-                        const isActionable = sch.is_actionable && !sch.is_archived;
-                        return (
-                          <tr key={`${sch.document_id}-${i}`} className="hover:bg-slate-50/50">
-                            <td className="py-3 font-medium text-slate-900 truncate max-w-[220px]" title={sch.document_title}>
-                              {sch.document_title}
-                            </td>
-                            <td className="py-3 text-slate-700 font-semibold">{sch.current_streak}</td>
-                            <td className="py-3 text-slate-600">{formatIntervalDays(sch.interval_days)}</td>
-                            <td className="py-3 text-slate-700">{formatScore(sch.latest_review_score)}</td>
-                            <td className="py-3 text-slate-600">{formatUtcDate(sch.next_review_due)}</td>
-                            <td className="py-3">
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                                  sch.is_due
-                                    ? "bg-rose-50 text-rose-700 border-rose-200"
-                                    : "bg-slate-50 text-slate-600 border-slate-200"
-                                }`}
-                              >
-                                {sch.is_due ? "Review Due" : "Upcoming"}
-                              </span>
-                            </td>
-                            <td className="py-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleLaunchSchedule(sch)}
-                                disabled={!isActionable}
-                                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-                                  isActionable
-                                    ? "bg-accent-50 text-accent-700 border border-accent-200 hover:bg-accent-100"
-                                    : "cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-200"
-                                }`}
-                              >
-                                {isActionable ? "Review Document" : sch.is_archived ? "Archived" : "Not Ready"}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-
-            {/* Topic Mastery Explorer */}
-            <section aria-label="Topic Mastery" className="rounded-xl border border-slate-200 bg-surface p-5 shadow-2xs space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">Topic Mastery Explorer</h2>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Comprehensive topic breakdown preserving composite document provenance.
-                </p>
-              </div>
-
-              {!topics || topics.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
-                  No topic mastery data found. Complete revision questions to populate topic mastery.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-400">
-                        <th className="pb-2 font-medium">Topic</th>
-                        <th className="pb-2 font-medium">Source Document</th>
-                        <th className="pb-2 font-medium">Mastery Score</th>
-                        <th className="pb-2 font-medium">Tier</th>
-                        <th className="pb-2 font-medium">Questions Attempted</th>
-                        <th className="pb-2 font-medium">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {topics.map((t, i) => {
-                        const tierInfo = formatMasteryTier(t.mastery_tier, t.is_assessed);
-                        return (
-                          <tr key={`${t.document_id}-${t.topic_key}-${i}`} className="hover:bg-slate-50/50">
-                            <td className="py-3 font-medium text-slate-900">{t.topic_display}</td>
-                            <td className="py-3 text-slate-600 truncate max-w-[200px]" title={t.document_title}>
-                              {t.document_title}
-                              {t.is_archived && <span className="ml-1 text-[10px] text-amber-600">(archived)</span>}
-                            </td>
-                            <td className="py-3 font-semibold text-slate-900">
-                              {t.is_assessed ? formatPercent(t.mastery_score) : "--"}
-                            </td>
-                            <td className="py-3">
-                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tierInfo.badgeClasses}`}>
-                                {tierInfo.label}
-                              </span>
-                            </td>
-                            <td className="py-3 text-slate-600">{t.distinct_attempted_questions}</td>
-                            <td className="py-3 text-[11px] text-slate-400">
-                              {t.is_assessed ? "Assessed" : `${t.questions_needed} more needed`}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          </>
-        )}
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );

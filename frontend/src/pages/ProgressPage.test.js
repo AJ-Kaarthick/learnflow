@@ -166,3 +166,71 @@ test("7. Recommendation -> Revision setup handoff flow works end-to-end", () => 
   assert.equal(failOutcome.isValid, false);
   assert.match(failOutcome.reason, /Bio2\.pdf/);
 });
+
+// ---------------------------------------------------------------------------
+// 8. Independent Resource Loading & Retry Architecture Contracts
+// ---------------------------------------------------------------------------
+test("8. ProgressPage.jsx decouples resource loading into 5 independent states with dedicated retries", () => {
+  const pageSource = readFileSync(join(__dirname, "./ProgressPage.jsx"), "utf-8");
+
+  // 5 independent resource states
+  assert.match(pageSource, /summaryState/);
+  assert.match(pageSource, /topicsState/);
+  assert.match(pageSource, /weakTopicsState/);
+  assert.match(pageSource, /schedulesState/);
+  assert.match(pageSource, /recommendationsState/);
+
+  // 5 independent loader functions
+  assert.match(pageSource, /const\s+loadSummary\s*=/);
+  assert.match(pageSource, /const\s+loadTopics\s*=/);
+  assert.match(pageSource, /const\s+loadWeakTopics\s*=/);
+  assert.match(pageSource, /const\s+loadSchedules\s*=/);
+  assert.match(pageSource, /const\s+loadRecommendations\s*=/);
+
+  // 5 independent section retry handlers
+  assert.match(pageSource, /const\s+retrySummary\s*=/);
+  assert.match(pageSource, /const\s+retryTopics\s*=/);
+  assert.match(pageSource, /const\s+retryWeakTopics\s*=/);
+  assert.match(pageSource, /const\s+retrySchedules\s*=/);
+  assert.match(pageSource, /const\s+retryRecommendations\s*=/);
+
+  // Dedicated section retry button bindings in JSX
+  assert.match(pageSource, /onClick=\{retrySummary\}/);
+  assert.match(pageSource, /onClick=\{retryRecommendations\}/);
+  assert.match(pageSource, /onClick=\{retryWeakTopics\}/);
+  assert.match(pageSource, /onClick=\{retrySchedules\}/);
+  assert.match(pageSource, /onClick=\{retryTopics\}/);
+
+  // Manual refresh uses Promise.allSettled and generation tracking
+  assert.match(pageSource, /handleManualRefresh/);
+  assert.match(pageSource, /Promise\.allSettled/);
+  assert.match(pageSource, /isRefreshing/);
+});
+
+// ---------------------------------------------------------------------------
+// 9. Identity Change Isolation & Auth Loading Shell Contracts
+// ---------------------------------------------------------------------------
+test("9. ProgressPage.jsx immediately purges previous identity data and displays shell during auth loading", () => {
+  const pageSource = readFileSync(join(__dirname, "./ProgressPage.jsx"), "utf-8");
+
+  // Previous scope tracking ref
+  assert.match(pageSource, /previousScopeRef\s*=\s*useRef\(null\)/);
+
+  // Scope change detection immediately resets all 5 resource states
+  assert.match(pageSource, /currentScope\s*!==\s*previousScopeRef\.current/);
+  assert.match(pageSource, /setSummaryState\(\{\s*data:\s*null/);
+  assert.match(pageSource, /setTopicsState\(\{\s*data:\s*null/);
+  assert.match(pageSource, /setWeakTopicsState\(\{\s*data:\s*null/);
+  assert.match(pageSource, /setSchedulesState\(\{\s*data:\s*null/);
+  assert.match(pageSource, /setRecommendationsState\(\{\s*data:\s*null/);
+
+  // In-flight abort & generation increment on identity change
+  assert.match(pageSource, /abortControllerRef\.current\.abort\(\)/);
+  assert.match(pageSource, /generationRef\.current\s*\+=\s*1/);
+
+  // Auth loading gate: early return without firing network requests
+  assert.match(pageSource, /authStatus\s*===\s*"loading"\s*\|\|\s*!currentScope/);
+
+  // Render isolated shell while resolving identity (no stale user data)
+  assert.match(pageSource, /Resolving identity\.\.\./);
+});

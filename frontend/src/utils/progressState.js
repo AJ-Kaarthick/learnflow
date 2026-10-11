@@ -11,12 +11,18 @@ export const VOLUME_METRICS = [
   { id: "total_attempts", label: "Total Attempts", description: "All attempts including retries" },
 ];
 
+function isFiniteNumber(val) {
+  if (val === null || val === undefined || val === "") return false;
+  const num = typeof val === "number" ? val : Number(val);
+  return typeof num === "number" && Number.isFinite(num);
+}
+
 /**
  * Formats a fractional number (0.0 to 1.0) into a clean percentage string (e.g. "85%").
- * Returns "--" for null, undefined, or NaN without fabricating zero.
+ * Returns "--" for null, undefined, NaN, or non-finite values without fabricating zero.
  */
 export function formatPercent(val) {
-  if (val === null || val === undefined || Number.isNaN(Number(val))) {
+  if (!isFiniteNumber(val)) {
     return "--";
   }
   const num = Number(val);
@@ -72,10 +78,10 @@ export function formatMasteryTier(tier, isAssessed = true) {
 
 /**
  * Formats an unbounded struggle index to 2 decimal places.
- * Never clamps the value to 0-1.
+ * Never clamps the value to 0-1, and safely rejects non-finite values.
  */
 export function formatStruggleIndex(index) {
-  if (index === null || index === undefined || Number.isNaN(Number(index))) {
+  if (!isFiniteNumber(index)) {
     return "--";
   }
   return Number(index).toFixed(2);
@@ -84,10 +90,10 @@ export function formatStruggleIndex(index) {
 /**
  * Formats an urgency metric and derives review status.
  * Authoritative review status uses urgency >= 1.0 or server-provided isDue flag.
- * Always displays the raw numerical urgency value when present.
+ * Safely rejects non-finite urgency values without displaying Infinityx or NaN.
  */
 export function formatUrgency(urgency, isDue = false) {
-  const hasUrgency = urgency !== null && urgency !== undefined && !Number.isNaN(Number(urgency));
+  const hasUrgency = isFiniteNumber(urgency);
   const numericUrgency = hasUrgency ? Number(urgency) : null;
   const isDueActive = Boolean(isDue || (numericUrgency !== null && numericUrgency >= 1.0));
 
@@ -178,7 +184,7 @@ export function computeActivityChartData(
   // Extract raw volume values based on selected metric
   const volumes = timeline.map((d) => {
     const raw = d[volumeMetric];
-    return typeof raw === "number" && !Number.isNaN(raw) && raw >= 0 ? raw : 0;
+    return isFiniteNumber(raw) && Number(raw) >= 0 ? Number(raw) : 0;
   });
 
   const rawMaxVolume = Math.max(0, ...volumes);
@@ -217,7 +223,7 @@ export function computeActivityChartData(
 
     // Score trend line coordinates
     const avgScore = day.average_score;
-    const hasScore = typeof avgScore === "number" && !Number.isNaN(avgScore) && avgScore >= 0;
+    const hasScore = isFiniteNumber(avgScore) && Number(avgScore) >= 0;
 
     if (hasScore) {
       // Score is 0.0 to 1.0 mapped to plotHeight
@@ -292,41 +298,77 @@ export const VALID_DIFFICULTIES = new Set(["beginner", "intermediate", "advanced
 export const VALID_QUESTION_TYPES = new Set(["multiple_choice", "open_ended", "mixed"]);
 
 /**
- * Validates a pending launcher payload to ensure it conforms to Revision creation constraints.
+ * Validates a pending launcher payload to ensure it conforms strictly to Revision creation constraints.
+ * Rejects malformed payloads rather than silently altering or defaulting them.
  */
 export function validatePendingLaunchPayload(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
   }
 
-  const docIds = Array.isArray(payload.document_ids)
-    ? payload.document_ids.filter((id) => typeof id === "string" && id.trim().length > 0)
-    : [];
+  // 1. document_ids: must be a non-empty array of 1-10 valid, non-empty string IDs.
+  // Reject the entire payload if any supplied ID is invalid. Do not filter invalid entries and continue.
+  if (!Array.isArray(payload.document_ids) || payload.document_ids.length === 0 || payload.document_ids.length > 10) {
+    return null;
+  }
+  const docIds = [];
+  for (const id of payload.document_ids) {
+    if (typeof id !== "string" || !id.trim()) {
+      return null;
+    }
+    docIds.push(id.trim());
+  }
 
-  if (docIds.length === 0 || docIds.length > 10) {
+  // 2. Validate mode against supported values (reject invalid instead of replacing with defaults)
+  if (!payload.mode || !VALID_MODES.has(payload.mode)) {
     return null;
   }
 
-  const mode = VALID_MODES.has(payload.mode) ? payload.mode : "practice";
-  const difficulty = VALID_DIFFICULTIES.has(payload.difficulty) ? payload.difficulty : "intermediate";
-  const questionType = VALID_QUESTION_TYPES.has(payload.question_type) ? payload.question_type : "multiple_choice";
-
-  let questionCount = Number.parseInt(payload.question_count, 10);
-  if (Number.isNaN(questionCount) || questionCount < 1 || questionCount > 20) {
-    questionCount = 5;
+  // 3. Validate difficulty against supported values (reject invalid instead of replacing with defaults)
+  if (!payload.difficulty || !VALID_DIFFICULTIES.has(payload.difficulty)) {
+    return null;
   }
 
+  // 4. Validate question_type against supported values (reject invalid instead of replacing with defaults)
+  if (!payload.question_type || !VALID_QUESTION_TYPES.has(payload.question_type)) {
+    return null;
+  }
+
+  // 5. Validate question_count against bounds (reject out-of-range or invalid instead of clamping)
+  const rawCount = payload.question_count;
+  let questionCount = rawCount;
+  if (typeof rawCount === "string" && /^\d+$/.test(rawCount.trim())) {
+    questionCount = Number.parseInt(rawCount.trim(), 10);
+  }
+  if (
+    typeof questionCount !== "number" ||
+    !Number.isInteger(questionCount) ||
+    questionCount < 1 ||
+    questionCount > 20
+  ) {
+    return null;
+  }
+
+  // 6. Validate topic_focus: null/absent or a valid string no longer than 100 characters.
+  // Do not silently truncate malformed payload values.
   let topicFocus = null;
-  if (typeof payload.topic_focus === "string" && payload.topic_focus.trim().length > 0) {
-    topicFocus = payload.topic_focus.trim().slice(0, 100);
+  if (payload.topic_focus !== null && payload.topic_focus !== undefined) {
+    if (typeof payload.topic_focus !== "string") {
+      return null;
+    }
+    const trimmed = payload.topic_focus.trim();
+    if (trimmed.length > 100) {
+      return null;
+    }
+    topicFocus = trimmed.length > 0 ? trimmed : null;
   }
 
   return {
     document_ids: docIds,
-    mode,
-    difficulty,
+    mode: payload.mode,
+    difficulty: payload.difficulty,
     question_count: questionCount,
-    question_type: questionType,
+    question_type: payload.question_type,
     topic_focus: topicFocus,
   };
 }

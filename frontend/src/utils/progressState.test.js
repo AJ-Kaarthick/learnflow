@@ -23,14 +23,27 @@ import {
 // ---------------------------------------------------------------------------
 // 1. Metric formatting and schema semantics
 // ---------------------------------------------------------------------------
-test("formatPercent handles 0-1 decimals and preserves null/undefined/NaN as '--'", () => {
+test("formatPercent and formatScore safely handle decimals and reject non-finite/null values as '--'", () => {
   assert.equal(formatPercent(0.85), "85%");
   assert.equal(formatPercent(1.0), "100%");
   assert.equal(formatPercent(0.0), "0%");
   assert.equal(formatPercent(null), "--");
   assert.equal(formatPercent(undefined), "--");
   assert.equal(formatPercent(Number.NaN), "--");
+  assert.equal(formatPercent(Infinity), "--");
+  assert.equal(formatPercent(-Infinity), "--");
+  assert.equal(formatPercent(""), "--");
+  assert.equal(formatPercent("invalid"), "--");
+
+  assert.equal(formatScore(0.85), "85%");
+  assert.equal(formatScore(1.0), "100%");
+  assert.equal(formatScore(0.0), "0%");
   assert.equal(formatScore(null), "--");
+  assert.equal(formatScore(undefined), "--");
+  assert.equal(formatScore(Number.NaN), "--");
+  assert.equal(formatScore(Infinity), "--");
+  assert.equal(formatScore(-Infinity), "--");
+  assert.equal(formatScore("invalid"), "--");
 });
 
 test("formatMasteryTier distinguishes mastered, proficient, needs_practice, and unassessed", () => {
@@ -54,16 +67,20 @@ test("formatMasteryTier distinguishes mastered, proficient, needs_practice, and 
   assert.equal(nullTier.tier, "unassessed");
 });
 
-test("formatStruggleIndex formats unbounded numbers to 2 decimal places without clamping", () => {
+test("formatStruggleIndex formats unbounded numbers to 2 decimal places without clamping and safely rejects non-finite values", () => {
   assert.equal(formatStruggleIndex(0.456), "0.46");
   assert.equal(formatStruggleIndex(1.854), "1.85");
   assert.equal(formatStruggleIndex(3.2), "3.20");
   assert.equal(formatStruggleIndex(0.0), "0.00");
   assert.equal(formatStruggleIndex(null), "--");
   assert.equal(formatStruggleIndex(undefined), "--");
+  assert.equal(formatStruggleIndex(Number.NaN), "--");
+  assert.equal(formatStruggleIndex(Infinity), "--");
+  assert.equal(formatStruggleIndex(-Infinity), "--");
+  assert.equal(formatStruggleIndex("not-a-number"), "--");
 });
 
-test("formatUrgency uses urgency >= 1.0 or isDue as authoritative and displays raw numerical value", () => {
+test("formatUrgency uses urgency >= 1.0 or isDue as authoritative, displays raw numerical value, and rejects non-finite values", () => {
   const due = formatUrgency(1.5, false);
   assert.equal(due.isDue, true);
   assert.equal(due.valueText, "1.50x");
@@ -82,6 +99,22 @@ test("formatUrgency uses urgency >= 1.0 or isDue as authoritative and displays r
   const noUrgency = formatUrgency(null, false);
   assert.equal(noUrgency.isDue, false);
   assert.equal(noUrgency.valueText, "--");
+
+  const nanUrgency = formatUrgency(Number.NaN, false);
+  assert.equal(nanUrgency.isDue, false);
+  assert.equal(nanUrgency.valueText, "--");
+
+  const infUrgency = formatUrgency(Infinity, false);
+  assert.equal(infUrgency.isDue, false);
+  assert.equal(infUrgency.valueText, "--");
+
+  const negInfUrgency = formatUrgency(-Infinity, false);
+  assert.equal(negInfUrgency.isDue, false);
+  assert.equal(negInfUrgency.valueText, "--");
+
+  const strUrgency = formatUrgency("not-numeric", false);
+  assert.equal(strUrgency.isDue, false);
+  assert.equal(strUrgency.valueText, "--");
 });
 
 test("formatUtcDate formats stable calendar dates in UTC", () => {
@@ -191,7 +224,7 @@ test("savePendingRevisionLaunch and consumePendingRevisionLaunch enforce one-sho
   assert.equal(subsequent, null);
 });
 
-test("validatePendingLaunchPayload sanitizes and clamps bounds", () => {
+test("validatePendingLaunchPayload strictly validates valid payloads and rejects malformed inputs", () => {
   const valid = validatePendingLaunchPayload({
     document_ids: ["doc-1", "doc-2"],
     mode: "quiz",
@@ -200,24 +233,196 @@ test("validatePendingLaunchPayload sanitizes and clamps bounds", () => {
     question_type: "open_ended",
     topic_focus: "Photosynthesis",
   });
-  assert.equal(valid.mode, "quiz");
-  assert.equal(valid.difficulty, "advanced");
-  assert.equal(valid.question_count, 15);
-  assert.equal(valid.question_type, "open_ended");
-  assert.equal(valid.topic_focus, "Photosynthesis");
-
-  const invalid = validatePendingLaunchPayload({ document_ids: [] });
-  assert.equal(invalid, null);
-
-  const fallback = validatePendingLaunchPayload({
-    document_ids: ["doc-1"],
-    mode: "invalid_mode",
-    difficulty: "invalid_diff",
-    question_count: 999,
+  assert.deepEqual(valid, {
+    document_ids: ["doc-1", "doc-2"],
+    mode: "quiz",
+    difficulty: "advanced",
+    question_count: 15,
+    question_type: "open_ended",
+    topic_focus: "Photosynthesis",
   });
-  assert.equal(fallback.mode, "practice");
-  assert.equal(fallback.difficulty, "intermediate");
-  assert.equal(fallback.question_count, 5);
+
+  // Null or non-object payloads
+  assert.equal(validatePendingLaunchPayload(null), null);
+  assert.equal(validatePendingLaunchPayload("not-an-object"), null);
+
+  // Empty document_ids array
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: [],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 5,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+
+  // Any invalid document ID in array rejects the whole payload without filtering
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1", ""],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 5,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1", null],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 5,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1", "   "],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 5,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+
+  // More than 10 documents
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: Array.from({ length: 11 }, (_, i) => `doc-${i}`),
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 5,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+
+  // Invalid mode (rejected, not defaulted)
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1"],
+      mode: "invalid_mode",
+      difficulty: "intermediate",
+      question_count: 5,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+
+  // Invalid difficulty (rejected, not defaulted)
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1"],
+      mode: "practice",
+      difficulty: "invalid_diff",
+      question_count: 5,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+
+  // Invalid question_type (rejected, not defaulted)
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1"],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 5,
+      question_type: "invalid_type",
+    }),
+    null
+  );
+
+  // Question count bounds and types (1-20 integer)
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1"],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 0,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1"],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 21,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1"],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 5.5,
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1"],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: "abc",
+      question_type: "multiple_choice",
+    }),
+    null
+  );
+
+  // topic_focus > 100 chars (rejected, not silently truncated)
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1"],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 5,
+      question_type: "multiple_choice",
+      topic_focus: "A".repeat(101),
+    }),
+    null
+  );
+
+  // topic_focus non-string
+  assert.equal(
+    validatePendingLaunchPayload({
+      document_ids: ["doc-1"],
+      mode: "practice",
+      difficulty: "intermediate",
+      question_count: 5,
+      question_type: "multiple_choice",
+      topic_focus: 123,
+    }),
+    null
+  );
+
+  // Canonical recommendation payload with topic_focus: null
+  const canonical = validatePendingLaunchPayload({
+    document_ids: ["doc-1"],
+    mode: "practice",
+    difficulty: "intermediate",
+    question_count: 5,
+    question_type: "multiple_choice",
+    topic_focus: null,
+  });
+  assert.deepEqual(canonical, {
+    document_ids: ["doc-1"],
+    mode: "practice",
+    difficulty: "intermediate",
+    question_count: 5,
+    question_type: "multiple_choice",
+    topic_focus: null,
+  });
 });
 
 test("createLaunchPayloadFromRecommendation uses authoritative action_payload", () => {
