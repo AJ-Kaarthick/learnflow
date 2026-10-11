@@ -756,6 +756,77 @@ def test_sr_score_threshold_exact_70_succeeds_below_fails(
     assert sched.interval_days == 1
 
 
+def test_sr_threshold_precision_raw_69996_fails_and_resets_streak(
+    db_session: Session,
+    test_user: User,
+    test_document: Document,
+):
+    """
+    Verifies that a document-level average score of 0.69996 fails (< 0.70), resets streak to 0,
+    and sets interval to 1 day, even though rounding to 4 decimal places yields 0.7000.
+    """
+    t1 = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
+    t2 = datetime(2026, 1, 2, 10, 0, tzinfo=timezone.utc)
+
+    # Initial session succeeds -> streak 1
+    sess1 = create_session(db_session, test_user, completed_at=t1)
+    add_question(db_session, sess1, 1, test_document.id, test_document.original_filename, attempts=[(0.80, True, t1)])
+
+    # Second session: 2 questions with scores 0.70002 and 0.69990 -> average = 0.69996
+    sess2 = create_session(db_session, test_user, completed_at=t2)
+    add_question(db_session, sess2, 1, test_document.id, test_document.original_filename, attempts=[(0.70002, True, t2)])
+    add_question(db_session, sess2, 2, test_document.id, test_document.original_filename, attempts=[(0.69990, False, t2)])
+    db_session.commit()
+
+    identity = Identity(type=IdentityType.USER, id=test_user.id)
+    sched = get_document_schedule(db_session, identity, test_document.id, now=t2)
+    assert sched is not None
+    # Decision must be a failure (< 0.70)
+    assert sched.current_streak == 0
+    assert sched.interval_days == 1
+    # Reporting score is rounded to 4 decimals (0.7)
+    assert sched.latest_review_score == 0.7
+
+
+def test_sr_calculate_schedule_for_events_precision():
+    """
+    Verifies calculate_schedule_for_events uses unrounded score precision:
+    - 0.70 succeeds.
+    - 0.69996 fails even though round(0.69996, 4) == 0.7000.
+    """
+    t1 = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
+    t2 = datetime(2026, 1, 2, 10, 0, tzinfo=timezone.utc)
+
+    # Exactly 0.70 succeeds
+    ev_exact = ReviewEvent(
+        document_id="doc-1",
+        document_title="Doc 1",
+        is_archived=False,
+        session_id="sess-1",
+        completed_at=t1,
+        score=0.70,
+        is_successful=True,
+    )
+    sched1 = calculate_schedule_for_events([ev_exact], "doc-1", "Doc 1", False, now=t1)
+    assert sched1.current_streak == 1
+    assert sched1.interval_days == 1
+
+    # 0.69996 fails
+    ev_sub = ReviewEvent(
+        document_id="doc-1",
+        document_title="Doc 1",
+        is_archived=False,
+        session_id="sess-2",
+        completed_at=t2,
+        score=0.69996,
+        is_successful=False,
+    )
+    sched2 = calculate_schedule_for_events([ev_exact, ev_sub], "doc-1", "Doc 1", False, now=t2)
+    assert sched2.current_streak == 0
+    assert sched2.interval_days == 1
+    assert sched2.latest_review_score == 0.7
+
+
 def test_sr_streak_transitions_produce_exact_intervals(
     db_session: Session,
     test_user: User,

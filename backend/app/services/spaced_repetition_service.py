@@ -210,7 +210,7 @@ def get_review_schedules(
                     question_scores.append(0.0)
 
             avg_score = (
-                round(sum(question_scores) / len(question_scores), 4)
+                sum(question_scores) / len(question_scores)
                 if question_scores
                 else 0.0
             )
