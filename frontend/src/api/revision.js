@@ -21,6 +21,7 @@ export async function createRevisionSession(options = {}) {
   const difficulty = options.difficulty ?? "intermediate";
   const mode = options.mode ?? "practice";
   const title = options.title;
+  const topicFocus = options.topic_focus ?? options.topicFocus;
 
   const payload = {
     document_ids: documentIds,
@@ -32,6 +33,10 @@ export async function createRevisionSession(options = {}) {
 
   if (title && typeof title === "string" && title.trim()) {
     payload.title = title.trim();
+  }
+
+  if (topicFocus && typeof topicFocus === "string" && topicFocus.trim()) {
+    payload.topic_focus = topicFocus.trim().slice(0, 100);
   }
 
   const response = await apiFetch(`${API_BASE_URL}/api/v1/revision/sessions`, {

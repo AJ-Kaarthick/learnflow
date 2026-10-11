@@ -1,6 +1,7 @@
 import AppShell from "./components/AppShell";
 import ChatPage from "./pages/ChatPage";
 import HomePage from "./pages/HomePage";
+import ProgressPage from "./pages/ProgressPage";
 import RevisionPage from "./pages/RevisionPage";
 import StudyPage from "./pages/StudyPage";
 import { ROUTES, useHashRoute } from "./router/useHashRoute";
@@ -15,6 +16,7 @@ function App() {
       {route === ROUTES.STUDY && <StudyPage />}
       {route === ROUTES.CHAT && <ChatPage />}
       {route === ROUTES.REVISION && <RevisionPage />}
+      {route === ROUTES.PROGRESS && <ProgressPage />}
       {route === ROUTES.HOME && <HomePage />}
     </AppShell>
   );

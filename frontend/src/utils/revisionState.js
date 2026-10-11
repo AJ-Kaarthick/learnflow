@@ -35,6 +35,7 @@ export const MAX_REVISION_DOCUMENTS = 10;
 export function createInitialSetupState() {
   return {
     title: "",
+    topicFocus: "",
     difficulty: "intermediate",
     mode: "practice",
     questionType: "multiple_choice",
@@ -154,6 +155,11 @@ export function buildCreateSessionPayload(setupState = {}, selectedDocuments = [
   const rawTitle = setupState.title;
   if (rawTitle && typeof rawTitle === "string" && rawTitle.trim()) {
     payload.title = rawTitle.trim();
+  }
+
+  const rawTopicFocus = setupState.topicFocus ?? setupState.topic_focus;
+  if (rawTopicFocus && typeof rawTopicFocus === "string" && rawTopicFocus.trim()) {
+    payload.topic_focus = rawTopicFocus.trim().slice(0, 100);
   }
 
   return payload;
@@ -423,6 +429,7 @@ export function prepareRetakeSetup(session) {
   const config = session.config || {};
   return {
     title: session.title ? `${session.title} (Retake)` : "",
+    topicFocus: config.topic_focus || "",
     difficulty: config.difficulty || "intermediate",
     mode: config.mode || "practice",
     questionType: config.question_type || "multiple_choice",

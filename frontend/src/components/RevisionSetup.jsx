@@ -20,6 +20,8 @@ function RevisionSetup({
   onStartSession,
   isCreating = false,
   creationError = null,
+  hydrationError = null,
+  onClearHydrationError = null,
   setupState: controlledSetupState,
   onSetupStateChange,
   selectedDocuments: controlledSelectedDocuments,
@@ -94,6 +96,46 @@ function RevisionSetup({
       </div>
 
       {/* Error notices */}
+      {hydrationError && (
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="font-semibold">Recommendation Requires Action</p>
+              <p className="mt-1">{hydrationError}</p>
+              <div className="mt-3 flex items-center gap-3">
+                <a
+                  href="#/progress"
+                  className="inline-flex items-center text-xs font-semibold text-accent-700 hover:text-accent-800 underline"
+                >
+                  ← Return to Progress
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onClearHydrationError) onClearHydrationError();
+                    setIsPickerOpen(true);
+                  }}
+                  className="text-xs font-medium text-slate-600 hover:text-slate-900 underline"
+                >
+                  Select different documents
+                </button>
+              </div>
+            </div>
+            {onClearHydrationError && (
+              <button
+                type="button"
+                onClick={onClearHydrationError}
+                aria-label="Dismiss warning"
+                className="rounded p-1 text-amber-600 hover:bg-amber-100"
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
+                  <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L8 6.94l2.72-2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {creationError && isGuestLimitError(creationError) && (
         <div className="mb-6">
           <GuestLimitNotice error={creationError} />
@@ -209,6 +251,25 @@ function RevisionSetup({
               maxLength={200}
               className="mt-1.5 block w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
             />
+          </div>
+
+          {/* Topic Focus (Optional) */}
+          <div>
+            <label htmlFor="revision-topic-focus" className="block text-xs font-medium text-slate-700">
+              Topic Focus <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              id="revision-topic-focus"
+              type="text"
+              value={setupState.topicFocus || ""}
+              onChange={(e) => setSetupState((prev) => ({ ...prev, topicFocus: e.target.value }))}
+              placeholder="e.g. Mitosis, Binary Search, Photosynthesis"
+              maxLength={100}
+              className="mt-1.5 block w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Target revision questions toward a specific concept or topic covered in the selected documents.
+            </p>
           </div>
 
           {/* Question Type Selection */}

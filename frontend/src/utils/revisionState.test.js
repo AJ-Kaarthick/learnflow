@@ -51,6 +51,7 @@ test("3. createInitialSetupState provides standard default configuration", () =>
   assert.equal(initial.questionType, "multiple_choice");
   assert.equal(initial.questionCount, 5);
   assert.equal(initial.title, "");
+  assert.equal(initial.topicFocus, "");
   assert.equal(REVISION_DIFFICULTIES.length, 3);
   assert.equal(REVISION_MODES.length, 3);
   assert.equal(REVISION_QUESTION_TYPES.length, 3);
@@ -174,6 +175,20 @@ test("9. buildCreateSessionPayload extracts readable doc IDs and setup options",
     question_type: "mixed",
     question_count: 10,
   });
+
+  // Includes topic_focus when provided and non-empty
+  const targetedPayload = buildCreateSessionPayload({
+    ...setupState,
+    topicFocus: "  Mitosis & Cytokinesis  ",
+  }, docs);
+  assert.equal(targetedPayload.topic_focus, "Mitosis & Cytokinesis");
+
+  // Omitted when whitespace only or empty
+  const blankTopicPayload = buildCreateSessionPayload({
+    ...setupState,
+    topicFocus: "    ",
+  }, docs);
+  assert.equal("topic_focus" in blankTopicPayload, false);
 });
 
 // ---------------------------------------------------------------------------

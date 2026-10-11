@@ -5,11 +5,10 @@ const NAV_ITEMS = [
   { route: ROUTES.STUDY, label: "Study" },
   { route: ROUTES.CHAT, label: "Chat" },
   { route: ROUTES.REVISION, label: "Revision" },
+  { route: ROUTES.PROGRESS, label: "Progress" },
 ];
 
-// Recall is not yet implemented, but showing it here, disabled, makes
-// the eventual five-item nav visible as the direction the app is heading.
-const UPCOMING_ITEMS = ["Recall"];
+const UPCOMING_ITEMS = [];
 
 const NAV_LINK_CLASSES =
   "rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset";

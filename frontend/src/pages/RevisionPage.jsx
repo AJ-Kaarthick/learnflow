@@ -1,31 +1,82 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createRevisionSession } from "../api/revision.js";
 import RevisionActiveRunner from "../components/RevisionActiveRunner.jsx";
 import RevisionHistoryView from "../components/RevisionHistoryView.jsx";
 import RevisionResultsView from "../components/RevisionResultsView.jsx";
 import RevisionSetup from "../components/RevisionSetup.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import { hydrateDocumentIds } from "../utils/documentHydration.js";
+import {
+  consumePendingRevisionLaunch,
+  validateHydratedDocumentsForLaunch,
+} from "../utils/progressState.js";
 import { createInitialSetupState, prepareRetakeSetup } from "../utils/revisionState.js";
 
 /**
  * Top-level page for Revision Experience 2.0 (V3 Milestone 4 Phase 4).
  *
  * Coordinates:
- * 1. Revision Setup (New Session / Retake)
+ * 1. Revision Setup (New Session / Retake / Recommendation launch)
  * 2. Revision Session History
  * 3. Active Session Runner (New or Resumed)
  * 4. Completed Session Results Review
  */
 function RevisionPage() {
+  const { identity, status: authStatus } = useAuth();
   const [viewMode, setViewMode] = useState("launcher"); // "launcher" | "history" | "runner" | "results"
   const [activeSession, setActiveSession] = useState(null);
   const [reviewingSession, setReviewingSession] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [creationError, setCreationError] = useState(null);
+  const [hydrationError, setHydrationError] = useState(null);
 
   // Setup form state preserved at page level across launcher <-> history view switches
   const [setupState, setSetupState] = useState(() => createInitialSetupState());
   const [selectedDocuments, setSelectedDocuments] = useState([]);
+
+  // Consume pending revision launch when identity is verified
+  useEffect(() => {
+    if (authStatus === "loading" || !identity) {
+      // Identity is temporarily unresolved: do not consume or discard prematurely!
+      return;
+    }
+
+    const pendingLaunch = consumePendingRevisionLaunch(identity);
+    if (!pendingLaunch) {
+      return;
+    }
+
+    setViewMode("launcher");
+    setHydrationError(null);
+    setSetupState((prev) => ({
+      ...prev,
+      mode: pendingLaunch.mode || prev.mode,
+      difficulty: pendingLaunch.difficulty || prev.difficulty,
+      questionCount: pendingLaunch.question_count || prev.questionCount,
+      questionType: pendingLaunch.question_type || prev.questionType,
+      topicFocus: pendingLaunch.topic_focus || "",
+    }));
+
+    const docIds = pendingLaunch.document_ids || [];
+    if (docIds.length > 0) {
+      hydrateDocumentIds(docIds)
+        .then((hydrated) => {
+          const validation = validateHydratedDocumentsForLaunch(docIds, hydrated);
+          if (validation.isValid) {
+            setSelectedDocuments(validation.validDocs);
+            setHydrationError(null);
+          } else {
+            // Strictly reject partial sets or missing/unready docs; zero silent drops
+            setSelectedDocuments([]);
+            setHydrationError(validation.reason || "One or more recommended documents are unavailable.");
+          }
+        })
+        .catch((err) => {
+          setSelectedDocuments([]);
+          setHydrationError(err?.message || "Failed to load recommended documents.");
+        });
+    }
+  }, [identity, authStatus]);
 
   async function handleStartSession(payload) {
     setIsCreating(true);
@@ -157,6 +208,8 @@ function RevisionPage() {
           onStartSession={handleStartSession}
           isCreating={isCreating}
           creationError={creationError}
+          hydrationError={hydrationError}
+          onClearHydrationError={() => setHydrationError(null)}
         />
       )}
     </main>
