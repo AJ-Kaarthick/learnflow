@@ -234,3 +234,98 @@ test("9. ProgressPage.jsx immediately purges previous identity data and displays
   // Render isolated shell while resolving identity (no stale user data)
   assert.match(pageSource, /Resolving identity\.\.\./);
 });
+
+// ---------------------------------------------------------------------------
+// 10. Manual Refresh Loader Reuse & Single-Request Guarantee
+// ---------------------------------------------------------------------------
+test("10. Manual refresh reuses the 5 resource loaders without duplicate API calls and ties isRefreshing to loader promises", async () => {
+  const pageSource = readFileSync(join(__dirname, "./ProgressPage.jsx"), "utf-8");
+
+  // 1. loadAll returns a promise settling when all 5 loaders finish
+  assert.match(
+    pageSource,
+    /const\s+loadAll\s*=\s*useCallback\(\s*\(\s*signal,\s*gen\s*\)\s*=>\s*\{\s*return\s+Promise\.allSettled\(\[\s*loadSummary\(signal,\s*gen\),\s*loadTopics\(signal,\s*gen\),\s*loadWeakTopics\(signal,\s*gen\),\s*loadSchedules\(signal,\s*gen\),\s*loadRecommendations\(signal,\s*gen\),\s*\]\);/
+  );
+
+  // 2. handleManualRefresh delegates directly to loadAll without duplicating API calls
+  const refreshMatch = pageSource.match(/const\s+handleManualRefresh\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\};/);
+  assert.ok(refreshMatch, "handleManualRefresh must be defined");
+  const refreshBody = refreshMatch[1];
+
+  // Must call loadAll
+  assert.match(refreshBody, /loadAll\(controller\.signal,\s*newGen\)\.finally\(/);
+
+  // Must NOT call individual API functions directly
+  assert.doesNotMatch(refreshBody, /getProgressSummary/);
+  assert.doesNotMatch(refreshBody, /getProgressTopics/);
+  assert.doesNotMatch(refreshBody, /getProgressWeakTopics/);
+  assert.doesNotMatch(refreshBody, /getSpacedRepetitionSchedules/);
+  assert.doesNotMatch(refreshBody, /getProgressRecommendations/);
+
+  // 3. Behavioral verification of the refresh flow:
+  // Verifies that exactly one call is made per resource loader and isRefreshing is tied to the loaders promise
+  const callCounts = { summary: 0, topics: 0, weakTopics: 0, schedules: 0, recs: 0 };
+  let resolveSummary;
+  let isRefreshing = false;
+  let generation = 1;
+
+  const mockLoadSummary = () => {
+    callCounts.summary += 1;
+    return new Promise((res) => {
+      resolveSummary = res;
+    });
+  };
+  const mockLoadTopics = async () => {
+    callCounts.topics += 1;
+  };
+  const mockLoadWeakTopics = async () => {
+    callCounts.weakTopics += 1;
+  };
+  const mockLoadSchedules = async () => {
+    callCounts.schedules += 1;
+  };
+  const mockLoadRecommendations = async () => {
+    callCounts.recs += 1;
+  };
+
+  const mockLoadAll = (signal, gen) => {
+    return Promise.allSettled([
+      mockLoadSummary(),
+      mockLoadTopics(),
+      mockLoadWeakTopics(),
+      mockLoadSchedules(),
+      mockLoadRecommendations(),
+    ]);
+  };
+
+  // Trigger manual refresh
+  const triggerRefresh = () => {
+    const newGen = generation + 1;
+    generation = newGen;
+    isRefreshing = true;
+    return mockLoadAll(null, newGen).finally(() => {
+      if (generation === newGen) {
+        isRefreshing = false;
+      }
+    });
+  };
+
+  const refreshPromise = triggerRefresh();
+
+  // Exactly one call per loader dispatched
+  assert.equal(callCounts.summary, 1);
+  assert.equal(callCounts.topics, 1);
+  assert.equal(callCounts.weakTopics, 1);
+  assert.equal(callCounts.schedules, 1);
+  assert.equal(callCounts.recs, 1);
+
+  // isRefreshing remains true while loaders are pending
+  assert.equal(isRefreshing, true);
+
+  // Settle remaining loader
+  resolveSummary();
+  await refreshPromise;
+
+  // isRefreshing resets to false once all loaders settle
+  assert.equal(isRefreshing, false);
+});

@@ -166,11 +166,13 @@ function ProgressPage() {
 
   const loadAll = useCallback(
     (signal, gen) => {
-      loadSummary(signal, gen);
-      loadTopics(signal, gen);
-      loadWeakTopics(signal, gen);
-      loadSchedules(signal, gen);
-      loadRecommendations(signal, gen);
+      return Promise.allSettled([
+        loadSummary(signal, gen),
+        loadTopics(signal, gen),
+        loadWeakTopics(signal, gen),
+        loadSchedules(signal, gen),
+        loadRecommendations(signal, gen),
+      ]);
     },
     [loadSummary, loadTopics, loadWeakTopics, loadSchedules, loadRecommendations]
   );
@@ -223,15 +225,7 @@ function ProgressPage() {
     generationRef.current = newGen;
 
     setIsRefreshing(true);
-    loadAll(controller.signal, newGen);
-
-    Promise.allSettled([
-      getProgressSummary({ signal: controller.signal }),
-      getProgressTopics({ signal: controller.signal }),
-      getProgressWeakTopics({ signal: controller.signal }),
-      getSpacedRepetitionSchedules({ includeUnreviewedActive: true, signal: controller.signal }),
-      getProgressRecommendations({ signal: controller.signal }),
-    ]).finally(() => {
+    loadAll(controller.signal, newGen).finally(() => {
       if (generationRef.current === newGen) {
         setIsRefreshing(false);
       }
