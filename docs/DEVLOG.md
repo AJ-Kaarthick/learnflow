@@ -2673,10 +2673,9 @@ Build a comprehensive, persistent learning intelligence and adaptive recommendat
 - Full frontend test suite: **321 passed, 0 failed** in 1.53s (`npm test`)
 - Production frontend build: **successful** (`npm run build`, 0 errors)
 - Database schema: single Alembic head **`74eb271ec556`**, 0 new migrations, 0 new dependencies
-- Manual browser QA: **Passed** (Activity timeline score markers stay strictly anchored during hover; Progress dashboard updates dynamically across session completion and page reloads)
-- M5 release tag & publication: **Pending release publication**
+- M5 release tag & publication: **Published** ([`v3.0.0-m5`](https://github.com/AJ-Kaarthick/learnflow/releases/tag/v3.0.0-m5)) on commit `1ef6628`
 - Repository status: `git diff --check` clean, zero blockers
 
 ## Result
 
-LearnFlow V3 Milestone 5 is complete. Implementation, automated verification, and manual browser QA are complete across all five phases. LearnFlow provides a robust, persistent learning intelligence suite featuring recency-decayed mastery estimation, weak-topic detection, spaced repetition review scheduling, a 3-priority adaptive recommendation engine, targeted Revision generation, and a dedicated Progress workspace (`#/progress`), ready for release publication.
+LearnFlow V3 Milestone 5 is complete and released. Implementation, automated verification, manual browser QA, and release publication are complete across all five phases. LearnFlow provides a robust, persistent learning intelligence suite featuring recency-decayed mastery estimation, weak-topic detection, spaced repetition review scheduling, a 3-priority adaptive recommendation engine, targeted Revision generation, and a dedicated Progress workspace (`#/progress`), published under release [`v3.0.0-m5`](https://github.com/AJ-Kaarthick/learnflow/releases/tag/v3.0.0-m5).

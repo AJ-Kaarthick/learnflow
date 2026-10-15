@@ -639,9 +639,9 @@ LearnFlow currently supports:
 - Verified guest AI quota accounting (0 for MCQ, 1 for open-ended on success)
 - Full automated test suite passing: 612 backend tests, 288 frontend tests, clean production build
 
-#### Milestone 5 — Learning Intelligence & Progress 🟡
+#### Milestone 5 — Learning Intelligence & Progress ✅
 
-*Status: Implementation, automated verification, and manual browser QA complete — release publication pending.*
+*Status: Completed and released as [v3.0.0-m5](https://github.com/AJ-Kaarthick/learnflow/releases/tag/v3.0.0-m5).*
 
 - Dedicated Learner Progress workspace (`#/progress`)
 - 5 read-only, zero-quota REST analytics endpoints (`/progress/*`)
@@ -703,7 +703,7 @@ LearnFlow currently supports:
 - Activity-chart hover/marker regression resolved and covered by automated frontend contract and coordinate bounding tests
 - Full automated test suite passing: 726 backend tests (5 skipped — PostgreSQL-specific tests skipped when `POSTGRES_TEST_DATABASE_URL` is unset), 321 frontend tests, clean production build
 - Manual browser QA passed: Activity timeline score markers stay strictly anchored during hover, and Progress dashboard updates dynamically across session completion and page reloads
-- Milestone 5 complete — release publication (`v3.0.0-m5`) pending user authorization
+- Released as [v3.0.0-m5](https://github.com/AJ-Kaarthick/learnflow/releases/tag/v3.0.0-m5)
 
 #### Milestone 6 — Home & Personalized Dashboard
 - Continue where you left off
@@ -850,10 +850,7 @@ npm run dev
 - Persistent Revision data model foundation (sessions, questions, attempts)
 - V3 Milestone 3 — Study Experience 2.0 (Learn Mode & Visualize Mode)
 - V3 Milestone 4 — Revision Experience 2.0 (Sessions, Attempt Tracking, Results Review)
-
-### In Progress / Awaiting Release
-
-- V3 Milestone 5 — Learning Intelligence & Progress (Implementation, automated verification, and manual browser QA complete — release publication pending)
+- V3 Milestone 5 — Learning Intelligence & Progress ([v3.0.0-m5](https://github.com/AJ-Kaarthick/learnflow/releases/tag/v3.0.0-m5))
 
 ### Planned
 
