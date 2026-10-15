@@ -176,6 +176,35 @@ test("computeActivityChartData handles edge cases: empty timeline, all zero volu
   assert.equal(zeroChart.scorePoints.length, 0);
 });
 
+test("computeActivityChartData anchors all score points strictly inside the plot area", () => {
+  const width = 640;
+  const height = 240;
+  const padding = { top: 24, right: 40, bottom: 36, left: 40 };
+
+  const timeline = [
+    { date: "2026-10-01", questions_attempted: 1, average_score: 0.0 }, // minimum score bound
+    { date: "2026-10-02", questions_attempted: 2, average_score: 0.5 },
+    { date: "2026-10-03", questions_attempted: 3, average_score: 1.0 }, // maximum score bound
+    { date: "2026-10-04", questions_attempted: 4, average_score: 1.2 }, // over 1.0 clamped
+    { date: "2026-10-05", questions_attempted: 5, average_score: 0.2 },
+    { date: "2026-10-06", questions_attempted: 6, average_score: 0.85 },
+    { date: "2026-10-07", questions_attempted: 7, average_score: 0.95 },
+  ];
+
+  const chart = computeActivityChartData(timeline, { width, height, padding });
+  assert.equal(chart.scorePoints.length, 7);
+
+  const minX = padding.left;
+  const maxX = width - padding.right;
+  const minY = padding.top;
+  const maxY = height - padding.bottom;
+
+  for (const pt of chart.scorePoints) {
+    assert.ok(pt.x >= minX && pt.x <= maxX, `pt.x (${pt.x}) must be within [${minX}, ${maxX}]`);
+    assert.ok(pt.y >= minY && pt.y <= maxY, `pt.y (${pt.y}) must be within [${minY}, ${maxY}]`);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 3. Identity scoping and safe Revision launch handoff
 // ---------------------------------------------------------------------------

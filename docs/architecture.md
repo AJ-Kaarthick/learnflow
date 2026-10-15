@@ -1328,3 +1328,115 @@ The frontend provides a dedicated workspace route (`#/revision`) structured into
 - **Session History**: Owner-scoped list of past sessions displaying scores, completion badges, and document chips.
 - **Results Review & Resume**: In-progress sessions can be resumed directly at the first unattempted question without question regeneration. Completed sessions render official backend scores, attempt timelines, and source document provenance citations with archived document resilience.
 
+---
+
+## Learning Intelligence & Progress (V3 Milestone 5)
+
+Milestone 5 adds a persistent learning analytics and adaptive recommendation engine to LearnFlow, transforming completed Revision sessions into actionable diagnostic insights, weak-topic detection, and spaced repetition schedules without consuming AI quota or requiring database schema mutations.
+
+### 1. Architectural Invariants & Zero-Quota Design
+
+All progress intelligence is derived deterministically from persisted Revision sessions, questions, and attempts:
+- **Zero Schema Migrations**: Operates directly on Milestone 4 tables (`RevisionSession`, `RevisionSessionDocument`, `RevisionQuestion`, `RevisionAttempt`) with single Alembic head `74eb271ec556`.
+- **Zero AI Quota Consumption**: All five Progress API endpoints are read-only, execute zero LLM calls, and consume zero guest or user AI quotas.
+- **Zero Database Mutations on Read**: GET requests to Progress endpoints perform strictly read-only aggregations and analytics without mutating session or schedule state.
+
+### 2. Progress REST API Endpoints
+
+The progress intelligence layer is exposed via five dedicated endpoints under `/api/v1/progress`:
+1. `GET /api/v1/progress/summary`: Returns overall mastery tier, completed session counts, attempt accuracy, continuous 7-, 14-, and 30-day activity timelines, difficulty distributions, and flashcard recall rates.
+2. `GET /api/v1/progress/topics`: Returns topic-level mastery evaluations with document provenance, distinct question counts, and assessment tiers.
+3. `GET /api/v1/progress/weak-topics`: Detects areas of learner difficulty, calculates the continuous struggle index, and flags actionable topics.
+4. `GET /api/v1/progress/spaced-repetition`: Computes document-level review intervals, review urgency, and due dates based on historical performance.
+5. `GET /api/v1/progress/recommendations`: Produces a prioritized 3-priority recommendation feed (`spaced_review`, `weak_topic_practice`, `unrevised_document`) with pre-configured action payloads for seamless one-click Revision launching.
+
+### 3. Recency-Decayed Mastery Estimation
+
+Mastery estimation utilizes a continuous exponential decay function with a 14-day half-life to weight recent practice more heavily than past performance:
+
+$$\lambda = \frac{\ln(2)}{14 \times 86400} \approx 5.7302 \times 10^{-7} \text{ s}^{-1}$$
+
+For each attempted question, the score $s_i \in [0.0, 1.0]$ from its most recent attempt is weighted by elapsed time $\Delta t_i = \max(0, t_{\text{ref}} - t_i)$:
+
+$$w_i = e^{-\lambda \Delta t_i}$$
+
+$$\text{Mastery Score} = \frac{\sum_{i=1}^{N} w_i \cdot s_i}{\sum_{i=1}^{N} w_i}$$
+
+- **Assessment Threshold**: A minimum of 3 distinct attempted questions ($N \ge 3$) is strictly required for assessed status (`is_assessed = True`). Entities with fewer than 3 questions remain `unassessed`.
+- **Mastery Tiers**:
+  - `mastered`: $\text{Score} \ge 0.85$ ($N \ge 3$)
+  - `proficient`: $0.70 \le \text{Score} < 0.85$ ($N \ge 3$)
+  - `needs_practice`: $\text{Score} < 0.70$ ($N \ge 3$)
+  - `unassessed`: $N < 3$ (score defaults to $0.0$, tier is `unassessed`)
+
+### 4. Topic Identity Scoping & Provenance
+
+Topics are extracted from question `evidence_metadata` and normalized using Unicode NFKD normalization and casefolding.
+To prevent topic collision across unrelated documents, topic identity is strictly scoped by the composite key:
+
+$$\text{Topic Identity} = (\text{source\_document\_identity}, \text{normalized\_topic\_key})$$
+
+Two different documents with similarly named topics (e.g., "Introduction" in Biology vs. "Introduction" in History) maintain completely separate mastery histories, struggle indices, and recommendation streams.
+
+### 5. Weak-Topic Detection & Struggle Index
+
+A topic is flagged as weak when:
+1. It is assessed ($N \ge 3$ distinct attempted questions).
+2. Its recency-decayed mastery score is $< 0.70$, OR its incorrect attempt ratio is $> 0.40$.
+
+The struggle index quantifies learner difficulty using an unbounded logarithmic formulation:
+
+$$\text{Struggle Index} = (1.0 - \text{Mastery Score}) \times \ln(1 + \text{Total Attempts}) \times \text{Incorrect Ratio}$$
+
+- **Properties**: Unbounded above, non-negative, reaches $0.0$ on perfect mastery, and scales smoothly with both volume of failures and low mastery.
+- **Actionability Safeguards**: A weak topic is flagged as actionable (`is_actionable = True`) only when its source document is live, ready (`status == "ready"`), not archived, and possesses non-empty extracted text.
+
+### 6. Spaced Repetition Review Engine
+
+Spaced repetition computes review intervals for contributing documents based on SM-2 progression:
+- **Review Scores**: Average score across all question attempts within a completed session. Raw session review averages determine success using the $\ge 0.70$ threshold before any reporting rounding.
+- **Interval Progression**:
+  - Success ($\ge 0.70$): Success streak increments ($S \leftarrow S + 1$). Intervals advance:
+    - Streak 1: 1 day
+    - Streak 2: 3 days
+    - Streak 3: 7 days
+    - Streak 4: 14 days
+    - Streak 5+: 30 days
+  - Sub-threshold ($< 0.70$): Streak resets to $0$, next interval resets to 1 day.
+- **Review Urgency**:
+  $$\text{Urgency} = \frac{\Delta t_{\text{since}}}{\text{interval\_days}}$$
+  A document is due for review when $\text{Urgency} \ge 1.0$ (or overdue if $> 1.0$).
+
+### 7. Adaptive Recommendation Priority Hierarchy
+
+The recommendation engine evaluates all learner history and surfaces recommendations strictly ordered by the 3-priority educational hierarchy:
+1. **Priority 1 (`spaced_review`)**: Active, actionable documents with revision history where review urgency $\ge 1.0$. Sorted by highest urgency first, earliest due date, document title, and document ID.
+2. **Priority 2 (`weak_topic_practice`)**: Actionable weak topics on active documents. Sorted by highest struggle index first, lowest mastery score, document title, topic, and document ID.
+3. **Priority 3 (`unrevised_document`)**: Active, ready documents that have never been revised in a completed session. Sorted by document title alphabetically, and document ID.
+
+### 8. Targeted Revision Practice & Atomic Rollback
+
+When a learner accepts a weak-topic recommendation, the system invokes targeted Revision generation:
+- **`topic_focus` Constraint**: Passes explicit topic focus to `POST /api/v1/revision/sessions`.
+- **Strict Grounding Contract**: Prompt instructs the LLM to verify that document excerpts contain sufficient evidence for the topic.
+- **Explicit Support Confirmation**:
+  - If supported: LLM returns `{"topic_supported": true, "questions": [...]}` where every question cites a verifiable verbatim evidence snippet.
+  - If unsupported: LLM returns `{"topic_supported": false, "questions": []}`, and the backend rejects the request with HTTP 422 (`UnsupportedTopicError`).
+- **Atomic Rollback**: If the LLM generates invalid JSON, count mismatch, or unverifiable evidence quotes, the entire transaction rolls back atomically with zero orphaned sessions or questions created (HTTP 502).
+
+### 9. Frontend Learner Progress Workspace (`#/progress`)
+
+The frontend workspace provides an accessible, responsive dashboard structured around five independent resource panels:
+- **Metric Cards**: Display overall mastery tier, attempt accuracy, total sessions, and questions attempted. Unavailable metrics render `--` rather than fabricated zeros.
+- **Continuous SVG Activity Chart**: Renders dual metrics (questions attempted volume bars and average attempt score polyline). Missing-data days (null average score) render as visible gaps in the SVG path. Score marker circles are strictly anchored to computed SVG data coordinates without coordinate-displacing CSS transforms (`hover:scale`), using non-displacing color transitions on hover to maintain visual stability and prevent boundary overflow.
+- **Independent Loading & Retry**: Progress resources load independently via `loadAll`. A network failure on one section retains successful responses from others and provides a localized retry action.
+- **Identity Isolation & Generation Guard**: When user identity changes (login, logout, guest transition), in-flight requests are aborted, refresh state is reset, and a generation counter ensures out-of-order responses are discarded.
+- **One-Click Launch Handoff**: Recommendations emit authoritative `action_payload` dictionaries stored with the learner's identity scope. Revision mounts safely, verifies document readiness, and launches the pre-configured targeted session.
+
+### 10. Cross-Phase Integration, Guest Migration & Durability Guarantees
+
+- **End-to-End Analytics Pipeline**: The entire intelligence loop is verified across all five endpoints against realistic multi-session learning history (`backend/tests/test_m5_integration.py`).
+- **Guest-to-Account Migration**: When a guest learner signs up or authenticates, `migrate_guest_data_to_user` transfers all revision sessions, questions, and attempts to the authenticated user ID. The Progress workspace updates instantly with full learning history without manual recalculation.
+- **Document Deletion Durability**: Relies on relational `ON DELETE SET NULL` foreign keys on `RevisionQuestion.source_document_id` and frozen question metadata (`evidence_snippet`, `evidence_metadata`). When an underlying source document is removed, historical mastery scores, question attempts, and review schedules remain intact while active launch recommendations for that document are safely suppressed.
+- **Strict Read-Only & Zero-Quota Invariant**: Zero LLM calls and zero database mutations occur during analytics fetching, preserving guest and user AI quotas exclusively for interactive generation features.
+

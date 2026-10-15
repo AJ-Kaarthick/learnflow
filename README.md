@@ -40,6 +40,12 @@ LearnFlow is an AI-powered study workspace that transforms PDF, DOCX, PPTX, and 
 - Revision Experience 2.0 with persistent multi-document sessions, deterministic MCQ scoring, and AI open-ended evaluation
 - Question != Attempt separation supporting immutable learner response tracking
 - Revision session history, in-progress resume, and results review with source document provenance
+- Learning Intelligence & Progress workspace (`#/progress`) with 5 dedicated analytics and recommendation endpoints
+- Recency-decayed mastery estimation with continuous exponential decay (14-day half-life)
+- Weak-topic detection, unbounded struggle index metrics, and topic identity scoped by document
+- Spaced repetition review schedules with SM-2 intervals and overdue urgency tracking
+- Targeted Revision practice with explicit `topic_focus` and one-click recommendation handoff
+- Zero-quota, read-only progress analytics requiring zero database migrations
 
 ---
 
@@ -100,6 +106,15 @@ LearnFlow currently supports:
 - 🕒 Revision history list, in-progress session resume, and detailed results review
 - 🔍 Per-question source document attribution and frozen evidence snippet citations
 - 🛡️ Archived document durability when underlying files are deleted
+- 📈 Learner Progress Workspace (`#/progress`) with independent resource cards and retry states
+- ⏱️ Continuous exponential recency-decayed mastery estimation (14-day half-life)
+- 📊 Continuous daily activity windows (7, 14, and 30 days) and SVG activity chart
+- 🎯 Topic mastery tracking scoped strictly by `(document, normalized_topic)`
+- ⚠️ Weak-topic detection with unbounded struggle index and actionability safeguards
+- 🔁 SM-2 inspired spaced repetition review engine with overdue urgency tracking
+- 💡 3-priority adaptive recommendation engine (due spaced review, weak-topic practice, unrevised active documents)
+- 🎯 Targeted Revision generation with verifiable evidence grounding and strict fallback
+- ⚡ Strict zero-quota, read-only analytics with zero database migrations
 
 ---
 
@@ -624,16 +639,71 @@ LearnFlow currently supports:
 - Verified guest AI quota accounting (0 for MCQ, 1 for open-ended on success)
 - Full automated test suite passing: 612 backend tests, 288 frontend tests, clean production build
 
-#### Milestone 5 — Learning Intelligence & Progress
-- Topic-level performance tracking
-- Weak-topic detection
-- Mastery estimation
-- Progress over time
-- Difficulty-aware performance
-- Revision recommendations
-- Adaptive revision
-- Flashcard performance
-- Spaced-repetition foundation
+#### Milestone 5 — Learning Intelligence & Progress 🟡
+
+*Status: Implementation, automated verification, and manual browser QA complete — release publication pending.*
+
+- Dedicated Learner Progress workspace (`#/progress`)
+- 5 read-only, zero-quota REST analytics endpoints (`/progress/*`)
+- Exponential recency-decayed mastery estimation (14-day half-life continuous decay)
+- Topic mastery tracking scoped strictly by `(document_identity, normalized_topic_key)`
+- Weak-topic detection with struggle index and document readiness actionability safeguards
+- Spaced repetition review schedules with SM-2 inspired intervals and overdue urgency tracking
+- 3-priority adaptive recommendation engine (`spaced_review`, `weak_topic_practice`, `unrevised_document`)
+- Targeted Revision practice with explicit `topic_focus`, verifiable evidence grounding, and atomic rollback
+- One-click launch handoff from Progress recommendations to Revision setup
+- Durability across document deletion (`ON DELETE SET NULL`) and guest-to-account migration
+- Zero database migrations (Alembic head `74eb271ec556` preserved)
+
+##### Phase 1 — Mastery Estimation & Progress Analytics Foundation Backend ✅
+- Exponential recency-decay weighting with 14-day half-life ($\lambda \approx 5.73 \times 10^{-7} \text{ s}^{-1}$)
+- 3-question minimum threshold: assessed ($N \ge 3$) vs unassessed ($N < 3$)
+- 4 mastery tiers: `mastered` ($\ge 0.85$), `proficient` ($0.70 \le s < 0.85$), `needs_practice` ($< 0.70$), `unassessed`
+- Progress endpoints: `GET /api/v1/progress/summary` and `GET /api/v1/progress/topics`
+- Daily activity buckets over continuous 7-, 14-, and 30-day windows
+- Topic provenance isolation preventing conflation across distinct documents
+
+##### Phase 2 — Weak-Topic Detection, Spaced Repetition & Adaptive Scheduling Backend ✅
+- Weak-topic detection endpoint `GET /api/v1/progress/weak-topics`
+- Unbounded struggle index: $\text{Struggle} = (1.0 - \text{Mastery}) \times \ln(1 + \text{Total Attempts}) \times \text{Incorrect Ratio}$
+- Spaced repetition schedule endpoint `GET /api/v1/progress/spaced-repetition`
+- SM-2 inspired review progression (1, 3, 7, 14, 30 days) with raw review average thresholding (0.70)
+- Overdue urgency calculation ($\text{Urgency} = \Delta t / \text{interval}$) and review due date projections
+- Actionability gated strictly on live, ready documents with usable extracted text
+
+##### Phase 3 — Adaptive Recommendation Engine & Progress REST APIs ✅
+- Recommendation endpoint `GET /api/v1/progress/recommendations` with 3-priority hierarchy:
+  1. `spaced_review` (urgency $\ge 1.0$)
+  2. `weak_topic_practice` (struggle index and mastery)
+  3. `unrevised_document` (active ready documents never revised)
+- Action payloads containing pre-configured Revision parameters (`document_ids`, `mode`, `difficulty`, `question_count`, `topic_focus`)
+- Targeted Revision backend support via `topic_focus` in `POST /api/v1/revision/sessions`
+- AI topic support confirmation protocol (`topic_supported: true/false`) and verifiable evidence extraction
+- Atomic failure rollback on unsupported topic (HTTP 422), malformed output (HTTP 502), or unverifiable quotes
+- Retake preparation preserving `topic_focus` without auto-starting
+
+##### Phase 4 — Learner Progress Workspace & Recommendation Actions ✅
+- Dedicated Progress workspace route (`#/progress`) and top-level navigation link
+- Metric overview cards with honest schemas (percentages, `--` for unassessed, decimal struggle index)
+- Responsive SVG activity chart with volume bars, continuous polyline, and missing-data gaps
+- Activity timeline score marker coordinate anchoring: eliminated SVG root-origin scaling (`hover:scale-125`) in favor of direct data-anchored styling and non-displacing color transitions, keeping markers strictly inside plot bounds
+- Topic mastery table with tier badges, attempt counts, and document titles
+- Weak-topic cards with struggle metrics and "Practice Weak Topic" action buttons
+- Spaced repetition review list with urgency badges, streaks, and "Review Now" action buttons
+- Priority recommendation cards with one-click Revision handoff
+- Independent resource loading states, per-section retry without discarding successful endpoints
+- Generation guard and identity isolation aborting old requests on identity change
+
+##### Phase 5 — Cross-Phase Integration, Guest Migration, QA & Documentation ✅
+- Comprehensive cross-phase integration test suite (`backend/tests/test_m5_integration.py`, 17 tests) covering all 5 progress endpoints against shared learning history
+- Targeted Revision generation and atomic failure mode verification (HTTP 422 unsupported topic rejection, mock AI verification)
+- Verified guest-to-account migration preserving revision sessions, questions, attempts, and progress visibility
+- Verified document deletion durability (`ON DELETE SET NULL`) and title collision safety
+- Phase 4 workspace contract and zero-quota regression verification
+- Activity-chart hover/marker regression resolved and covered by automated frontend contract and coordinate bounding tests
+- Full automated test suite passing: 726 backend tests (5 skipped — PostgreSQL-specific tests skipped when `POSTGRES_TEST_DATABASE_URL` is unset), 321 frontend tests, clean production build
+- Manual browser QA passed: Activity timeline score markers stay strictly anchored during hover, and Progress dashboard updates dynamically across session completion and page reloads
+- Milestone 5 complete — release publication (`v3.0.0-m5`) pending user authorization
 
 #### Milestone 6 — Home & Personalized Dashboard
 - Continue where you left off
@@ -778,13 +848,15 @@ npm run dev
 - Legacy SQLite schema drift detection
 - SQLite → PostgreSQL data migration CLI and storage synchronization
 - Persistent Revision data model foundation (sessions, questions, attempts)
+- V3 Milestone 3 — Study Experience 2.0 (Learn Mode & Visualize Mode)
+- V3 Milestone 4 — Revision Experience 2.0 (Sessions, Attempt Tracking, Results Review)
+
+### In Progress / Awaiting Release
+
+- V3 Milestone 5 — Learning Intelligence & Progress (Implementation, automated verification, and manual browser QA complete — release publication pending)
 
 ### Planned
 
-- V3 Milestone 2 Phase 4 — Integration, Isolation & Regression
-- V3 Milestone 3 — Study Experience 2.0
-- V3 Milestone 4 — Revision Mode
-- V3 Milestone 5 — Learning Intelligence & Progress
 - V3 Milestone 6 — Home & Personalized Dashboard
 - V3 Milestone 7 — Sharing & Learning Material Export
 - V3 Milestone 8 — Production & Deployment

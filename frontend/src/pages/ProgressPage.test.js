@@ -77,6 +77,33 @@ test("4. ProgressPage.jsx defines all required sections, SVG chart, and generati
   assert.match(pageSource, /window\.location\.hash\s*=\s*"#\/revision"/);
 });
 
+test("4b. ProgressPage.jsx score markers remain anchored without coordinate-displacing CSS transforms", () => {
+  const pageSource = readFileSync(join(__dirname, "./ProgressPage.jsx"), "utf-8");
+
+  // Extract the score point <circle> rendering block
+  const circleMatch = pageSource.match(/\{chartData\.scorePoints\.map\(\(pt\)\s*=>\s*\([\s\S]*?<circle[\s\S]*?<\/circle>\s*\)\)\}/);
+  assert.ok(circleMatch, "Expected score point <circle> rendering block in ProgressPage.jsx");
+
+  const circleSnippet = circleMatch[0];
+
+  // Circle must bind cx/cy directly to data point coordinates
+  assert.match(circleSnippet, /cx=\{pt\.x\}/);
+  assert.match(circleSnippet, /cy=\{pt\.y\}/);
+
+  // Circle must NOT apply CSS transform scale (which scales relative to SVG 0,0 origin and throws markers off-chart)
+  assert.doesNotMatch(circleSnippet, /hover:scale/);
+  assert.doesNotMatch(circleSnippet, /scale-\d+/);
+  assert.doesNotMatch(circleSnippet, /transition-transform/);
+
+  // Circle must use safe visual styling on hover (e.g., color transitions, cursor pointer)
+  assert.match(circleSnippet, /cursor-pointer/);
+  assert.match(circleSnippet, /hover:fill-/);
+  assert.match(circleSnippet, /hover:stroke-/);
+
+  // Circle must preserve native accessible title tooltip
+  assert.match(circleSnippet, /<title>\{`\$\{pt\.dateLabel\}: \$\{pt\.scorePercent\} average score`\}<\/title>/);
+});
+
 // ---------------------------------------------------------------------------
 // 5. RevisionSetup Component Contracts
 // ---------------------------------------------------------------------------

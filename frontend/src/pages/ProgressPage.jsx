@@ -606,7 +606,7 @@ function ProgressPage() {
                           cx={pt.x}
                           cy={pt.y}
                           r="3.5"
-                          className="fill-white stroke-emerald-600 transition-transform hover:scale-125"
+                          className="fill-white stroke-emerald-600 transition-colors duration-150 hover:fill-emerald-100 hover:stroke-emerald-700 cursor-pointer"
                           strokeWidth="2"
                         >
                           <title>{`${pt.dateLabel}: ${pt.scorePercent} average score`}</title>

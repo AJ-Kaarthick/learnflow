@@ -2582,3 +2582,101 @@ Build a dedicated, persistent learning evaluation system for active recall, prac
 ## Result
 
 V3 Milestone 4 is complete. LearnFlow provides a robust, multi-document Revision Experience 2.0 with persistent revision sessions, deterministic MCQ scoring, rubric-guided AI evaluation, attempt tracking, and document deletion durability.
+
+
+# V3 — Milestone 5: Learning Intelligence & Progress
+
+## Goal
+
+Build a comprehensive, persistent learning intelligence and adaptive recommendation engine that transforms completed Revision sessions into actionable diagnostic insights, weak-topic detection, and spaced repetition schedules without consuming AI quota or requiring database schema mutations.
+
+## Features Completed
+
+### Phase 1 — Mastery Estimation & Progress Analytics Foundation Backend
+- Recency-decayed mastery estimation service (`mastery_service.py`) using continuous exponential decay with a 14-day half-life ($\lambda \approx 5.7302 \times 10^{-7} \text{ s}^{-1}$).
+- Strict 3-question minimum threshold: entities with $< 3$ distinct attempted questions are labelled `unassessed` (score defaults to 0.0), while $\ge 3$ questions are categorized into `mastered` ($\ge 0.85$), `proficient` ($0.70 \le s < 0.85$), or `needs_practice` ($< 0.70$).
+- Two dedicated Progress endpoints: `GET /api/v1/progress/summary` and `GET /api/v1/progress/topics`.
+- Continuous daily activity aggregation across 7-, 14-, and 30-day windows tracking total attempts, distinct questions, completed sessions, and average score.
+- Topic identity isolation strictly scoped by `(source_document_identity, normalized_topic_key)` using Unicode NFKD normalization and casefolding.
+
+### Phase 2 — Weak-Topic Detection, Spaced Repetition & Adaptive Scheduling Backend
+- Weak-topic detection service (`weak_topic_service.py`) and endpoint `GET /api/v1/progress/weak-topics`.
+- Unbounded logarithmic struggle index: $\text{Struggle} = (1.0 - \text{Mastery}) \times \ln(1 + \text{Total Attempts}) \times \text{Incorrect Ratio}$.
+- Spaced repetition service (`spaced_repetition_service.py`) and endpoint `GET /api/v1/progress/spaced-repetition`.
+- SM-2 inspired interval progression (1, 3, 7, 14, 30 days) with raw review average thresholding (0.70) before reporting rounding.
+- Review urgency tracking ($\text{Urgency} = \Delta t / \text{interval}$) and due-date projection.
+- Actionability safeguards gating weak topics and schedules strictly on live, ready documents with usable extracted text.
+
+### Phase 3 — Adaptive Recommendation Engine & Progress REST APIs
+- Recommendation engine service (`recommendation_service.py`) and endpoint `GET /api/v1/progress/recommendations`.
+- Strict 3-priority recommendation hierarchy: Priority 1 (`spaced_review` / due review), Priority 2 (`weak_topic_practice`), Priority 3 (`unrevised_document`).
+- Action payloads containing pre-configured Revision session parameters (`document_ids`, `mode`, `difficulty`, `question_count`, `topic_focus`).
+- Targeted Revision generation backend support via `topic_focus` parameter on `POST /api/v1/revision/sessions`.
+- LLM topic support confirmation protocol (`topic_supported: true/false`) and verifiable evidence extraction against source document text.
+- Atomic failure rollback on unsupported topic (HTTP 422 `UnsupportedTopicError`), malformed JSON or count mismatch (HTTP 502), or unverifiable quotes.
+- Retake preparation preserving `topic_focus` without auto-starting.
+
+### Phase 4 — Learner Progress Workspace & Recommendation Actions
+- Dedicated Progress workspace route (`#/progress`) and top-level navigation link.
+- Overview metric cards adhering to honest schemas (percentages, `--` for unassessed, decimal struggle index).
+- Responsive SVG activity chart with questions attempted volume bars, continuous score polyline, and visible gaps for null score days.
+- Topic mastery breakdown table with tier badges, attempt counts, and document titles.
+- Weak topics section with struggle metrics and "Practice Weak Topic" action buttons.
+- Spaced repetition review list with urgency badges, streaks, and "Review Now" action buttons.
+- Priority recommendations banner with one-click Revision handoff.
+- Independent resource loading states, per-section retry without discarding successful endpoints.
+- Identity-change safeguards: aborting old requests, resetting refresh state, and generation guards to prevent race conditions.
+- Hydrated document validation ensuring all required recommendation document IDs are live and ready before launch.
+
+### Phase 5 — Cross-Phase Integration, Guest Migration, QA & Documentation
+- Comprehensive cross-phase integration test suite (`backend/tests/test_m5_integration.py`, 17 tests).
+- Verified end-to-end progress API integration across all 5 endpoints against shared persisted learning history.
+- Verified targeted Revision generation, weak-topic handoff, 422 on unsupported topics, and atomic failure modes.
+- Verified guest-to-account migration preserving revision sessions, questions, attempts, and immediate progress visibility without cache rebuild.
+- Verified document deletion durability (`ON DELETE SET NULL`, frozen metadata fallback, preserved review schedules).
+- Verified Phase 4 workspace contract and zero-quota guarantees.
+- Fixed activity-chart SVG score marker jumping by replacing SVG root-origin scaling (`hover:scale-125`) with direct data-anchored styling and non-displacing color transitions.
+- Full automated test suite passing: 726 backend tests (5 skipped), 321 frontend tests, clean production build.
+- Manual browser QA passed: Activity timeline score markers stay strictly anchored during hover, and Progress dashboard updates dynamically across session completion and page reloads.
+
+## Learned
+
+- **Continuous Exponential Decay**: Using continuous exponential decay with a 14-day half-life ($\lambda \approx 5.73 \times 10^{-7} \text{ s}^{-1}$) provides smooth, time-sensitive mastery scores that naturally reward recent revision while decaying older performance.
+- **Precision Before Rounding**: Computing review success thresholds against raw floating-point averages before rounding avoids precision truncation artifacts where a 0.699 average could prematurely graduate an interval.
+- **Strict Topic Scoping**: Defining topic identity by `(source_document_identity, normalized_topic_key)` prevents accidental collision between identically named topics across different study documents.
+- **Unbounded Struggle Metric**: Formulating the struggle index logarithmically with total attempts captures true learner distress on persistently failed topics without artificial clamping.
+- **Actionability vs Durability**: Historical analytics must preserve knowledge gained from deleted or processing documents, while recommendation actions must strictly gate launchability on live, ready documents with usable extracted text.
+- **SVG Transform-Origin Pitfalls**: CSS `transform: scale()` on SVG geometric primitives scales relative to the SVG root origin `(0, 0)` by default rather than the element center, causing coordinate multiplication and displacement outside plot boundaries. Safe SVG hover states should use stroke/fill color transitions or native radius adjustments rather than box-model CSS transforms.
+
+## Problems Faced
+
+- Starlette TestClient cookie retention across sequential requests caused cross-identity test requests to inadvertently inherit previous session cookies.
+- Progress loading flow originally used `Promise.all()`, causing a single failed endpoint to discard successful responses from the other four.
+- Manual refresh previously launched duplicate network requests by invoking both `loadAll()` and a parallel `Promise.allSettled()`.
+- An identity change during an active refresh could leave `isRefreshing` stuck in a true state because the older promise's `finally` block was guarded by generation comparison.
+- Recommendation action payloads with deleted or unready documents could cause Revision sessions to launch with missing documents if not validated during hydration.
+- The activity timeline SVG score markers used CSS `hover:scale-125`. In SVG, CSS scale transforms default to scaling from the SVG root origin `(0, 0)`, which multiplied the markers' coordinates by $1.25$. This displaced the rightmost score marker $100\text{px}$ past the right plot margin and outside the SVG canvas, causing erratic jumping and jittering on cursor hover.
+
+## Solutions
+
+- Cleared `client.cookies.clear()` explicitly in test suites between switching user and guest identities.
+- Refactored `ProgressPage.jsx` so each of the five progress resources manages independent data, loading, and error states, with per-section retry buttons.
+- Streamlined `handleManualRefresh()` to execute exactly one request per resource via `loadAll()`.
+- Added an explicit `setIsRefreshing(false)` reset in the identity-change effect when transitioning across distinct identity scopes.
+- Implemented strict document hydration validation in `validateHydratedDocumentsForLaunch()`, blocking launch and showing a clear explanation if any required document is missing or not ready.
+- Removed `transition-transform hover:scale-125` from `<circle>` in `ProgressPage.jsx` and replaced with non-coordinate-displacing color transitions (`transition-colors duration-150 hover:fill-emerald-100 hover:stroke-emerald-700 cursor-pointer`), keeping all markers strictly anchored to their calculated data coordinates. Added automated regression and coordinate bounds tests.
+
+## Verification
+
+- Focused M5 integration tests: **17 passed** in 3.60s (`test_m5_integration.py`)
+- Full backend test suite: **726 passed, 5 skipped** in 111.07s (5 PostgreSQL-compatibility tests skipped because `POSTGRES_TEST_DATABASE_URL` is unset in this environment)
+- Full frontend test suite: **321 passed, 0 failed** in 1.53s (`npm test`)
+- Production frontend build: **successful** (`npm run build`, 0 errors)
+- Database schema: single Alembic head **`74eb271ec556`**, 0 new migrations, 0 new dependencies
+- Manual browser QA: **Passed** (Activity timeline score markers stay strictly anchored during hover; Progress dashboard updates dynamically across session completion and page reloads)
+- M5 release tag & publication: **Pending release publication**
+- Repository status: `git diff --check` clean, zero blockers
+
+## Result
+
+LearnFlow V3 Milestone 5 is complete. Implementation, automated verification, and manual browser QA are complete across all five phases. LearnFlow provides a robust, persistent learning intelligence suite featuring recency-decayed mastery estimation, weak-topic detection, spaced repetition review scheduling, a 3-priority adaptive recommendation engine, targeted Revision generation, and a dedicated Progress workspace (`#/progress`), ready for release publication.
