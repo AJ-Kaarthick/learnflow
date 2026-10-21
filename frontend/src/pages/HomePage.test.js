@@ -133,12 +133,14 @@ test("11. HomePage.jsx renders Action Center with accessible landmark and recomm
   assert.match(source, /View progress analytics/);
 });
 
-test("12. HomePage.jsx renders Weak Topics section with positive empty state and practice CTA", () => {
+test("12. HomePage.jsx renders Weak Topics section with truthful empty state and practice CTA", () => {
   const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
 
   assert.match(source, /aria-label="Weak Topics"/);
   assert.match(source, /data-testid="weak-topic-card"/);
-  assert.match(source, /No weak topics detected!/);
+  assert.match(source, /No practice-ready weak topics right now\./);
+  assert.match(source, /Review your complete topic history and learning insights in/);
+  assert.match(source, /routeHref\(ROUTES\.PROGRESS\)/);
   assert.match(source, /handleLaunchWeakTopic\(wt\)/);
   assert.match(source, /Practice Topic/);
 });

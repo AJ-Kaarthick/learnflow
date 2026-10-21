@@ -593,9 +593,18 @@ function HomePage() {
               Loading focus areas...
             </div>
           ) : weakTopics.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/30 p-5 text-center text-xs text-emerald-800">
-              <p className="font-semibold text-emerald-900">No weak topics detected!</p>
-              <p className="mt-0.5 text-emerald-700">Your revision performance and topic mastery are on track.</p>
+            <div className="rounded-xl border border-dashed border-slate-300 bg-surface p-5 text-center text-xs text-slate-600">
+              <p className="font-semibold text-slate-900">No practice-ready weak topics right now.</p>
+              <p className="mt-1 text-slate-500">
+                Review your complete topic history and learning insights in{" "}
+                <a
+                  href={routeHref(ROUTES.PROGRESS)}
+                  className="font-medium text-accent-700 hover:text-accent-800 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 rounded-xs"
+                >
+                  Progress
+                </a>
+                .
+              </p>
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">

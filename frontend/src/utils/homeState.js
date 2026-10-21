@@ -350,7 +350,7 @@ export function isRequestCurrent(requestGen, requestScope, currentGen, currentSc
  * 3. If actionable weak topics exist, actionable items fill available slots first.
  *    Any remaining slots (up to max) may retain non-actionable items as informational cards.
  * 4. If NO actionable weak topics exist at all, returns an empty array to render the
- *    truthful positive empty state on Home, while preserving historical audit in Progress.
+ *    truthful empty state ("No practice-ready weak topics right now.") on Home, while preserving historical audit in Progress.
  * 5. Sanitizes all fields safely and excludes null/malformed records.
  *
  * @param {Array<Object>} weakTopics - Raw weak topics from getProgressWeakTopics
@@ -414,7 +414,7 @@ export function getTopWeakTopics(weakTopics, max = 2) {
   const actionable = sanitized.filter((wt) => wt.isActionable);
 
   // If no actionable weak topics exist, return empty array so Home displays
-  // the truthful empty state ("No weak topics detected! Your concept mastery is on solid ground."),
+  // the truthful empty state ("No practice-ready weak topics right now."),
   // while preserving full history in the Progress workspace.
   if (actionable.length === 0) {
     return [];
