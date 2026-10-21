@@ -3,7 +3,9 @@ import { test } from "node:test";
 import { ROUTES } from "../router/useHashRoute.js";
 import {
   QUICK_ACTIONS,
+  extractInProgressSession,
   formatGreetingTitle,
+  formatInProgressSessionProgress,
   formatRecentDocumentDate,
   getGreetingSubtitle,
 } from "./homeState.js";
@@ -83,4 +85,123 @@ test("formatRecentDocumentDate formats dates safely and handles invalid dates", 
 
   const formatted = formatRecentDocumentDate("2026-10-15T12:00:00Z");
   assert.match(formatted, /Oct 15, 2026/);
+});
+
+// ---------------------------------------------------------------------------
+// 5. extractInProgressSession Tests
+// ---------------------------------------------------------------------------
+test("extractInProgressSession returns null for empty, null, or non-array inputs", () => {
+  assert.equal(extractInProgressSession(null), null);
+  assert.equal(extractInProgressSession(undefined), null);
+  assert.equal(extractInProgressSession([]), null);
+  assert.equal(extractInProgressSession({}), null);
+});
+
+test("extractInProgressSession ignores completed, abandoned, or missing ID sessions", () => {
+  const sessions = [
+    { id: "s-comp", status: "completed", title: "Done Session" },
+    { id: "s-aband", status: "abandoned", title: "Abandoned Session" },
+    { id: "", status: "in_progress", title: "Invalid ID" },
+    { id: null, status: "in_progress", title: "Null ID" },
+  ];
+  assert.equal(extractInProgressSession(sessions), null);
+});
+
+test("extractInProgressSession extracts first in_progress session with safe fallbacks", () => {
+  const sessions = [
+    { id: "s-done", status: "completed", title: "Old Completed Session" },
+    {
+      id: "s-active-1",
+      status: "in_progress",
+      title: "  Biology Unit 2  ",
+      config: { difficulty: "advanced", mode: "quiz" },
+      total_questions: 10,
+    },
+    {
+      id: "s-active-2",
+      status: "in_progress",
+      title: "Second in progress",
+    },
+  ];
+
+  const extracted = extractInProgressSession(sessions);
+  assert.ok(extracted);
+  assert.equal(extracted.id, "s-active-1");
+  assert.equal(extracted.title, "Biology Unit 2");
+  assert.equal(extracted.difficulty, "advanced");
+  assert.equal(extracted.mode, "quiz");
+  assert.equal(extracted.totalQuestions, 10);
+  assert.equal(extracted.answeredQuestions, null);
+  assert.equal(extracted.progressPercentage, null);
+});
+
+test("extractInProgressSession uses 'Untitled Revision Session' fallback when title is missing", () => {
+  const sessions = [
+    {
+      id: "s-no-title",
+      status: "in_progress",
+      title: "   ",
+      total_questions: 5,
+    },
+  ];
+
+  const extracted = extractInProgressSession(sessions);
+  assert.equal(extracted.title, "Untitled Revision Session");
+});
+
+test("extractInProgressSession derives answered count and progress percentage from questions", () => {
+  const sessionDetail = {
+    id: "s-detail",
+    status: "in_progress",
+    title: "Detailed Session",
+    total_questions: 4,
+    questions: [
+      { id: "q1", attempts: [{ score: 1.0 }] },
+      { id: "q2", attempts: [{ score: 0.5 }, { score: 1.0 }] },
+      { id: "q3", attempts: [] },
+      { id: "q4", attempts: null },
+    ],
+  };
+
+  const extracted = extractInProgressSession([sessionDetail]);
+  assert.equal(extracted.totalQuestions, 4);
+  assert.equal(extracted.answeredQuestions, 2);
+  assert.equal(extracted.progressPercentage, 50);
+});
+
+test("extractInProgressSession supports answered_questions integer property", () => {
+  const session = {
+    id: "s-prop",
+    status: "in_progress",
+    title: "Property Session",
+    total_questions: 10,
+    answered_questions: 3,
+  };
+
+  const extracted = extractInProgressSession([session]);
+  assert.equal(extracted.totalQuestions, 10);
+  assert.equal(extracted.answeredQuestions, 3);
+  assert.equal(extracted.progressPercentage, 30);
+});
+
+// ---------------------------------------------------------------------------
+// 6. formatInProgressSessionProgress Tests
+// ---------------------------------------------------------------------------
+test("formatInProgressSessionProgress formats progress variations accurately", () => {
+  assert.equal(formatInProgressSessionProgress(null), "Revision session in progress");
+
+  assert.equal(
+    formatInProgressSessionProgress({ answeredQuestions: 3, totalQuestions: 5 }),
+    "3 of 5 questions answered"
+  );
+
+  assert.equal(
+    formatInProgressSessionProgress({ answeredQuestions: null, totalQuestions: 10 }),
+    "10 questions"
+  );
+
+  assert.equal(
+    formatInProgressSessionProgress({ answeredQuestions: null, totalQuestions: null }),
+    "Revision session in progress"
+  );
 });

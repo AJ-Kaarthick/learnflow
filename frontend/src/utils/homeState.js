@@ -102,3 +102,83 @@ export function formatRecentDocumentDate(isoString) {
     year: "numeric",
   });
 }
+
+/**
+ * Extracts and sanitizes the most recent in-progress revision session.
+ * Excludes completed, abandoned, or malformed sessions.
+ *
+ * @param {Array<Object>} sessions - List of session summaries or details
+ * @returns {Object|null} Sanitized in-progress session descriptor or null
+ */
+export function extractInProgressSession(sessions) {
+  if (!Array.isArray(sessions) || sessions.length === 0) {
+    return null;
+  }
+
+  const candidate = sessions.find((s) => s && s.status === "in_progress");
+  if (!candidate || !candidate.id || typeof candidate.id !== "string") {
+    return null;
+  }
+
+  const title = typeof candidate.title === "string" && candidate.title.trim()
+    ? candidate.title.trim()
+    : "Untitled Revision Session";
+
+  const config = candidate.config && typeof candidate.config === "object" ? candidate.config : {};
+  const difficulty = candidate.difficulty || config.difficulty || null;
+  const mode = candidate.mode || config.mode || null;
+
+  let totalQuestions = null;
+  if (typeof candidate.total_questions === "number" && candidate.total_questions > 0) {
+    totalQuestions = candidate.total_questions;
+  } else if (Array.isArray(candidate.questions) && candidate.questions.length > 0) {
+    totalQuestions = candidate.questions.length;
+  }
+
+  let answeredQuestions = null;
+  if (Array.isArray(candidate.questions)) {
+    answeredQuestions = candidate.questions.filter(
+      (q) => Array.isArray(q.attempts) && q.attempts.length > 0
+    ).length;
+  } else if (typeof candidate.answered_questions === "number" && candidate.answered_questions >= 0) {
+    answeredQuestions = candidate.answered_questions;
+  }
+
+  let progressPercentage = null;
+  if (typeof answeredQuestions === "number" && typeof totalQuestions === "number" && totalQuestions > 0) {
+    progressPercentage = Math.round((answeredQuestions / totalQuestions) * 100);
+  }
+
+  return {
+    id: candidate.id,
+    title,
+    difficulty,
+    mode,
+    totalQuestions,
+    answeredQuestions,
+    progressPercentage,
+    createdAt: candidate.created_at || null,
+  };
+}
+
+/**
+ * Formats progress text for an in-progress revision session.
+ *
+ * @param {Object} session - Sanitized session descriptor from extractInProgressSession
+ * @returns {string} Human-readable progress description
+ */
+export function formatInProgressSessionProgress(session) {
+  if (!session) {
+    return "Revision session in progress";
+  }
+
+  if (typeof session.answeredQuestions === "number" && typeof session.totalQuestions === "number" && session.totalQuestions > 0) {
+    return `${session.answeredQuestions} of ${session.totalQuestions} questions answered`;
+  }
+
+  if (typeof session.totalQuestions === "number" && session.totalQuestions > 0) {
+    return `${session.totalQuestions} questions`;
+  }
+
+  return "Revision session in progress";
+}

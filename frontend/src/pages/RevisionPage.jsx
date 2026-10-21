@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createRevisionSession } from "../api/revision.js";
+import { createRevisionSession, getRevisionSession } from "../api/revision.js";
 import RevisionActiveRunner from "../components/RevisionActiveRunner.jsx";
 import RevisionHistoryView from "../components/RevisionHistoryView.jsx";
 import RevisionResultsView from "../components/RevisionResultsView.jsx";
@@ -10,7 +10,11 @@ import {
   consumePendingRevisionLaunch,
   validateHydratedDocumentsForLaunch,
 } from "../utils/progressState.js";
-import { createInitialSetupState, prepareRetakeSetup } from "../utils/revisionState.js";
+import {
+  consumePendingRevisionResume,
+  createInitialSetupState,
+  prepareRetakeSetup,
+} from "../utils/revisionState.js";
 
 /**
  * Top-level page for Revision Experience 2.0 (V3 Milestone 4 Phase 4).
@@ -29,18 +33,55 @@ function RevisionPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [creationError, setCreationError] = useState(null);
   const [hydrationError, setHydrationError] = useState(null);
+  const [isResuming, setIsResuming] = useState(false);
+  const [resumeError, setResumeError] = useState(null);
 
   // Setup form state preserved at page level across launcher <-> history view switches
   const [setupState, setSetupState] = useState(() => createInitialSetupState());
   const [selectedDocuments, setSelectedDocuments] = useState([]);
 
-  // Consume pending revision launch when identity is verified
+  // Consume pending revision resume or launch when identity is verified
   useEffect(() => {
     if (authStatus === "loading" || !identity) {
       // Identity is temporarily unresolved: do not consume or discard prematurely!
       return;
     }
 
+    // 1. Consume pending revision resume from Home
+    const pendingResume = consumePendingRevisionResume(identity);
+    if (pendingResume && pendingResume.sessionId) {
+      let cancelled = false;
+      setIsResuming(true);
+      setResumeError(null);
+
+      getRevisionSession(pendingResume.sessionId)
+        .then((session) => {
+          if (cancelled) return;
+          if (session && session.status === "in_progress") {
+            handleResumeSession(session);
+          } else if (session && session.status === "completed") {
+            handleReviewSession(session);
+          } else {
+            setViewMode("history");
+          }
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setResumeError(err?.message || "Could not resume the revision session.");
+          setViewMode("history");
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsResuming(false);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // 2. Consume pending revision launch
     const pendingLaunch = consumePendingRevisionLaunch(identity);
     if (!pendingLaunch) {
       return;
@@ -143,74 +184,108 @@ function RevisionPage() {
 
   return (
     <main aria-label="Revision" className="min-w-0 flex-1 min-h-0 overflow-y-auto bg-slate-50/50 py-6">
-      {/* Sub-Navigation between New Session and History */}
-      {showSubNav && (
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mb-6">
-          <div className="inline-flex rounded-lg border border-slate-200 bg-surface p-1 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setViewMode("launcher")}
-              className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
-                viewMode === "launcher"
-                  ? "bg-accent-600 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              New Revision
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("history")}
-              className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
-                viewMode === "history"
-                  ? "bg-accent-600 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Session History
-            </button>
-          </div>
+      {/* Resuming loader indicator */}
+      {isResuming ? (
+        <div
+          data-testid="revision-resuming-indicator"
+          className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-16 flex flex-col items-center justify-center text-center"
+          aria-live="polite"
+        >
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-600 border-t-transparent" />
+          <p className="mt-3 text-sm font-semibold text-slate-800">Resuming revision session...</p>
+          <p className="mt-1 text-xs text-slate-400">Restoring your questions and answers</p>
         </div>
-      )}
+      ) : (
+        <>
+          {/* Resume error alert banner */}
+          {resumeError && (
+            <div
+              role="alert"
+              className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mb-6"
+            >
+              <div className="flex items-center justify-between rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 shadow-2xs">
+                <span>{resumeError}</span>
+                <button
+                  type="button"
+                  onClick={() => setResumeError(null)}
+                  className="ml-2 font-semibold text-rose-700 hover:text-rose-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded px-1"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
 
-      {/* View router */}
-      {viewMode === "runner" && activeSession && (
-        <RevisionActiveRunner
-          session={activeSession}
-          onExit={handleExitToHistory}
-          onReview={(completedSession) => handleReviewSession(completedSession)}
-        />
-      )}
+          {/* Sub-Navigation between New Session and History */}
+          {showSubNav && (
+            <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mb-6">
+              <div className="inline-flex rounded-lg border border-slate-200 bg-surface p-1 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("launcher")}
+                  className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
+                    viewMode === "launcher"
+                      ? "bg-accent-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  New Revision
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("history")}
+                  className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
+                    viewMode === "history"
+                      ? "bg-accent-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Session History
+                </button>
+              </div>
+            </div>
+          )}
 
-      {viewMode === "results" && reviewingSession && (
-        <RevisionResultsView
-          session={reviewingSession}
-          onBackToHistory={handleExitToHistory}
-          onRetake={(session) => handleRetakeSession(session)}
-        />
-      )}
+          {/* View router */}
+          {viewMode === "runner" && activeSession && (
+            <RevisionActiveRunner
+              session={activeSession}
+              onExit={handleExitToHistory}
+              onReview={(completedSession) => handleReviewSession(completedSession)}
+            />
+          )}
 
-      {viewMode === "history" && (
-        <RevisionHistoryView
-          onStartNewSession={handleExitToLauncher}
-          onResumeSession={handleResumeSession}
-          onReviewSession={handleReviewSession}
-          onRetakeSession={handleRetakeSession}
-        />
-      )}
+          {viewMode === "results" && reviewingSession && (
+            <RevisionResultsView
+              session={reviewingSession}
+              onBackToHistory={handleExitToHistory}
+              onRetake={(session) => handleRetakeSession(session)}
+            />
+          )}
 
-      {viewMode === "launcher" && (
-        <RevisionSetup
-          setupState={setupState}
-          onSetupStateChange={setSetupState}
-          selectedDocuments={selectedDocuments}
-          onSelectedDocumentsChange={setSelectedDocuments}
-          onStartSession={handleStartSession}
-          isCreating={isCreating}
-          creationError={creationError}
-          hydrationError={hydrationError}
-          onClearHydrationError={() => setHydrationError(null)}
-        />
+          {viewMode === "history" && (
+            <RevisionHistoryView
+              onStartNewSession={handleExitToLauncher}
+              onResumeSession={handleResumeSession}
+              onReviewSession={handleReviewSession}
+              onRetakeSession={handleRetakeSession}
+            />
+          )}
+
+          {viewMode === "launcher" && (
+            <RevisionSetup
+              setupState={setupState}
+              onSetupStateChange={setSetupState}
+              selectedDocuments={selectedDocuments}
+              onSelectedDocumentsChange={setSelectedDocuments}
+              onStartSession={handleStartSession}
+              isCreating={isCreating}
+              creationError={creationError}
+              hydrationError={hydrationError}
+              onClearHydrationError={() => setHydrationError(null)}
+            />
+          )}
+        </>
       )}
     </main>
   );

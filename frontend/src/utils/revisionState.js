@@ -1,3 +1,5 @@
+import { getIdentityScope } from "./progressState.js";
+
 /**
  * Pure state and helper functions for LearnFlow Revision Experience 2.0 (V3 Milestone 4 Phase 3).
  *
@@ -447,3 +449,125 @@ export function getStatusBadgeClasses(status) {
   }
   return "bg-amber-50 text-amber-700 border-amber-200";
 }
+
+export const STORAGE_RESUME_KEY = "learnflow_pending_revision_resume_v3";
+let memoryPendingResume = null;
+
+/**
+ * Saves a pending Revision resume token bound to the active identity scope.
+ *
+ * @param {string} sessionId - The session ID to resume
+ * @param {Object} identity - The current auth identity
+ * @returns {boolean} True if saved successfully, false otherwise
+ */
+export function savePendingRevisionResume(sessionId, identity) {
+  if (!sessionId || typeof sessionId !== "string" || !sessionId.trim()) {
+    return false;
+  }
+
+  const scope = getIdentityScope(identity);
+  if (!scope) {
+    return false;
+  }
+
+  const itemToStore = {
+    scope,
+    sessionId: sessionId.trim(),
+    savedAt: Date.now(),
+  };
+
+  memoryPendingResume = itemToStore;
+
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      window.sessionStorage.setItem(STORAGE_RESUME_KEY, JSON.stringify(itemToStore));
+    }
+  } catch {
+    // Memory fallback suffices if sessionStorage throws or is restricted
+  }
+
+  return true;
+}
+
+/**
+ * Consumes a pending Revision resume token for the calling identity.
+ *
+ * Rules:
+ * - If identity scope cannot be verified (e.g. still loading), returns null WITHOUT
+ *   clearing the stored payload prematurely, allowing retry once identity resolves.
+ * - Once identity is verified, performs one-shot consume-and-clear.
+ * - If stored scope does not match current identity, discards payload and returns null.
+ * - Rejects expired tokens (> 30 minutes).
+ *
+ * @param {Object} identity - The current auth identity
+ * @returns {{ sessionId: string } | null} The resume token or null
+ */
+export function consumePendingRevisionResume(identity) {
+  const currentScope = getIdentityScope(identity);
+  if (!currentScope) {
+    // Identity unresolved / unverified; do not discard yet!
+    return null;
+  }
+
+  let storedItem = memoryPendingResume;
+
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      const serialized = window.sessionStorage.getItem(STORAGE_RESUME_KEY);
+      if (serialized) {
+        storedItem = JSON.parse(serialized);
+      }
+    }
+  } catch {
+    // Fall back to memory item
+  }
+
+  // Clear one-shot immediately
+  memoryPendingResume = null;
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      window.sessionStorage.removeItem(STORAGE_RESUME_KEY);
+    }
+  } catch {
+    // Ignore clear error
+  }
+
+  if (!storedItem || typeof storedItem !== "object") {
+    return null;
+  }
+
+  if (storedItem.scope !== currentScope) {
+    // Identity mismatch: token saved under different identity
+    return null;
+  }
+
+  // Check TTL (30 minutes)
+  const MAX_RESUME_AGE_MS = 30 * 60 * 1000;
+  if (typeof storedItem.savedAt === "number" && Date.now() - storedItem.savedAt > MAX_RESUME_AGE_MS) {
+    return null;
+  }
+
+  if (!storedItem.sessionId || typeof storedItem.sessionId !== "string" || !storedItem.sessionId.trim()) {
+    return null;
+  }
+
+  return {
+    sessionId: storedItem.sessionId.trim(),
+  };
+}
+
+/**
+ * Explicitly clears any pending resume token in memory and sessionStorage.
+ */
+export function clearPendingRevisionResume() {
+  memoryPendingResume = null;
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      window.sessionStorage.removeItem(STORAGE_RESUME_KEY);
+    }
+  } catch {
+    // Ignore clear error
+  }
+}
+
+export { getIdentityScope };

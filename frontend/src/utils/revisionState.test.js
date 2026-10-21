@@ -16,6 +16,8 @@ import {
   calculateSessionProgress,
   calculateSessionScore,
   canSubmitAnswer,
+  clearPendingRevisionResume,
+  consumePendingRevisionResume,
   createInitialRunnerState,
   createInitialSetupState,
   formatPercentageScore,
@@ -23,6 +25,7 @@ import {
   goToQuestionIndex,
   isAtLastQuestion,
   recordAttemptInState,
+  savePendingRevisionResume,
   updateAnswerInState,
   validateSetupState,
 } from "./revisionState.js";
@@ -478,4 +481,75 @@ test("24. calculateSessionProgress and calculateSessionScore accurately compute 
   // Score: (1.0 + 0.5 + 0.0 + 0.0) / 4 = 1.5 / 4 = 0.375
   const score = calculateSessionScore(runner);
   assert.equal(score, 0.375);
+});
+
+// ---------------------------------------------------------------------------
+// 25. savePendingRevisionResume & consumePendingRevisionResume
+// ---------------------------------------------------------------------------
+test("25. savePendingRevisionResume and consumePendingRevisionResume enforce identity match and one-shot consumption", () => {
+  clearPendingRevisionResume();
+  const userIdentity = { type: "user", id: "user-123" };
+
+  // Save valid resume payload
+  const saved = savePendingRevisionResume("session-abc", userIdentity);
+  assert.equal(saved, true);
+
+  // Consume with same identity
+  const consumed = consumePendingRevisionResume(userIdentity);
+  assert.deepEqual(consumed, { sessionId: "session-abc" });
+
+  // One-shot: second consume returns null
+  const secondConsume = consumePendingRevisionResume(userIdentity);
+  assert.equal(secondConsume, null);
+});
+
+test("26. consumePendingRevisionResume preserves payload when identity is unverified or loading", () => {
+  clearPendingRevisionResume();
+  const userIdentity = { type: "user", id: "user-123" };
+
+  savePendingRevisionResume("session-xyz", userIdentity);
+
+  // Identity null/unresolved: returns null WITHOUT clearing stored token
+  assert.equal(consumePendingRevisionResume(null), null);
+  assert.equal(consumePendingRevisionResume(undefined), null);
+  assert.equal(consumePendingRevisionResume({}), null);
+
+  // Still consumable once identity resolves!
+  const consumed = consumePendingRevisionResume(userIdentity);
+  assert.deepEqual(consumed, { sessionId: "session-xyz" });
+});
+
+test("27. consumePendingRevisionResume rejects mismatched identity scopes", () => {
+  clearPendingRevisionResume();
+  const userA = { type: "user", id: "user-A" };
+  const userB = { type: "user", id: "user-B" };
+  const guest = { type: "guest", id: "guest-A" };
+
+  savePendingRevisionResume("session-scoped", userA);
+
+  // Different user attempts to consume
+  assert.equal(consumePendingRevisionResume(userB), null);
+
+  // Guest attempts to consume user token
+  assert.equal(consumePendingRevisionResume(guest), null);
+});
+
+test("28. savePendingRevisionResume rejects invalid session IDs or missing identity", () => {
+  clearPendingRevisionResume();
+  const validIdentity = { type: "user", id: "u-1" };
+
+  assert.equal(savePendingRevisionResume("", validIdentity), false);
+  assert.equal(savePendingRevisionResume("   ", validIdentity), false);
+  assert.equal(savePendingRevisionResume(null, validIdentity), false);
+  assert.equal(savePendingRevisionResume(123, validIdentity), false);
+  assert.equal(savePendingRevisionResume("session-1", null), false);
+  assert.equal(savePendingRevisionResume("session-1", {}), false);
+});
+
+test("29. clearPendingRevisionResume clears any active resume token", () => {
+  const identity = { type: "guest", id: "guest-99" };
+  savePendingRevisionResume("session-clear-me", identity);
+
+  clearPendingRevisionResume();
+  assert.equal(consumePendingRevisionResume(identity), null);
 });

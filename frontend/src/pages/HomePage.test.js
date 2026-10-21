@@ -68,3 +68,42 @@ test("5. HomePage.jsx preserves Continue Studying recently opened documents", ()
   assert.match(source, /formatRecentDocumentDate\(doc\.last_opened_at\)/);
   assert.match(source, /View all documents/);
 });
+
+// ---------------------------------------------------------------------------
+// HomePage Component Contracts (V3 Milestone 6 Phase 2)
+// ---------------------------------------------------------------------------
+
+test("6. HomePage.jsx fetches revision sessions and integrates extractInProgressSession", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /import\s*\{[^}]*listRevisionSessions[^}]*\}\s*from\s*"\.\.\/api\/revision/);
+  assert.match(source, /import\s*\{[^}]*extractInProgressSession[^}]*\}\s*from\s*"\.\.\/utils\/homeState/);
+  assert.match(source, /listRevisionSessions\(\)/);
+  assert.match(source, /extractInProgressSession\(sessions\)/);
+});
+
+test("7. HomePage.jsx renders In-Progress Revision card when an active session is present", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /aria-label="In-Progress Revision"/);
+  assert.match(source, /data-testid="in-progress-revision-card"/);
+  assert.match(source, /inProgressSession\.title/);
+  assert.match(source, /formatInProgressSessionProgress\(inProgressSession\)/);
+  assert.match(source, /Resume Session/);
+});
+
+test("8. HomePage.jsx invokes savePendingRevisionResume on Resume Session click", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /import\s*\{[^}]*savePendingRevisionResume[^}]*\}\s*from\s*"\.\.\/utils\/revisionState/);
+  assert.match(source, /savePendingRevisionResume\(sessionId,\s*identity\)/);
+  assert.match(source, /handleResumeSession\(inProgressSession\.id\)/);
+  assert.match(source, /routeHref\(ROUTES\.REVISION\)/);
+});
+
+test("9. HomePage.jsx isolates requests across identity changes with scoped dependencies", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  // Document list and revision session effects depend on [identity, authStatus]
+  assert.match(source, /},\s*\[identity,\s*authStatus\]\);/);
+});
