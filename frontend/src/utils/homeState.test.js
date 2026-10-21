@@ -8,6 +8,10 @@ import {
   formatInProgressSessionProgress,
   formatRecentDocumentDate,
   getGreetingSubtitle,
+  getRecommendationActionText,
+  getRecommendationBadge,
+  getTopRecommendations,
+  getTopWeakTopics,
 } from "./homeState.js";
 
 // ---------------------------------------------------------------------------
@@ -204,4 +208,217 @@ test("formatInProgressSessionProgress formats progress variations accurately", (
     formatInProgressSessionProgress({ answeredQuestions: null, totalQuestions: null }),
     "Revision session in progress"
   );
+});
+
+// ---------------------------------------------------------------------------
+// 7. getTopRecommendations Tests
+// ---------------------------------------------------------------------------
+test("getTopRecommendations returns empty array for null, empty, or invalid input", () => {
+  assert.deepEqual(getTopRecommendations(null), []);
+  assert.deepEqual(getTopRecommendations(undefined), []);
+  assert.deepEqual(getTopRecommendations([]), []);
+  assert.deepEqual(getTopRecommendations("string"), []);
+});
+
+test("getTopRecommendations slices to max and preserves M5 priority order and fields", () => {
+  const mockRecs = [
+    {
+      id: "rec-1",
+      type: "spaced_review",
+      priority: 1,
+      title: "Review Due: Biology",
+      reason: "Optimal retention window reached",
+      document_id: "doc-1",
+      document_title: "Biology 101",
+      is_archived: false,
+      is_actionable: true,
+      urgency: 1.45,
+      due_date: "2026-10-22T00:00:00Z",
+      action_payload: { document_ids: ["doc-1"], mode: "practice", difficulty: "intermediate" },
+    },
+    {
+      id: "rec-2",
+      type: "weak_topic_practice",
+      priority: 2,
+      title: "Practice Weak Topic: Photosynthesis",
+      reason: "High struggle detected",
+      document_id: "doc-1",
+      document_title: "Biology 101",
+      is_archived: false,
+      is_actionable: true,
+      topic_focus: "Photosynthesis",
+      struggle_index: 2.15,
+      action_payload: { document_ids: ["doc-1"], topic_focus: "Photosynthesis" },
+    },
+    {
+      id: "rec-3",
+      type: "unrevised_document",
+      priority: 3,
+      title: "First Revision: Chemistry",
+      reason: "Unrevised document",
+      document_id: "doc-2",
+      document_title: "Chemistry Notes",
+      is_archived: false,
+      is_actionable: true,
+    },
+  ];
+
+  const topTwo = getTopRecommendations(mockRecs, 2);
+  assert.equal(topTwo.length, 2);
+
+  // Priority 1 preserved
+  assert.equal(topTwo[0].id, "rec-1");
+  assert.equal(topTwo[0].type, "spaced_review");
+  assert.equal(topTwo[0].priority, 1);
+  assert.equal(topTwo[0].title, "Review Due: Biology");
+  assert.equal(topTwo[0].isActionable, true);
+  assert.equal(topTwo[0].urgency, 1.45);
+
+  // Priority 2 preserved
+  assert.equal(topTwo[1].id, "rec-2");
+  assert.equal(topTwo[1].type, "weak_topic_practice");
+  assert.equal(topTwo[1].priority, 2);
+  assert.equal(topTwo[1].topicFocus, "Photosynthesis");
+  assert.equal(topTwo[1].struggleIndex, 2.15);
+});
+
+test("getTopRecommendations safely handles archived and non-actionable recommendations", () => {
+  const mockRecs = [
+    {
+      id: "rec-archived",
+      type: "spaced_review",
+      title: "Archived Doc",
+      document_id: "doc-archived",
+      document_title: "Old Doc",
+      is_archived: true,
+      is_actionable: false,
+    },
+    {
+      id: "rec-missing-id",
+      type: "unrevised_document",
+      title: "No ID Doc",
+      document_id: null,
+      is_archived: false,
+      is_actionable: true,
+    },
+  ];
+
+  const top = getTopRecommendations(mockRecs);
+  assert.equal(top[0].isArchived, true);
+  assert.equal(top[0].isActionable, false);
+
+  assert.equal(top[1].isActionable, false);
+});
+
+// ---------------------------------------------------------------------------
+// 8. getRecommendationBadge Tests
+// ---------------------------------------------------------------------------
+test("getRecommendationBadge returns correct labels and styling tokens", () => {
+  assert.equal(getRecommendationBadge("spaced_review").label, "Spaced Review");
+  assert.match(getRecommendationBadge("spaced_review").badgeClasses, /amber/);
+
+  assert.equal(getRecommendationBadge("weak_topic_practice").label, "Weak Topic");
+  assert.match(getRecommendationBadge("weak_topic_practice").badgeClasses, /rose/);
+
+  assert.equal(getRecommendationBadge("unrevised_document").label, "New Document");
+  assert.match(getRecommendationBadge("unrevised_document").badgeClasses, /blue/);
+
+  assert.equal(getRecommendationBadge("unknown").label, "Recommendation");
+});
+
+// ---------------------------------------------------------------------------
+// 9. getRecommendationActionText Tests
+// ---------------------------------------------------------------------------
+test("getRecommendationActionText returns tailored CTA or disabled status", () => {
+  assert.equal(getRecommendationActionText(null), "Not Ready");
+  assert.equal(getRecommendationActionText({ isActionable: false, isArchived: true }), "Archived");
+  assert.equal(getRecommendationActionText({ isActionable: false, isArchived: false }), "Not Ready");
+
+  assert.equal(
+    getRecommendationActionText({ isActionable: true, isArchived: false, type: "spaced_review" }),
+    "Review Now"
+  );
+  assert.equal(
+    getRecommendationActionText({ isActionable: true, isArchived: false, type: "weak_topic_practice" }),
+    "Practice Topic"
+  );
+  assert.equal(
+    getRecommendationActionText({ isActionable: true, isArchived: false, type: "unrevised_document" }),
+    "Start Revision"
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 10. getTopWeakTopics Tests
+// ---------------------------------------------------------------------------
+test("getTopWeakTopics returns empty array for null or empty input", () => {
+  assert.deepEqual(getTopWeakTopics(null), []);
+  assert.deepEqual(getTopWeakTopics(undefined), []);
+  assert.deepEqual(getTopWeakTopics([]), []);
+});
+
+test("getTopWeakTopics slices to max and sanitizes weak topic properties", () => {
+  const mockWeak = [
+    {
+      topic_key: "mitosis",
+      topic_display: "Mitosis & Cell Division",
+      document_id: "doc-1",
+      document_title: "Cell Biology",
+      is_archived: false,
+      is_actionable: true,
+      struggle_index: 3.4,
+      mastery_score: 0.25,
+      total_attempts: 8,
+      distinct_attempted_questions: 4,
+    },
+    {
+      topic_key: "glycolysis",
+      topic_display: "Glycolysis Pathway",
+      document_id: "doc-1",
+      document_title: "Cell Biology",
+      is_archived: false,
+      is_actionable: true,
+      struggle_index: 2.1,
+      mastery_score: 0.4,
+      total_attempts: 5,
+      distinct_attempted_questions: 3,
+    },
+    {
+      topic_key: "krebs",
+      topic_display: "Krebs Cycle",
+      document_id: "doc-1",
+      document_title: "Cell Biology",
+      is_archived: false,
+      is_actionable: true,
+    },
+  ];
+
+  const top = getTopWeakTopics(mockWeak, 2);
+  assert.equal(top.length, 2);
+
+  assert.equal(top[0].topicDisplay, "Mitosis & Cell Division");
+  assert.equal(top[0].documentTitle, "Cell Biology");
+  assert.equal(top[0].struggleIndex, 3.4);
+  assert.equal(top[0].isActionable, true);
+
+  assert.equal(top[1].topicDisplay, "Glycolysis Pathway");
+  assert.equal(top[1].struggleIndex, 2.1);
+});
+
+test("getTopWeakTopics handles archived or missing document sources", () => {
+  const mockWeak = [
+    {
+      topic_key: "archived_topic",
+      topic_display: "Archived Topic",
+      document_id: "doc-deleted",
+      document_title: "",
+      is_archived: true,
+      is_actionable: false,
+    },
+  ];
+
+  const top = getTopWeakTopics(mockWeak);
+  assert.equal(top[0].documentTitle, "Archived Document");
+  assert.equal(top[0].isArchived, true);
+  assert.equal(top[0].isActionable, false);
 });

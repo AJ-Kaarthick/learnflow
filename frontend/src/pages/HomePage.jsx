@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listDocuments } from "../api/documents.js";
+import { getProgressRecommendations, getProgressWeakTopics } from "../api/progress.js";
 import { getRevisionSession, listRevisionSessions } from "../api/revision.js";
 import AuthPanel from "../components/AuthPanel.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -11,21 +12,34 @@ import {
   formatInProgressSessionProgress,
   formatRecentDocumentDate,
   getGreetingSubtitle,
+  getRecommendationActionText,
+  getRecommendationBadge,
+  getTopRecommendations,
+  getTopWeakTopics,
 } from "../utils/homeState.js";
 import { saveActiveDocumentId } from "../utils/persistence.js";
+import {
+  createLaunchPayloadFromRecommendation,
+  createLaunchPayloadFromWeakTopic,
+  formatStruggleIndex,
+  formatUtcDate,
+  savePendingRevisionLaunch,
+} from "../utils/progressState.js";
 import { savePendingRevisionResume } from "../utils/revisionState.js";
 
 const RECENT_DOCUMENT_LIMIT = 5;
 
 /**
- * LearnFlow Home Dashboard (V3 Milestone 6 Phase 2).
+ * LearnFlow Home Dashboard (V3 Milestone 6 Phase 3).
  *
  * Provides:
  * 1. Personalized, identity-aware greeting banner.
  * 2. Non-intrusive guest session callout with one-click access to AuthPanel.
  * 3. In-Progress Revision card with identity-safe one-click resume handoff.
- * 4. 4-way Workspace Quick Actions grid (Study, Revision, Chat, Progress).
- * 5. Preserved 'Continue studying' list for recently opened documents.
+ * 4. Action Center with top adaptive recommendations and Revision setup handoff.
+ * 5. Focus Areas card spotlighting high-need weak topics with practice trigger.
+ * 6. 4-way Workspace Quick Actions grid (Study, Revision, Chat, Progress).
+ * 7. Preserved 'Continue studying' list for recently opened documents.
  */
 function HomePage() {
   const { identity, isAuthenticated, status: authStatus } = useAuth();
@@ -37,6 +51,14 @@ function HomePage() {
 
   const [inProgressSession, setInProgressSession] = useState(null);
   const [loadingSession, setLoadingSession] = useState(true);
+
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(true);
+  const [recommendationsError, setRecommendationsError] = useState(null);
+
+  const [weakTopics, setWeakTopics] = useState([]);
+  const [loadingWeakTopics, setLoadingWeakTopics] = useState(true);
+  const [weakTopicsError, setWeakTopicsError] = useState(null);
 
   // Load recently opened documents scoped to current identity
   useEffect(() => {
@@ -112,12 +134,119 @@ function HomePage() {
     };
   }, [identity, authStatus]);
 
+  // Load adaptive recommendations and weak topics scoped to current identity
+  useEffect(() => {
+    if (authStatus === "loading") {
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingRecommendations(true);
+    setRecommendationsError(null);
+    setLoadingWeakTopics(true);
+    setWeakTopicsError(null);
+
+    // 1. Fetch top recommendations
+    getProgressRecommendations({ limit: 2 })
+      .then((data) => {
+        if (cancelled) return;
+        setRecommendations(getTopRecommendations(data, 2));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setRecommendationsError(err?.message || "Could not load recommendations.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRecommendations(false);
+      });
+
+    // 2. Fetch detected weak topics
+    getProgressWeakTopics()
+      .then((data) => {
+        if (cancelled) return;
+        setWeakTopics(getTopWeakTopics(data, 2));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setWeakTopicsError(err?.message || "Could not load weak topics.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingWeakTopics(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [identity, authStatus]);
+
+  function retryRecommendations() {
+    setLoadingRecommendations(true);
+    setRecommendationsError(null);
+    getProgressRecommendations({ limit: 2 })
+      .then((data) => {
+        setRecommendations(getTopRecommendations(data, 2));
+      })
+      .catch((err) => {
+        setRecommendationsError(err?.message || "Could not load recommendations.");
+      })
+      .finally(() => {
+        setLoadingRecommendations(false);
+      });
+  }
+
+  function retryWeakTopics() {
+    setLoadingWeakTopics(true);
+    setWeakTopicsError(null);
+    getProgressWeakTopics()
+      .then((data) => {
+        setWeakTopics(getTopWeakTopics(data, 2));
+      })
+      .catch((err) => {
+        setWeakTopicsError(err?.message || "Could not load weak topics.");
+      })
+      .finally(() => {
+        setLoadingWeakTopics(false);
+      });
+  }
+
   function handleContinueStudying(doc) {
     saveActiveDocumentId(doc.id);
   }
 
   function handleResumeSession(sessionId) {
     savePendingRevisionResume(sessionId, identity);
+  }
+
+  function handleLaunchRecommendation(rec) {
+    if (!rec || !rec.isActionable || rec.isArchived) {
+      return;
+    }
+    const payload = createLaunchPayloadFromRecommendation(rec);
+    if (!payload) {
+      return;
+    }
+    const success = savePendingRevisionLaunch(payload, identity);
+    if (success) {
+      window.location.hash = routeHref(ROUTES.REVISION);
+    }
+  }
+
+  function handleLaunchWeakTopic(topic) {
+    if (!topic || !topic.isActionable || topic.isArchived || !topic.documentId) {
+      return;
+    }
+    const payload = createLaunchPayloadFromWeakTopic({
+      document_id: topic.documentId,
+      topic_display: topic.topicDisplay,
+      topic_key: topic.topicKey,
+    });
+    if (!payload) {
+      return;
+    }
+    const success = savePendingRevisionLaunch(payload, identity);
+    if (success) {
+      window.location.hash = routeHref(ROUTES.REVISION);
+    }
   }
 
   return (
@@ -242,6 +371,204 @@ function HomePage() {
             </div>
           </section>
         )}
+
+        {/* Action Center: Adaptive Recommendations */}
+        <section aria-label="Action Center" className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold tracking-tight text-slate-900">
+              Recommended next steps
+            </h2>
+            <a
+              href={routeHref(ROUTES.PROGRESS)}
+              className="text-xs font-medium text-accent-700 hover:text-accent-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+            >
+              View progress analytics →
+            </a>
+          </div>
+
+          {recommendationsError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center justify-between">
+              <span>{recommendationsError}</span>
+              <button
+                type="button"
+                onClick={retryRecommendations}
+                className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-200"
+              >
+                Retry
+              </button>
+            </div>
+          ) : loadingRecommendations ? (
+            <div className="rounded-xl border border-slate-200 bg-surface p-6 text-center text-xs text-slate-400">
+              <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-accent-600 border-t-transparent mr-2 align-middle" />
+              Loading recommendations...
+            </div>
+          ) : recommendations.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-400">
+              No active revision recommendations. You are all caught up!
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {recommendations.map((rec) => {
+                const badge = getRecommendationBadge(rec.type);
+                const actionText = getRecommendationActionText(rec);
+                const isActionable = rec.isActionable && !rec.isArchived;
+
+                return (
+                  <div
+                    key={rec.id}
+                    data-testid="recommendation-card"
+                    className={`flex flex-col justify-between rounded-xl border p-5 transition-all ${
+                      isActionable
+                        ? "border-slate-200 bg-surface hover:border-slate-300 hover:shadow-2xs"
+                        : "border-slate-200/60 bg-slate-50/50 opacity-75"
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.badgeClasses}`}>
+                          {badge.label}
+                        </span>
+                        {rec.dueDate && (
+                          <span className="text-[10px] text-slate-400">
+                            Due {formatUtcDate(rec.dueDate)}
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-sm font-semibold text-slate-900 leading-snug">
+                        {rec.title}
+                      </h3>
+
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        {rec.reason}
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-500">
+                        <span className="font-medium text-slate-700 truncate max-w-[200px]" title={rec.documentTitle}>
+                          📄 {rec.documentTitle}
+                        </span>
+                        {rec.topicFocus && (
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
+                            Focus: {rec.topicFocus}
+                          </span>
+                        )}
+                        {rec.struggleIndex !== null && (
+                          <span className="text-rose-600 font-medium">
+                            Struggle: {formatStruggleIndex(rec.struggleIndex)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleLaunchRecommendation(rec)}
+                        disabled={!isActionable}
+                        aria-label={`Launch revision for recommendation: ${rec.title}`}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
+                          isActionable
+                            ? "bg-accent-600 text-white hover:bg-accent-700"
+                            : "cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-200"
+                        }`}
+                      >
+                        <span>{actionText}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Weak Areas Card */}
+        <section aria-label="Weak Topics" className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold tracking-tight text-slate-900">
+              Focus areas
+            </h2>
+            <span className="text-xs text-slate-400">High-need topics</span>
+          </div>
+
+          {weakTopicsError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center justify-between">
+              <span>{weakTopicsError}</span>
+              <button
+                type="button"
+                onClick={retryWeakTopics}
+                className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-200"
+              >
+                Retry
+              </button>
+            </div>
+          ) : loadingWeakTopics ? (
+            <div className="rounded-xl border border-slate-200 bg-surface p-6 text-center text-xs text-slate-400">
+              <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-accent-600 border-t-transparent mr-2 align-middle" />
+              Loading focus areas...
+            </div>
+          ) : weakTopics.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/30 p-5 text-center text-xs text-emerald-800">
+              <p className="font-semibold text-emerald-900">No weak topics detected!</p>
+              <p className="mt-0.5 text-emerald-700">Your revision performance and topic mastery are on track.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {weakTopics.map((wt) => {
+                const isActionable = wt.isActionable && !wt.isArchived;
+
+                return (
+                  <div
+                    key={`${wt.documentId || "archived"}:${wt.topicKey}`}
+                    data-testid="weak-topic-card"
+                    className="flex flex-col justify-between rounded-xl border border-slate-200 bg-surface p-4 shadow-2xs"
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                          Needs Practice
+                        </span>
+                        {wt.struggleIndex !== null && (
+                          <span className="text-[10px] font-medium text-rose-600">
+                            Struggle: {formatStruggleIndex(wt.struggleIndex)}
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-sm font-semibold text-slate-900 truncate" title={wt.topicDisplay}>
+                        {wt.topicDisplay}
+                      </h3>
+
+                      <p className="text-xs text-slate-500 truncate" title={wt.documentTitle}>
+                        📄 {wt.documentTitle}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-400">
+                        {wt.totalAttempts} {wt.totalAttempts === 1 ? "attempt" : "attempts"}
+                      </span>
+                      {isActionable ? (
+                        <button
+                          type="button"
+                          onClick={() => handleLaunchWeakTopic(wt)}
+                          aria-label={`Practice weak topic: ${wt.topicDisplay}`}
+                          className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 transition-colors"
+                        >
+                          Practice Topic →
+                        </button>
+                      ) : (
+                        <span className="rounded bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-400 border border-slate-200">
+                          {wt.isArchived ? "Archived" : "Not Ready"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {/* 4-way Workspace Quick Actions Grid */}
         <section aria-label="Workspace Quick Actions" className="space-y-3">

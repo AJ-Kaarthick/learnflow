@@ -182,3 +182,187 @@ export function formatInProgressSessionProgress(session) {
 
   return "Revision session in progress";
 }
+
+/**
+ * Sanitizes and limits the top adaptive recommendations strictly preserving
+ * the M5 canonical priority order.
+ *
+ * @param {Array<Object>} recommendations - Raw recommendations from getProgressRecommendations
+ * @param {number} [max=2] - Maximum number of recommendations to return
+ * @returns {Array<Object>} Sanitized recommendation descriptors
+ */
+export function getTopRecommendations(recommendations, max = 2) {
+  if (!Array.isArray(recommendations) || recommendations.length === 0) {
+    return [];
+  }
+
+  return recommendations.slice(0, max).map((rec, index) => {
+    if (!rec || typeof rec !== "object") {
+      return null;
+    }
+
+    const type = ["spaced_review", "weak_topic_practice", "unrevised_document"].includes(rec.type)
+      ? rec.type
+      : "unrevised_document";
+
+    const defaultTitle =
+      type === "spaced_review"
+        ? "Spaced Review Due"
+        : type === "weak_topic_practice"
+        ? "Practice Weak Topic"
+        : "First Revision";
+
+    const title = typeof rec.title === "string" && rec.title.trim()
+      ? rec.title.trim()
+      : defaultTitle;
+
+    const reason = typeof rec.reason === "string" && rec.reason.trim()
+      ? rec.reason.trim()
+      : "Recommended practice based on your learning activity.";
+
+    const documentTitle = typeof rec.document_title === "string" && rec.document_title.trim()
+      ? rec.document_title.trim()
+      : "Archived Document";
+
+    const documentId = rec.document_id || rec.action_payload?.document_ids?.[0] || null;
+    const isArchived = Boolean(rec.is_archived);
+    const isActionable = Boolean(rec.is_actionable && !isArchived && documentId);
+
+    const topicFocus =
+      typeof rec.topic_focus === "string" && rec.topic_focus.trim()
+        ? rec.topic_focus.trim()
+        : rec.action_payload?.topic_focus || null;
+
+    const urgency = typeof rec.urgency === "number" ? rec.urgency : null;
+    const dueDate = rec.due_date || null;
+    const struggleIndex = typeof rec.struggle_index === "number" ? rec.struggle_index : null;
+    const masteryScore = typeof rec.mastery_score === "number" ? rec.mastery_score : null;
+
+    return {
+      id: rec.id || `rec-${index}`,
+      type,
+      priority: typeof rec.priority === "number" ? rec.priority : 3,
+      title,
+      reason,
+      documentId,
+      documentTitle,
+      isArchived,
+      isActionable,
+      topicFocus,
+      urgency,
+      dueDate,
+      struggleIndex,
+      masteryScore,
+      actionPayload: rec.action_payload || null,
+    };
+  }).filter(Boolean);
+}
+
+/**
+ * Returns badge label and Tailwind styling for recommendation types.
+ *
+ * @param {string} type - Recommendation type
+ * @returns {{ label: string, badgeClasses: string }}
+ */
+export function getRecommendationBadge(type) {
+  switch (type) {
+    case "spaced_review":
+      return {
+        label: "Spaced Review",
+        badgeClasses: "bg-amber-50 text-amber-800 border-amber-200",
+      };
+    case "weak_topic_practice":
+      return {
+        label: "Weak Topic",
+        badgeClasses: "bg-rose-50 text-rose-800 border-rose-200",
+      };
+    case "unrevised_document":
+      return {
+        label: "New Document",
+        badgeClasses: "bg-blue-50 text-blue-800 border-blue-200",
+      };
+    default:
+      return {
+        label: "Recommendation",
+        badgeClasses: "bg-slate-50 text-slate-700 border-slate-200",
+      };
+  }
+}
+
+/**
+ * Returns action CTA text for a recommendation card.
+ *
+ * @param {Object} rec - Sanitized recommendation object
+ * @returns {string} Action label
+ */
+export function getRecommendationActionText(rec) {
+  if (!rec || !rec.isActionable || rec.isArchived) {
+    return rec?.isArchived ? "Archived" : "Not Ready";
+  }
+
+  switch (rec.type) {
+    case "spaced_review":
+      return "Review Now";
+    case "weak_topic_practice":
+      return "Practice Topic";
+    case "unrevised_document":
+      return "Start Revision";
+    default:
+      return "Start Revision";
+  }
+}
+
+/**
+ * Sanitizes and limits the top detected weak topics.
+ *
+ * @param {Array<Object>} weakTopics - Raw weak topics from getProgressWeakTopics
+ * @param {number} [max=2] - Maximum number of items
+ * @returns {Array<Object>} Sanitized weak topic descriptors
+ */
+export function getTopWeakTopics(weakTopics, max = 2) {
+  if (!Array.isArray(weakTopics) || weakTopics.length === 0) {
+    return [];
+  }
+
+  return weakTopics.slice(0, max).map((wt) => {
+    if (!wt || typeof wt !== "object") {
+      return null;
+    }
+
+    const topicDisplay =
+      typeof wt.topic_display === "string" && wt.topic_display.trim()
+        ? wt.topic_display.trim()
+        : typeof wt.topic_key === "string" && wt.topic_key.trim()
+        ? wt.topic_key.trim()
+        : "Untitled Topic";
+
+    const documentTitle =
+      typeof wt.document_title === "string" && wt.document_title.trim()
+        ? wt.document_title.trim()
+        : "Archived Document";
+
+    const documentId = wt.document_id || null;
+    const isArchived = Boolean(wt.is_archived);
+    const isActionable = Boolean(wt.is_actionable && !isArchived && documentId);
+
+    const struggleIndex = typeof wt.struggle_index === "number" ? wt.struggle_index : null;
+    const masteryScore = typeof wt.mastery_score === "number" ? wt.mastery_score : null;
+    const masteryTier = wt.mastery_tier || "needs_practice";
+    const totalAttempts = typeof wt.total_attempts === "number" ? wt.total_attempts : 0;
+    const distinctQuestions = typeof wt.distinct_attempted_questions === "number" ? wt.distinct_attempted_questions : 0;
+
+    return {
+      topicKey: wt.topic_key || topicDisplay,
+      topicDisplay,
+      documentId,
+      documentTitle,
+      isArchived,
+      isActionable,
+      struggleIndex,
+      masteryScore,
+      masteryTier,
+      totalAttempts,
+      distinctQuestions,
+    };
+  }).filter(Boolean);
+}

@@ -107,3 +107,64 @@ test("9. HomePage.jsx isolates requests across identity changes with scoped depe
   // Document list and revision session effects depend on [identity, authStatus]
   assert.match(source, /},\s*\[identity,\s*authStatus\]\);/);
 });
+
+// ---------------------------------------------------------------------------
+// HomePage Component Contracts (V3 Milestone 6 Phase 3)
+// ---------------------------------------------------------------------------
+
+test("10. HomePage.jsx fetches recommendations and weak topics from Progress API", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /import\s*\{[^}]*getProgressRecommendations[^}]*\}\s*from\s*"\.\.\/api\/progress/);
+  assert.match(source, /import\s*\{[^}]*getProgressWeakTopics[^}]*\}\s*from\s*"\.\.\/api\/progress/);
+  assert.match(source, /getProgressRecommendations\(\{\s*limit:\s*2\s*\}\)/);
+  assert.match(source, /getProgressWeakTopics\(\)/);
+});
+
+test("11. HomePage.jsx renders Action Center with accessible landmark and recommendation cards", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /aria-label="Action Center"/);
+  assert.match(source, /data-testid="recommendation-card"/);
+  assert.match(source, /getRecommendationBadge\(rec\.type\)/);
+  assert.match(source, /getRecommendationActionText\(rec\)/);
+  assert.match(source, /handleLaunchRecommendation\(rec\)/);
+  assert.match(source, /View progress analytics/);
+});
+
+test("12. HomePage.jsx renders Weak Topics section with positive empty state and practice CTA", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /aria-label="Weak Topics"/);
+  assert.match(source, /data-testid="weak-topic-card"/);
+  assert.match(source, /No weak topics detected!/);
+  assert.match(source, /handleLaunchWeakTopic\(wt\)/);
+  assert.match(source, /Practice Topic/);
+});
+
+test("13. HomePage.jsx invokes savePendingRevisionLaunch on recommendation action click", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /import\s*\{[^}]*savePendingRevisionLaunch[^}]*\}\s*from\s*"\.\.\/utils\/progressState/);
+  assert.match(source, /import\s*\{[^}]*createLaunchPayloadFromRecommendation[^}]*\}\s*from\s*"\.\.\/utils\/progressState/);
+  assert.match(source, /createLaunchPayloadFromRecommendation\(rec\)/);
+  assert.match(source, /savePendingRevisionLaunch\(payload,\s*identity\)/);
+  assert.match(source, /window\.location\.hash\s*=\s*routeHref\(ROUTES\.REVISION\)/);
+});
+
+test("14. HomePage.jsx invokes savePendingRevisionLaunch on weak topic practice click", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /import\s*\{[^}]*createLaunchPayloadFromWeakTopic[^}]*\}\s*from\s*"\.\.\/utils\/progressState/);
+  assert.match(source, /createLaunchPayloadFromWeakTopic\(\{/);
+  assert.match(source, /topic_display:\s*topic\.topicDisplay/);
+  assert.match(source, /savePendingRevisionLaunch\(payload,\s*identity\)/);
+});
+
+test("15. HomePage.jsx distinguishes actionable items from archived or unready items", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /const isActionable = rec\.isActionable && !rec\.isArchived;/);
+  assert.match(source, /getRecommendationActionText\(rec\)/);
+  assert.match(source, /wt\.isArchived\s*\?\s*"Archived"\s*:\s*"Not Ready"/);
+});
