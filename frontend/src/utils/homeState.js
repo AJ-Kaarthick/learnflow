@@ -185,7 +185,8 @@ export function formatInProgressSessionProgress(session) {
 
 /**
  * Sanitizes and limits the top adaptive recommendations strictly preserving
- * the M5 canonical priority order.
+ * the M5 canonical priority order. Actionable recommendations take precedence
+ * so non-actionable items never crowd out active revision opportunities.
  *
  * @param {Array<Object>} recommendations - Raw recommendations from getProgressRecommendations
  * @param {number} [max=2] - Maximum number of recommendations to return
@@ -196,9 +197,11 @@ export function getTopRecommendations(recommendations, max = 2) {
     return [];
   }
 
-  return recommendations.slice(0, max).map((rec, index) => {
+  const sanitized = [];
+  for (let index = 0; index < recommendations.length; index++) {
+    const rec = recommendations[index];
     if (!rec || typeof rec !== "object") {
-      return null;
+      continue;
     }
 
     const type = ["spaced_review", "weak_topic_practice", "unrevised_document"].includes(rec.type)
@@ -238,7 +241,7 @@ export function getTopRecommendations(recommendations, max = 2) {
     const struggleIndex = typeof rec.struggle_index === "number" ? rec.struggle_index : null;
     const masteryScore = typeof rec.mastery_score === "number" ? rec.mastery_score : null;
 
-    return {
+    sanitized.push({
       id: rec.id || `rec-${index}`,
       type,
       priority: typeof rec.priority === "number" ? rec.priority : 3,
@@ -254,8 +257,17 @@ export function getTopRecommendations(recommendations, max = 2) {
       struggleIndex,
       masteryScore,
       actionPayload: rec.action_payload || null,
-    };
-  }).filter(Boolean);
+    });
+  }
+
+  if (sanitized.length === 0) {
+    return [];
+  }
+
+  const actionable = sanitized.filter((r) => r.isActionable);
+  const nonActionable = sanitized.filter((r) => !r.isActionable);
+  const candidates = [...actionable, ...nonActionable];
+  return candidates.slice(0, max);
 }
 
 /**
@@ -313,7 +325,33 @@ export function getRecommendationActionText(rec) {
 }
 
 /**
- * Sanitizes and limits the top detected weak topics.
+ * Determines whether an asynchronous response is current and belongs to the active identity.
+ *
+ * @param {number} requestGen - Generation id assigned when request was launched
+ * @param {string|null} requestScope - Identity scope string when request was launched
+ * @param {number} currentGen - Current generation ref value
+ * @param {string|null} currentScope - Active identity scope
+ * @returns {boolean} True if the response is valid and current
+ */
+export function isRequestCurrent(requestGen, requestScope, currentGen, currentScope) {
+  if (!requestScope || !currentScope) {
+    return false;
+  }
+  return requestGen === currentGen && requestScope === currentScope;
+}
+
+/**
+ * Sanitizes, prioritizes, and limits detected weak topics for the Home Dashboard.
+ *
+ * Enforces safety and display rules:
+ * 1. Preserves the backend's deterministic ordering (struggle index descending, etc.).
+ * 2. Prioritizes actionable (practice-ready) weak topics so that archived or non-ready
+ *    topics never crowd out active revision opportunities.
+ * 3. If actionable weak topics exist, actionable items fill available slots first.
+ *    Any remaining slots (up to max) may retain non-actionable items as informational cards.
+ * 4. If NO actionable weak topics exist at all, returns an empty array to render the
+ *    truthful positive empty state on Home, while preserving historical audit in Progress.
+ * 5. Sanitizes all fields safely and excludes null/malformed records.
  *
  * @param {Array<Object>} weakTopics - Raw weak topics from getProgressWeakTopics
  * @param {number} [max=2] - Maximum number of items
@@ -324,9 +362,11 @@ export function getTopWeakTopics(weakTopics, max = 2) {
     return [];
   }
 
-  return weakTopics.slice(0, max).map((wt) => {
+  const sanitized = [];
+  for (let i = 0; i < weakTopics.length; i++) {
+    const wt = weakTopics[i];
     if (!wt || typeof wt !== "object") {
-      return null;
+      continue;
     }
 
     const topicDisplay =
@@ -349,9 +389,10 @@ export function getTopWeakTopics(weakTopics, max = 2) {
     const masteryScore = typeof wt.mastery_score === "number" ? wt.mastery_score : null;
     const masteryTier = wt.mastery_tier || "needs_practice";
     const totalAttempts = typeof wt.total_attempts === "number" ? wt.total_attempts : 0;
-    const distinctQuestions = typeof wt.distinct_attempted_questions === "number" ? wt.distinct_attempted_questions : 0;
+    const distinctQuestions =
+      typeof wt.distinct_attempted_questions === "number" ? wt.distinct_attempted_questions : 0;
 
-    return {
+    sanitized.push({
       topicKey: wt.topic_key || topicDisplay,
       topicDisplay,
       documentId,
@@ -363,6 +404,26 @@ export function getTopWeakTopics(weakTopics, max = 2) {
       masteryTier,
       totalAttempts,
       distinctQuestions,
-    };
-  }).filter(Boolean);
+    });
+  }
+
+  if (sanitized.length === 0) {
+    return [];
+  }
+
+  const actionable = sanitized.filter((wt) => wt.isActionable);
+
+  // If no actionable weak topics exist, return empty array so Home displays
+  // the truthful empty state ("No weak topics detected! Your concept mastery is on solid ground."),
+  // while preserving full history in the Progress workspace.
+  if (actionable.length === 0) {
+    return [];
+  }
+
+  const nonActionable = sanitized.filter((wt) => !wt.isActionable);
+
+  // Actionable topics take precedence in backend deterministic order.
+  // Secondary slots may retain non-actionable items as informational cards without crowding out actionable ones.
+  const candidates = [...actionable, ...nonActionable];
+  return candidates.slice(0, max);
 }

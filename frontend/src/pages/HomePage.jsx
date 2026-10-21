@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listDocuments } from "../api/documents.js";
 import { getProgressRecommendations, getProgressWeakTopics } from "../api/progress.js";
 import { getRevisionSession, listRevisionSessions } from "../api/revision.js";
@@ -16,6 +16,7 @@ import {
   getRecommendationBadge,
   getTopRecommendations,
   getTopWeakTopics,
+  isRequestCurrent,
 } from "../utils/homeState.js";
 import { saveActiveDocumentId } from "../utils/persistence.js";
 import {
@@ -23,6 +24,7 @@ import {
   createLaunchPayloadFromWeakTopic,
   formatStruggleIndex,
   formatUtcDate,
+  getIdentityScope,
   savePendingRevisionLaunch,
 } from "../utils/progressState.js";
 import { savePendingRevisionResume } from "../utils/revisionState.js";
@@ -43,6 +45,15 @@ const RECENT_DOCUMENT_LIMIT = 5;
  */
 function HomePage() {
   const { identity, isAuthenticated, status: authStatus } = useAuth();
+  const currentScope = getIdentityScope(identity);
+  const currentScopeRef = useRef(currentScope);
+  currentScopeRef.current = currentScope;
+
+  const recGenRef = useRef(0);
+  const recAbortRef = useRef(null);
+  const weakTopicsGenRef = useRef(0);
+  const weakTopicsAbortRef = useRef(null);
+
   const [authPanelOpen, setAuthPanelOpen] = useState(false);
   const [authPanelMode, setAuthPanelMode] = useState("signup");
 
@@ -136,76 +147,150 @@ function HomePage() {
 
   // Load adaptive recommendations and weak topics scoped to current identity
   useEffect(() => {
-    if (authStatus === "loading") {
+    // Invalidate outstanding requests/retries on identity or auth changes
+    if (recAbortRef.current) recAbortRef.current.abort();
+    if (weakTopicsAbortRef.current) weakTopicsAbortRef.current.abort();
+
+    const nextRecGen = recGenRef.current + 1;
+    recGenRef.current = nextRecGen;
+    const nextWeakGen = weakTopicsGenRef.current + 1;
+    weakTopicsGenRef.current = nextWeakGen;
+
+    // Immediately isolate state across identities: clear previous data & errors
+    setRecommendations([]);
+    setRecommendationsError(null);
+    setWeakTopics([]);
+    setWeakTopicsError(null);
+
+    if (authStatus === "loading" || !currentScope) {
+      setLoadingRecommendations(true);
+      setLoadingWeakTopics(true);
       return;
     }
 
-    let cancelled = false;
     setLoadingRecommendations(true);
-    setRecommendationsError(null);
     setLoadingWeakTopics(true);
-    setWeakTopicsError(null);
+
+    const recController = new AbortController();
+    recAbortRef.current = recController;
+    const weakController = new AbortController();
+    weakTopicsAbortRef.current = weakController;
+
+    const boundScope = currentScope;
 
     // 1. Fetch top recommendations
-    getProgressRecommendations({ limit: 2 })
+    getProgressRecommendations({ limit: 2, signal: recController.signal })
       .then((data) => {
-        if (cancelled) return;
-        setRecommendations(getTopRecommendations(data, 2));
+        if (isRequestCurrent(nextRecGen, boundScope, recGenRef.current, currentScopeRef.current)) {
+          setRecommendations(getTopRecommendations(data, 2));
+        }
       })
       .catch((err) => {
-        if (cancelled) return;
-        setRecommendationsError(err?.message || "Could not load recommendations.");
+        if (err?.name === "AbortError") return;
+        if (isRequestCurrent(nextRecGen, boundScope, recGenRef.current, currentScopeRef.current)) {
+          setRecommendationsError(err?.message || "Could not load recommendations.");
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoadingRecommendations(false);
+        if (isRequestCurrent(nextRecGen, boundScope, recGenRef.current, currentScopeRef.current)) {
+          setLoadingRecommendations(false);
+        }
       });
 
     // 2. Fetch detected weak topics
-    getProgressWeakTopics()
+    getProgressWeakTopics({ signal: weakController.signal })
       .then((data) => {
-        if (cancelled) return;
-        setWeakTopics(getTopWeakTopics(data, 2));
+        if (isRequestCurrent(nextWeakGen, boundScope, weakTopicsGenRef.current, currentScopeRef.current)) {
+          setWeakTopics(getTopWeakTopics(data, 2));
+        }
       })
       .catch((err) => {
-        if (cancelled) return;
-        setWeakTopicsError(err?.message || "Could not load weak topics.");
+        if (err?.name === "AbortError") return;
+        if (isRequestCurrent(nextWeakGen, boundScope, weakTopicsGenRef.current, currentScopeRef.current)) {
+          setWeakTopicsError(err?.message || "Could not load weak topics.");
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoadingWeakTopics(false);
+        if (isRequestCurrent(nextWeakGen, boundScope, weakTopicsGenRef.current, currentScopeRef.current)) {
+          setLoadingWeakTopics(false);
+        }
       });
 
     return () => {
-      cancelled = true;
+      recController.abort();
+      weakController.abort();
     };
-  }, [identity, authStatus]);
+  }, [currentScope, authStatus]);
 
   function retryRecommendations() {
+    if (authStatus === "loading" || !currentScope) {
+      return;
+    }
+    if (recAbortRef.current) {
+      recAbortRef.current.abort();
+    }
+    const nextGen = recGenRef.current + 1;
+    recGenRef.current = nextGen;
+    const boundScope = currentScope;
+
     setLoadingRecommendations(true);
     setRecommendationsError(null);
-    getProgressRecommendations({ limit: 2 })
+
+    const controller = new AbortController();
+    recAbortRef.current = controller;
+
+    getProgressRecommendations({ limit: 2, signal: controller.signal })
       .then((data) => {
-        setRecommendations(getTopRecommendations(data, 2));
+        if (isRequestCurrent(nextGen, boundScope, recGenRef.current, currentScopeRef.current)) {
+          setRecommendations(getTopRecommendations(data, 2));
+        }
       })
       .catch((err) => {
-        setRecommendationsError(err?.message || "Could not load recommendations.");
+        if (err?.name === "AbortError") return;
+        if (isRequestCurrent(nextGen, boundScope, recGenRef.current, currentScopeRef.current)) {
+          setRecommendationsError(err?.message || "Could not load recommendations.");
+        }
       })
       .finally(() => {
-        setLoadingRecommendations(false);
+        if (isRequestCurrent(nextGen, boundScope, recGenRef.current, currentScopeRef.current)) {
+          setLoadingRecommendations(false);
+        }
       });
   }
 
   function retryWeakTopics() {
+    if (authStatus === "loading" || !currentScope) {
+      return;
+    }
+    if (weakTopicsAbortRef.current) {
+      weakTopicsAbortRef.current.abort();
+    }
+    const nextGen = weakTopicsGenRef.current + 1;
+    weakTopicsGenRef.current = nextGen;
+    const boundScope = currentScope;
+
     setLoadingWeakTopics(true);
     setWeakTopicsError(null);
-    getProgressWeakTopics()
+
+    const controller = new AbortController();
+    weakTopicsAbortRef.current = controller;
+
+    getProgressWeakTopics({ signal: controller.signal })
       .then((data) => {
-        setWeakTopics(getTopWeakTopics(data, 2));
+        if (isRequestCurrent(nextGen, boundScope, weakTopicsGenRef.current, currentScopeRef.current)) {
+          setWeakTopics(getTopWeakTopics(data, 2));
+        }
       })
       .catch((err) => {
-        setWeakTopicsError(err?.message || "Could not load weak topics.");
+        if (err?.name === "AbortError") return;
+        if (isRequestCurrent(nextGen, boundScope, weakTopicsGenRef.current, currentScopeRef.current)) {
+          setWeakTopicsError(err?.message || "Could not load weak topics.");
+        }
       })
       .finally(() => {
-        setLoadingWeakTopics(false);
+        if (isRequestCurrent(nextGen, boundScope, weakTopicsGenRef.current, currentScopeRef.current)) {
+          setLoadingWeakTopics(false);
+        }
       });
   }
 

@@ -12,6 +12,7 @@ import {
   getRecommendationBadge,
   getTopRecommendations,
   getTopWeakTopics,
+  isRequestCurrent,
 } from "./homeState.js";
 
 // ---------------------------------------------------------------------------
@@ -405,8 +406,43 @@ test("getTopWeakTopics slices to max and sanitizes weak topic properties", () =>
   assert.equal(top[1].struggleIndex, 2.1);
 });
 
-test("getTopWeakTopics handles archived or missing document sources", () => {
-  const mockWeak = [
+test("getTopWeakTopics returns empty array when no actionable weak topics exist (truthful empty state)", () => {
+  const onlyArchived = [
+    {
+      topic_key: "archived_topic_1",
+      topic_display: "Archived Topic 1",
+      document_id: "doc-archived-1",
+      document_title: "Old Doc",
+      is_archived: true,
+      is_actionable: false,
+      struggle_index: 3.8,
+    },
+    {
+      topic_key: "archived_topic_2",
+      topic_display: "Archived Topic 2",
+      document_id: null,
+      document_title: "",
+      is_archived: false,
+      is_actionable: false,
+      struggle_index: 2.5,
+    },
+  ];
+
+  // Must return empty array so Home renders truthful empty state
+  assert.deepEqual(getTopWeakTopics(onlyArchived), []);
+});
+
+test("getTopWeakTopics handles archived document fallback when retained alongside actionable topic", () => {
+  const mixed = [
+    {
+      topic_key: "active_topic",
+      topic_display: "Active Topic",
+      document_id: "doc-active",
+      document_title: "Active Document",
+      is_archived: false,
+      is_actionable: true,
+      struggle_index: 2.0,
+    },
     {
       topic_key: "archived_topic",
       topic_display: "Archived Topic",
@@ -414,11 +450,150 @@ test("getTopWeakTopics handles archived or missing document sources", () => {
       document_title: "",
       is_archived: true,
       is_actionable: false,
+      struggle_index: 3.5,
     },
   ];
 
-  const top = getTopWeakTopics(mockWeak);
-  assert.equal(top[0].documentTitle, "Archived Document");
-  assert.equal(top[0].isArchived, true);
-  assert.equal(top[0].isActionable, false);
+  const top = getTopWeakTopics(mixed, 2);
+  assert.equal(top.length, 2);
+  assert.equal(top[0].isActionable, true);
+  assert.equal(top[0].topicDisplay, "Active Topic");
+  assert.equal(top[1].documentTitle, "Archived Document");
+  assert.equal(top[1].isArchived, true);
+  assert.equal(top[1].isActionable, false);
+});
+
+test("getTopWeakTopics prevents archived topics from crowding out active practice-ready topics in mixed lists", () => {
+  // Backend returns deterministically sorted by highest struggle index first
+  const mixed = [
+    {
+      topic_key: "archived_high_struggle",
+      topic_display: "Archived High Struggle",
+      document_id: "doc-archived",
+      document_title: "Old Biology",
+      is_archived: true,
+      is_actionable: false,
+      struggle_index: 4.8,
+      mastery_score: 0.1,
+    },
+    {
+      topic_key: "actionable_topic_1",
+      topic_display: "Actionable Concept 1",
+      document_id: "doc-1",
+      document_title: "Active Chemistry",
+      is_archived: false,
+      is_actionable: true,
+      struggle_index: 3.5,
+      mastery_score: 0.2,
+    },
+    {
+      topic_key: "actionable_topic_2",
+      topic_display: "Actionable Concept 2",
+      document_id: "doc-2",
+      document_title: "Active Physics",
+      is_archived: false,
+      is_actionable: true,
+      struggle_index: 2.8,
+      mastery_score: 0.35,
+    },
+  ];
+
+  const top = getTopWeakTopics(mixed, 2);
+  assert.equal(top.length, 2);
+
+  // Both slots must be practice-ready actionable topics; archived item must NOT crowd out actionable_topic_2
+  assert.equal(top[0].topicKey, "actionable_topic_1");
+  assert.equal(top[0].isActionable, true);
+  assert.equal(top[1].topicKey, "actionable_topic_2");
+  assert.equal(top[1].isActionable, true);
+});
+
+test("getTopWeakTopics handles mixed lists containing actionable, archived, non-ready, and malformed records", () => {
+  const mixedList = [
+    null,
+    undefined,
+    "invalid string record",
+    42,
+    {
+      // Non-ready (missing document_id)
+      topic_key: "unready_no_doc",
+      topic_display: "Unready Topic",
+      document_id: null,
+      document_title: "Missing Document",
+      is_archived: false,
+      is_actionable: false,
+      struggle_index: 5.0,
+    },
+    {
+      // Archived item
+      topic_key: "archived_item",
+      topic_display: "Archived Topic",
+      document_id: "doc-deleted",
+      document_title: "Deleted Doc",
+      is_archived: true,
+      is_actionable: false,
+      struggle_index: 4.2,
+    },
+    {
+      // Actionable item 1
+      topic_key: "actionable_item_1",
+      topic_display: "Actionable Item 1",
+      document_id: "doc-10",
+      document_title: "Calculus I",
+      is_archived: false,
+      is_actionable: true,
+      struggle_index: 3.1,
+      mastery_score: 0.25,
+      total_attempts: 6,
+    },
+    {
+      // Malformed object without topic or document
+      not_a_valid_record: true,
+    },
+    {
+      // Actionable item 2
+      topic_key: "actionable_item_2",
+      topic_display: "Actionable Item 2",
+      document_id: "doc-11",
+      document_title: "Linear Algebra",
+      is_archived: false,
+      is_actionable: true,
+      struggle_index: 2.2,
+      mastery_score: 0.45,
+      total_attempts: 4,
+    },
+  ];
+
+  const top = getTopWeakTopics(mixedList, 2);
+  assert.equal(top.length, 2);
+
+  // Safely selected the two actionable topics in their backend relative priority order
+  assert.equal(top[0].topicKey, "actionable_item_1");
+  assert.equal(top[0].documentId, "doc-10");
+  assert.equal(top[0].isActionable, true);
+
+  assert.equal(top[1].topicKey, "actionable_item_2");
+  assert.equal(top[1].documentId, "doc-11");
+  assert.equal(top[1].isActionable, true);
+});
+
+// ---------------------------------------------------------------------------
+// 11. isRequestCurrent Isolation Tests
+// ---------------------------------------------------------------------------
+test("isRequestCurrent validates matching generation and identity scope", () => {
+  assert.equal(isRequestCurrent(1, "user:u1", 1, "user:u1"), true);
+  assert.equal(isRequestCurrent(2, "guest:g1", 2, "guest:g1"), true);
+
+  // Stale generation (e.g. newer retry launched)
+  assert.equal(isRequestCurrent(1, "user:u1", 2, "user:u1"), false);
+
+  // Mismatched scope (e.g. user logged in or switched account)
+  assert.equal(isRequestCurrent(1, "guest:g1", 1, "user:u1"), false);
+  assert.equal(isRequestCurrent(1, "user:u1", 1, "user:u2"), false);
+
+  // Null, undefined, or missing scope fails safely
+  assert.equal(isRequestCurrent(1, null, 1, "user:u1"), false);
+  assert.equal(isRequestCurrent(1, "user:u1", 1, null), false);
+  assert.equal(isRequestCurrent(1, null, 1, null), false);
+  assert.equal(isRequestCurrent(1, undefined, 1, undefined), false);
 });

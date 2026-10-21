@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { isRequestCurrent } from "../utils/homeState.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -117,8 +118,8 @@ test("10. HomePage.jsx fetches recommendations and weak topics from Progress API
 
   assert.match(source, /import\s*\{[^}]*getProgressRecommendations[^}]*\}\s*from\s*"\.\.\/api\/progress/);
   assert.match(source, /import\s*\{[^}]*getProgressWeakTopics[^}]*\}\s*from\s*"\.\.\/api\/progress/);
-  assert.match(source, /getProgressRecommendations\(\{\s*limit:\s*2\s*\}\)/);
-  assert.match(source, /getProgressWeakTopics\(\)/);
+  assert.match(source, /getProgressRecommendations\(\{\s*limit:\s*2/);
+  assert.match(source, /getProgressWeakTopics\(\{/);
 });
 
 test("11. HomePage.jsx renders Action Center with accessible landmark and recommendation cards", () => {
@@ -167,4 +168,121 @@ test("15. HomePage.jsx distinguishes actionable items from archived or unready i
   assert.match(source, /const isActionable = rec\.isActionable && !rec\.isArchived;/);
   assert.match(source, /getRecommendationActionText\(rec\)/);
   assert.match(source, /wt\.isArchived\s*\?\s*"Archived"\s*:\s*"Not Ready"/);
+});
+
+test("16. HomePage.jsx guards retries and loads against cross-identity and stale-response races", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /const\s+currentScope\s*=\s*getIdentityScope\(identity\);/);
+  assert.match(source, /recGenRef\s*=\s*useRef\(0\)/);
+  assert.match(source, /recAbortRef\s*=\s*useRef\(null\)/);
+  assert.match(source, /weakTopicsGenRef\s*=\s*useRef\(0\)/);
+  assert.match(source, /weakTopicsAbortRef\s*=\s*useRef\(null\)/);
+  assert.match(source, /isRequestCurrent/);
+
+  // Independent retry handlers bump generation and abort prior requests
+  assert.match(source, /function\s+retryRecommendations\(\)\s*\{[\s\S]*?recGenRef\.current\s*\+/);
+  assert.match(source, /function\s+retryWeakTopics\(\)\s*\{[\s\S]*?weakTopicsGenRef\.current\s*\+/);
+});
+
+test("17. Simulation: outstanding retry followed by identity change cannot overwrite new identity state", async () => {
+  // Simulate the HomePage async state machine and refs
+  let currentScope = "guest:g-1";
+  const currentScopeRef = { current: currentScope };
+  const recGenRef = { current: 1 };
+  const recAbortRef = { current: new AbortController() };
+
+  let displayedRecommendations = [];
+  let recommendationsError = null;
+  let loadingRecommendations = false;
+
+  // Deferred promise simulating slow network response for Identity 1 retry
+  let resolveIdentity1Retry;
+  const identity1Promise = new Promise((resolve) => {
+    resolveIdentity1Retry = resolve;
+  });
+
+  // 1. User on Identity 1 clicks Retry Recommendations
+  const retryGen = recGenRef.current + 1;
+  recGenRef.current = retryGen;
+  const retryScope = currentScope;
+  loadingRecommendations = true;
+  recommendationsError = null;
+
+  const retryPromise = identity1Promise.then((data) => {
+    if (isRequestCurrent(retryGen, retryScope, recGenRef.current, currentScopeRef.current)) {
+      displayedRecommendations = data;
+    }
+  }).catch((err) => {
+    if (isRequestCurrent(retryGen, retryScope, recGenRef.current, currentScopeRef.current)) {
+      recommendationsError = err?.message;
+    }
+  }).finally(() => {
+    if (isRequestCurrent(retryGen, retryScope, recGenRef.current, currentScopeRef.current)) {
+      loadingRecommendations = false;
+    }
+  });
+
+  // 2. Identity changes to "user:u-2" before Identity 1's retry resolves
+  currentScope = "user:u-2";
+  currentScopeRef.current = currentScope;
+  recAbortRef.current?.abort();
+  recGenRef.current += 1; // Invalidate all pending requests for Identity 1
+  displayedRecommendations = []; // Cleared on switch
+  recommendationsError = null;
+
+  // 3. Identity 1's retry resolves with stale data
+  resolveIdentity1Retry([{ id: "stale-rec", title: "Identity 1 Stale Recommendation" }]);
+  await retryPromise;
+
+  // Stale result MUST NOT overwrite Identity 2's empty/clean state!
+  assert.deepEqual(displayedRecommendations, [], "Stale Identity 1 retry must not overwrite Identity 2 state");
+  assert.equal(recommendationsError, null, "Stale Identity 1 error must not be set");
+  assert.notEqual(displayedRecommendations[0]?.id, "stale-rec");
+});
+
+test("18. Simulation: out-of-order retries on same identity ignore older requests", async () => {
+  const currentScope = "user:u-1";
+  const currentScopeRef = { current: currentScope };
+  const recGenRef = { current: 0 };
+
+  let displayedRecommendations = [];
+
+  let resolveFirstRetry;
+  const firstPromise = new Promise((resolve) => {
+    resolveFirstRetry = resolve;
+  });
+
+  let resolveSecondRetry;
+  const secondPromise = new Promise((resolve) => {
+    resolveSecondRetry = resolve;
+  });
+
+  // First retry launched (Gen 1)
+  const gen1 = ++recGenRef.current;
+  const p1 = firstPromise.then((data) => {
+    if (isRequestCurrent(gen1, currentScope, recGenRef.current, currentScopeRef.current)) {
+      displayedRecommendations = data;
+    }
+  });
+
+  // Second retry launched (Gen 2)
+  const gen2 = ++recGenRef.current;
+  const p2 = secondPromise.then((data) => {
+    if (isRequestCurrent(gen2, currentScope, recGenRef.current, currentScopeRef.current)) {
+      displayedRecommendations = data;
+    }
+  });
+
+  // Second retry resolves first
+  resolveSecondRetry([{ id: "fast-fresh", title: "Newer Retry Data" }]);
+  await p2;
+  assert.equal(displayedRecommendations[0]?.id, "fast-fresh");
+
+  // First retry resolves second (late)
+  resolveFirstRetry([{ id: "slow-stale", title: "Older Retry Data" }]);
+  await p1;
+
+  // Second retry data remains in place; older retry was ignored
+  assert.equal(displayedRecommendations[0]?.id, "fast-fresh");
 });
