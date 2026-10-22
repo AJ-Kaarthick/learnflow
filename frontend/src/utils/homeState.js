@@ -427,3 +427,12 @@ export function getTopWeakTopics(weakTopics, max = 2) {
   const candidates = [...actionable, ...nonActionable];
   return candidates.slice(0, max);
 }
+
+export {
+  calculateOverdueReviewsCount,
+  extractLearningPulseKPIs,
+  formatActivityDate,
+  formatKPIAccuracy,
+  formatKPICount,
+  mergeRecentLearningActivity,
+} from "./homePulse.js";

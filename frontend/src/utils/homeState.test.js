@@ -597,3 +597,16 @@ test("isRequestCurrent validates matching generation and identity scope", () => 
   assert.equal(isRequestCurrent(1, null, 1, null), false);
   assert.equal(isRequestCurrent(1, undefined, 1, undefined), false);
 });
+
+// ---------------------------------------------------------------------------
+// 12. Learning Pulse & Activity Feed Helpers Re-Export Tests (Phase 4)
+// ---------------------------------------------------------------------------
+test("homeState re-exports all Learning Pulse and Activity Feed helpers", async () => {
+  const homeStateModule = await import("./homeState.js");
+  assert.equal(typeof homeStateModule.calculateOverdueReviewsCount, "function");
+  assert.equal(typeof homeStateModule.extractLearningPulseKPIs, "function");
+  assert.equal(typeof homeStateModule.formatActivityDate, "function");
+  assert.equal(typeof homeStateModule.formatKPIAccuracy, "function");
+  assert.equal(typeof homeStateModule.formatKPICount, "function");
+  assert.equal(typeof homeStateModule.mergeRecentLearningActivity, "function");
+});

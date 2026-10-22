@@ -288,3 +288,113 @@ test("18. Simulation: out-of-order retries on same identity ignore older request
   // Second retry data remains in place; older retry was ignored
   assert.equal(displayedRecommendations[0]?.id, "fast-fresh");
 });
+
+// ---------------------------------------------------------------------------
+// HomePage Component Contracts (V3 Milestone 6 Phase 4)
+// ---------------------------------------------------------------------------
+
+test("19. HomePage.jsx imports and integrates LearningPulseRibbon and Progress endpoints", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /import\s*LearningPulseRibbon\s*from\s*"\.\.\/components\/LearningPulseRibbon/);
+  assert.match(source, /import\s*\{[^}]*getProgressSummary[^}]*\}\s*from\s*"\.\.\/api\/progress/);
+  assert.match(source, /import\s*\{[^}]*getSpacedRepetitionSchedules[^}]*\}\s*from\s*"\.\.\/api\/progress/);
+  assert.match(source, /<LearningPulseRibbon[\s\S]*?summary=\{progressSummary\}[\s\S]*?schedules=\{schedules\}/);
+});
+
+test("20. LearningPulseRibbon.jsx defines accessible landmark, 4 KPI cards, and deep-link", () => {
+  const source = readFileSync(join(__dirname, "../components/LearningPulseRibbon.jsx"), "utf-8");
+
+  assert.match(source, /<section[^>]*aria-label="Learning Pulse"/);
+  assert.match(source, /View full analytics/);
+  assert.match(source, /routeHref\(ROUTES\.PROGRESS\)/);
+  assert.match(source, /data-testid="kpi-questions-attempted"/);
+  assert.match(source, /data-testid="kpi-overdue-reviews"/);
+  assert.match(source, /data-testid="kpi-attempt-accuracy"/);
+  assert.match(source, /data-testid="kpi-completed-sessions"/);
+  assert.match(source, /data-testid="learning-pulse-skeleton"/);
+});
+
+test("21. HomePage.jsx renders Recent Activity feed merging sessions and documents", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /<section[^>]*aria-label="Recent Activity"/);
+  assert.match(source, /Recent activity/);
+  assert.match(source, /mergeRecentLearningActivity/);
+  assert.match(source, /formatActivityDate/);
+  assert.match(source, /data-testid="recent-activity-item"/);
+  assert.match(source, /handleResumeSession\(item\.id\)/);
+  assert.match(source, /handleContinueStudying\(\{ id: item\.id \}\)/);
+});
+
+test("22. HomePage.jsx renders First-Run 3-step Onboarding Guide with Upload CTA when 0 documents", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /aria-label="First-Run Onboarding"/);
+  assert.match(source, /data-testid="first-run-onboarding"/);
+  assert.match(source, /Get started with LearnFlow/);
+  assert.match(source, /Upload a document/);
+  assert.match(source, /Study & generate/);
+  assert.match(source, /Test knowledge/);
+  assert.match(source, /Upload First Document/);
+  assert.match(source, /routeHref\(ROUTES\.STUDY\)/);
+  assert.match(source, /const isFirstRun = !loadingDocs && !docsError && totalDocumentsCount === 0;/);
+});
+
+test("23. HomePage.jsx guards Learning Pulse against cross-identity and stale-response races", () => {
+  const source = readFileSync(join(__dirname, "./HomePage.jsx"), "utf-8");
+
+  assert.match(source, /pulseGenRef\s*=\s*useRef\(0\)/);
+  assert.match(source, /pulseAbortRef\s*=\s*useRef\(null\)/);
+  assert.match(source, /function\s+retryPulse\(\)\s*\{[\s\S]*?pulseGenRef\.current\s*\+/);
+});
+
+test("24. Simulation: Learning Pulse retry followed by identity switch rejects stale response", async () => {
+  let currentScope = "guest:g-pulse-1";
+  const currentScopeRef = { current: currentScope };
+  const pulseGenRef = { current: 1 };
+  const pulseAbortRef = { current: new AbortController() };
+
+  let displayedSummary = null;
+  let pulseError = null;
+  let loadingPulse = false;
+
+  let resolveIdentity1Pulse;
+  const identity1Promise = new Promise((resolve) => {
+    resolveIdentity1Pulse = resolve;
+  });
+
+  // 1. Identity 1 launches pulse fetch
+  const pulseGen = ++pulseGenRef.current;
+  const pulseScope = currentScope;
+  loadingPulse = true;
+  pulseError = null;
+
+  const retryPromise = identity1Promise.then(([summary]) => {
+    if (isRequestCurrent(pulseGen, pulseScope, pulseGenRef.current, currentScopeRef.current)) {
+      displayedSummary = summary;
+    }
+  }).catch((err) => {
+    if (isRequestCurrent(pulseGen, pulseScope, pulseGenRef.current, currentScopeRef.current)) {
+      pulseError = err?.message;
+    }
+  }).finally(() => {
+    if (isRequestCurrent(pulseGen, pulseScope, pulseGenRef.current, currentScopeRef.current)) {
+      loadingPulse = false;
+    }
+  });
+
+  // 2. Identity switches to user:u-pulse-2
+  currentScope = "user:u-pulse-2";
+  currentScopeRef.current = currentScope;
+  pulseAbortRef.current?.abort();
+  pulseGenRef.current += 1;
+  displayedSummary = null;
+
+  // 3. Stale identity 1 response resolves
+  resolveIdentity1Pulse([{ total_attempted_questions: 999 }]);
+  await retryPromise;
+
+  assert.equal(displayedSummary, null, "Stale Identity 1 pulse must not overwrite Identity 2 state");
+  assert.equal(pulseError, null);
+});
